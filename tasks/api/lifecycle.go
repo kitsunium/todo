@@ -38,16 +38,35 @@ var Lifecycle = tasks.Service.Workflow("lifecycle", tasks.Tasks, func(t *tasks.T
 	On("archive", tasks.Done, tasks.Archived).
 	On("restore", tasks.Archived, tasks.Open).
 	On("reschedule", tasks.Overdue, tasks.Open).
-	When("overdue", tasks.Open, tasks.Overdue, pastDue).
+	At("overdue", tasks.Open, tasks.Overdue, dueDate).
 	After("auto-archive", ArchiveAfter, tasks.Done, tasks.Archived).
 	OnEnter(tasks.Done, stampCompletion).
 	OnEnter(tasks.Open, clearCompletion).
 	OnTransition(announceTransition)
 
-// pastDue holds once a task's due date has passed.
+// dueDate is when an open task becomes overdue: its due date, if it has one.
+// kit reads it again each time the task is written, and wakes the workflow's
+// loop at the earliest.
 //
-// fr: pastDue est vraie dès que l’échéance d’une tâche est passée.
-func pastDue(t tasks.Task, now time.Time) bool { return t.Due != nil && now.After(*t.Due) }
+// fr: dueDate est le moment où une tâche ouverte passe en retard : son
+// échéance, si elle en a une. kit la relit à chaque écriture de la tâche, et
+// réveille la boucle du workflow à la plus proche.
+func dueDate(t tasks.Task) (time.Time, bool) {
+	if t.Due == nil {
+		return time.Time{}, false
+	}
+	return *t.Due, true
+}
+
+// pastDue holds once a task's due date has come: what the workflow's loop
+// sees at that instant.
+//
+// fr: pastDue est vraie dès que l’échéance d’une tâche est arrivée : ce que voit
+// la boucle du workflow à cet instant.
+func pastDue(t tasks.Task, now time.Time) bool {
+	due, ok := dueDate(t)
+	return ok && !due.After(now)
+}
 
 // stampCompletion records when a task was done, and by whom: the user whose
 // request completed it.

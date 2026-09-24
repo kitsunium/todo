@@ -70,12 +70,12 @@ func exercise(h *harness) {
 	alice.expect(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Side task", "groupId": side.ID})
 	alice.expect(http.StatusNoContent, "DELETE", "/api/groups/"+side.ID, nil)
 
-	// Tasks: every endpoint, the guard, the timer, a reminder.
+	// Tasks: every endpoint, the timers, a reminder.
 	due := h.clk.Now().Add(time.Hour).Format(time.RFC3339)
 	post := call[task](alice, http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Write the post", "priority": 1, "due": due, "groupId": team.ID, "assigneeId": bobID})
 	solo := call[task](alice, http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Renew the domain", "due": h.clk.Now().Add(-time.Hour).Format(time.RFC3339)})
 	alice.expect(http.StatusOK, "POST", "/api/tasks/"+solo.ID+"/share", map[string]any{"userId": bobID})
-	h.settle("the overdue guard", 200*time.Millisecond, func() bool {
+	h.settle("the overdue timer", 200*time.Millisecond, func() bool {
 		return call[task](alice, http.StatusOK, "GET", "/api/tasks/"+solo.ID, nil).Status == "overdue"
 	})
 	alice.expect(http.StatusOK, "PATCH", "/api/tasks/"+solo.ID, map[string]any{"due": due, "title": "Renew the domains"})

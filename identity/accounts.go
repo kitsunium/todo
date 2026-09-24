@@ -91,11 +91,11 @@ var AccountLifecycle = Service.Workflow("accounts", Accounts, func(a *Account) *
 	OnTransition(announceAccount)
 
 // tooManyFailures holds once an account refused MaxFailedLogins passwords
-// in a row.
+// in a row. kit checks it each time the account is written.
 //
 // fr: tooManyFailures est vraie dès qu’un compte a refusé MaxFailedLogins mots
-// de passe d’affilée.
-func tooManyFailures(a Account, _ time.Time) bool { return a.FailedLogins >= MaxFailedLogins }
+// de passe d’affilée. kit la vérifie à chaque écriture du compte.
+func tooManyFailures(a Account) bool { return a.FailedLogins >= MaxFailedLogins }
 
 // activate gives an account a clean slate: no failures, no lock, and the
 // date its address was proved.

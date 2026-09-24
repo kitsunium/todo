@@ -83,8 +83,9 @@ func start(t *testing.T, analyze bool) *harness {
 }
 
 // settle moves the app's clock forward by step until cond holds. The
-// subscriptions' consumers, the outbox, the workflow sweeps and the loops all
-// wait on that clock, so nothing asynchronous happens unless it moves.
+// subscriptions' consumers, the outbox, the workflows' own loops and the
+// loops all wait on that clock, so nothing asynchronous happens unless it
+// moves.
 func (h *harness) settle(what string, step time.Duration, cond func() bool) {
 	h.t.Helper()
 	deadline := time.Now().Add(30 * time.Second)

@@ -445,7 +445,7 @@ stateDiagram-v2
   done --> archived: archive
   archived --> open: restore
   overdue --> open: reschedule (a later due date)
-  open --> overdue: overdue (guard: the due date passed)
+  open --> overdue: overdue (timer: at the due date)
   done --> archived: auto-archive (timer: TODO_ARCHIVE_AFTER, 24h)
 ```
 
@@ -543,7 +543,7 @@ go test -race ./...
 Every test runs the whole product in-process, on a manual clock it moves:
 accounts from sign-up to sign-out and the language each reads, the lock and
 its timer, resets, contacts and invitations by email, groups and roles, the
-task list with its views, counts, guard and timer, sharing, and the reminders
+task list with its views, counts and timers, sharing, and the reminders
 loop. Every mail is rendered in both languages, and no word of the English
 catalogue may appear in a French mail.
 `TestTheDiagramMatchesTheCode` uses the product end to end with its static

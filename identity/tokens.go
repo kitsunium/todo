@@ -64,20 +64,21 @@ var Tokens = Service.Store("tokens", func(t Token) string { return t.ID },
 	kit.Unique("hash", func(t Token) string { return t.Hash }))
 
 // TokenLifecycle is the life of a one-time link: used once, or expired by
-// its own guard when its deadline passes.
+// its own timer at its deadline.
 //
 // fr: TokenLifecycle est la vie d’un lien à usage unique : utilisé une fois, ou
-// expiré par sa propre garde quand son échéance passe.
+// expiré par son propre timer à son échéance.
 var TokenLifecycle = Service.Workflow("tokens", Tokens, func(t *Token) *TokenStatus { return &t.Status }).
 	Initial(Issued).
 	On("use", Issued, Used).
-	When("expire", Issued, Expired, pastDeadline).
+	At("expire", Issued, Expired, deadline).
 	OnEnter(Used, stampUse)
 
-// pastDeadline holds once a link's deadline passed.
+// deadline is when a link expires: the deadline it was issued with.
 //
-// fr: pastDeadline est vraie dès que l’échéance d’un lien est passée.
-func pastDeadline(t Token, now time.Time) bool { return !now.Before(t.ExpiresAt) }
+// fr: deadline est le moment où un lien expire : l’échéance avec laquelle il a
+// été émis.
+func deadline(t Token) (time.Time, bool) { return t.ExpiresAt, true }
 
 // stampUse records when a link was used.
 //

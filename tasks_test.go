@@ -48,7 +48,7 @@ func (c *client) titles(query string) []string {
 
 // The task list of one user: tasks created with priorities and due dates,
 // the views and their counts, edits, the lifecycle — with the workflow's own
-// guard marking a task overdue and its own timer archiving a done one.
+// timers marking a task overdue at its due date and archiving a done one.
 func TestTheTaskList(t *testing.T) {
 	h := start(t, false)
 	alice := h.signup("Alice", "alice@example.com")
@@ -70,8 +70,8 @@ func TestTheTaskList(t *testing.T) {
 	alice.violates("view", "GET", "/api/tasks?view=someday", nil)
 	alice.violates("tz", "GET", "/api/tasks?view=today&tz=Mars/Olympus", nil)
 
-	// The overdue guard is the workflow's own loop at work.
-	h.settle("the overdue guard", 200*time.Millisecond, func() bool {
+	// The overdue timer is the workflow's own loop at work.
+	h.settle("the overdue timer", 200*time.Millisecond, func() bool {
 		return call[task](alice, http.StatusOK, "GET", "/api/tasks/"+domain.ID, nil).Status == "overdue"
 	})
 	if got := alice.titles("?view=today"); !slices.Equal(got, []string{"Renew the domain", "Write the kit README"}) {

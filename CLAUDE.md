@@ -1,4 +1,4 @@
-<!-- updated: 2026-09-24T09:54:21Z -->
+<!-- updated: 2026-09-25T00:55:00Z -->
 # kitsunium/todo
 
 The reference product of kit (`github.com/kitsunium/platform`), and its
@@ -43,8 +43,12 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
   ID, insert rather than overwrite, and do the one irreversible thing — a
   mail — last.
 - Every timestamp and deadline reads `wire.Now(ctx)` (kit's clock): the
-  tests and the Studio move it. Logs go through `kit.Log(ctx)` and name
-  users by ID, never by address.
+  tests move it. Logs go through `kit.Log(ctx)` and name users by ID, never
+  by address.
+- A transition due at a date the entity carries (a due date, a link's
+  deadline) is an `At`: kit wakes the workflow's loop at that instant. A
+  `When` guard sees the entity only and is checked each time it is written —
+  never a condition on the time. No workflow loop runs while nothing is due.
 - Errors to callers are `kit.Error` values: `wire.Invalid` for a field,
   `kit.NotFound` for what the caller may not see (never 403 for a task, a
   group or a contact of someone else), and the codes of the contract
