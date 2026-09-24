@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -33,7 +34,7 @@ func TestAnAccountFromSignupToSignOut(t *testing.T) {
 		t.Fatalf("signup answered %+v", got)
 	}
 	verification := h.mail("alice@example.com", "/verify?token=")
-	if verification.Subject != "Confirm your email address" || !strings.Contains(verification.HTML, "Confirm email address") {
+	if verification.Subject != "Confirmez votre adresse e-mail" || !strings.Contains(verification.HTML, "Confirmer mon adresse e-mail") {
 		t.Errorf("verification mail %q", verification.Subject)
 	}
 
@@ -48,7 +49,7 @@ func TestAnAccountFromSignupToSignOut(t *testing.T) {
 	if again != got {
 		t.Errorf("a second sign-up answered %+v, want %+v", again, got)
 	}
-	h.mail("alice@example.com", "already have one")
+	h.mail("alice@example.com", "Vous en avez déjà un")
 
 	// A resend mails a second link; the first stays good until one is used.
 	call[struct{ Status string }](alice, http.StatusOK, "POST", "/api/auth/verify/resend", map[string]any{"email": "alice@example.com"})
@@ -65,7 +66,7 @@ func TestAnAccountFromSignupToSignOut(t *testing.T) {
 		t.Fatalf("session cookie %+v", cookie)
 	}
 	who := call[me](alice, http.StatusOK, "GET", "/api/auth/me", nil).User
-	if who.Name != "Alice Martin" || who.Email != "alice@example.com" || !strings.HasPrefix(who.ID, "user_") {
+	if who.Name != "Alice Martin" || who.Email != "alice@example.com" || !strings.HasPrefix(who.ID, "user_") || who.Locale != "fr" {
 		t.Fatalf("me %+v", who)
 	}
 
@@ -246,4 +247,91 @@ func TestSessionsAreRevoked(t *testing.T) {
 	laptop.expect(http.StatusNoContent, "DELETE", "/api/auth/sessions/"+phoneSession, nil)
 	phone.fails(http.StatusUnauthorized, "unauthenticated", "GET", "/api/auth/me", nil)
 	laptop.expect(http.StatusOK, "GET", "/api/auth/me", nil)
+}
+
+// Each account reads the product in its own language, French first: the
+// sign-up form names it, or the browser's Accept-Language decides, and
+// French when neither does. The account changes it later, and the next
+// mails follow; a mail to someone without an account is in the inviter's.
+func TestEachAccountReadsItsLanguage(t *testing.T) {
+	h := start(t, false)
+
+	// A browser that prefers English opens an English account.
+	eve := h.client("eve")
+	eve.languages = "en-US,en;q=0.9"
+	eve.expect(http.StatusOK, "POST", "/api/auth/signup", map[string]any{"email": "eve@example.com", "name": "Eve", "password": testPassword})
+	welcome := h.mail("eve@example.com", "/verify?token=")
+	if welcome.Subject != "Confirm your email address" || !strings.Contains(welcome.HTML, `<html lang="en">`) || !strings.Contains(welcome.Text, "Hi Eve,") {
+		t.Errorf("an English browser was welcomed with %q:\n%s", welcome.Subject, welcome.Text)
+	}
+	if got := call[me](eve, http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": token(t, welcome)}); got.User.Locale != "en" {
+		t.Errorf("eve reads %q", got.User.Locale)
+	}
+
+	// No header, a language the product does not speak: French.
+	for i, languages := range []string{"", "de-DE,de;q=0.9", "*"} {
+		c := h.client("fr")
+		c.languages = languages
+		email := fmt.Sprintf("fr%d@example.com", i)
+		c.expect(http.StatusOK, "POST", "/api/auth/signup", map[string]any{"email": email, "name": "Zoé", "password": testPassword})
+		m := h.mail(email, "/verify?token=")
+		if m.Subject != "Confirmez votre adresse e-mail" || !strings.Contains(m.HTML, `<html lang="fr">`) {
+			t.Errorf("Accept-Language %q: %q", languages, m.Subject)
+		}
+		if got := call[me](c, http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": token(t, m)}); got.User.Locale != "fr" {
+			t.Errorf("Accept-Language %q reads %q", languages, got.User.Locale)
+		}
+	}
+
+	// The form's language wins over the browser's; a language the product
+	// does not speak is refused.
+	form := h.client("form")
+	form.languages = "en"
+	form.expect(http.StatusOK, "POST", "/api/auth/signup", map[string]any{"email": "form@example.com", "name": "Form", "password": testPassword, "locale": "fr"})
+	h.mail("form@example.com", "Confirmez votre adresse e-mail")
+	form.violates("locale", "POST", "/api/auth/signup", map[string]any{"email": "x@example.com", "name": "X", "password": testPassword, "locale": "de"})
+
+	// A French user and an English one work together, each in their language.
+	alice := h.signup("Alice", "alice@example.com")
+	added := call[struct{ Request struct{ ID string } }](alice, http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "eve@example.com"})
+	h.mail("eve@example.com", "Alice wants to add you as a contact")
+	eve.expect(http.StatusOK, "POST", "/api/contacts/"+added.Request.ID+"/accept", nil)
+	h.mail("alice@example.com", "Eve a accepté votre demande de contact")
+	eve.expect(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "dan@example.com"})
+	h.mail("dan@example.com", "Eve invited you to Todo")
+	alice.expect(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "yann@example.com"})
+	h.mail("yann@example.com", "Alice vous invite sur Todo")
+
+	// Switching languages: the account says so, and the next mails follow.
+	if got := call[me](alice, http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"locale": "en"}); got.User.Locale != "en" || got.User.Name != "Alice" {
+		t.Fatalf("alice switched to %+v", got.User)
+	}
+	h.client("anon").expect(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "alice@example.com"})
+	h.mail("alice@example.com", "Reset your Todo password")
+	alice.expect(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "zed@example.com"})
+	h.mail("zed@example.com", "Alice invited you to Todo")
+	both := call[me](alice, http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"name": "Alice M.", "locale": "fr"})
+	if both.User.Locale != "fr" || both.User.Name != "Alice M." {
+		t.Errorf("name and language at once: %+v", both.User)
+	}
+	if same := call[me](alice, http.StatusOK, "PATCH", "/api/auth/me", map[string]any{}); same.User != both.User {
+		t.Errorf("an empty change changed %+v into %+v", both.User, same.User)
+	}
+	for _, bad := range []string{"de", "EN", "", "fr-FR"} {
+		alice.violates("locale", "PATCH", "/api/auth/me", map[string]any{"locale": bad})
+	}
+	if got := call[me](alice, http.StatusOK, "GET", "/api/auth/me", nil); got.User.Locale != "fr" {
+		t.Errorf("a refused change changed the language to %q", got.User.Locale)
+	}
+
+	// An account opened before the product spoke two languages reads French.
+	eveID := eve.id()
+	if _, err := identity.Accounts.Update(context.Background(), eveID, func(a *identity.Account) error { a.Locale = ""; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := call[me](eve, http.StatusOK, "GET", "/api/auth/me", nil); got.User.Locale != "fr" {
+		t.Errorf("an account without a language reads %q", got.User.Locale)
+	}
+	h.client("anon").expect(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "eve@example.com"})
+	h.mail("eve@example.com", "Réinitialisez votre mot de passe Todo")
 }

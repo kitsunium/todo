@@ -29,6 +29,10 @@ type Account struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name"`
+	// Locale is the language the user reads the product and its mails in.
+	// An account opened before the product spoke two languages has none,
+	// and reads French: see locale.
+	Locale wire.Locale `json:"locale,omitempty"`
 	// PasswordHash is the PHC string of the SDK's password hashing: salted,
 	// slow, self-describing. The password itself is never stored.
 	PasswordHash string        `json:"passwordHash" kit:"secret"`
@@ -45,7 +49,12 @@ type Account struct {
 func (a Account) ref() UserRef { return UserRef{ID: a.ID, Name: a.Name, Email: a.Email} }
 
 // user is how its owner sees the account.
-func (a Account) user() User { return User{UserRef: a.ref(), CreatedAt: a.CreatedAt} }
+func (a Account) user() User {
+	return User{UserRef: a.ref(), Locale: a.locale(), CreatedAt: a.CreatedAt}
+}
+
+// locale is the language the account reads: its own, or French.
+func (a Account) locale() wire.Locale { return a.Locale.Resolve() }
 
 // Accounts keeps every account, keyed by user ID. No two accounts share an
 // address: the unique index refuses the second.

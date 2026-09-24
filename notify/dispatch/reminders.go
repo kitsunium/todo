@@ -38,7 +38,7 @@ var Reminders = notify.Service.Store("reminders", func(r Reminder) string { retu
 var _ = notify.Service.Subscribe("track-due", tasks.Events, TrackDue)
 
 // ReminderLoop mails a task's owner, assignee and the users it is shared
-// with fifteen minutes before it is due. kit runs it: it sleeps until the
+// with fifteen minutes before it is due, each in their language. kit runs it: it sleeps until the
 // next reminder is due, wakes early when a task changes, and every minute
 // regardless — a task event may land after the wake it caused.
 var ReminderLoop = notify.Service.Loop("reminders", SendReminders,
@@ -151,17 +151,17 @@ func remind(ctx context.Context, r Reminder, now time.Time) error {
 		// Too late for "due in 15 minutes": the overdue state says it now.
 		return markSent(ctx, r, now)
 	}
-	names, err := identity.Directory(ctx, aud.Users...)
+	people, err := identity.People(ctx, aud.Users...)
 	if err != nil {
 		return err
 	}
 	task := notify.Task{ID: t.ID, Title: t.Title, Priority: int(t.Priority), Due: t.Due}
 	for _, id := range aud.Users {
-		to := names[id]
+		to := people[id]
 		if to.Email == "" {
 			continue
 		}
-		if _, err := notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, notify.DueSoon(to.Name, task, t.Due.Sub(now))); err != nil {
+		if _, err := notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, notify.DueSoon(to.Locale, to.Name, task, t.Due.Sub(now))); err != nil {
 			return err
 		}
 	}

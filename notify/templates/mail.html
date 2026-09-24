@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{.Lang}}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,13 +8,13 @@
       name="format-detection"
       content="telephone=no, date=no, address=no, email=no"
     />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="supported-color-schemes" content="light dark" />
+    <meta name="color-scheme" content="light only" />
+    <meta name="supported-color-schemes" content="light only" />
     <title>{{.Subject}}</title>
     <style>
       :root {
-        color-scheme: light dark;
-        supported-color-schemes: light dark;
+        color-scheme: light only;
+        supported-color-schemes: light only;
       }
       body,
       table,
@@ -36,34 +36,9 @@
           padding: 28px 24px 32px !important;
         }
       }
-      @media (prefers-color-scheme: dark) {
-        .page {
-          background: #0e0e10 !important;
-        }
-        .card {
-          background: #161618 !important;
-          border-color: #2a2a2e !important;
-        }
-        .panel {
-          background: #1e1e21 !important;
-          border-color: #2a2a2e !important;
-        }
-        .rule {
-          border-color: #2a2a2e !important;
-        }
-        .strong {
-          color: #fafaf9 !important;
-        }
-        .body {
-          color: #d6d3d1 !important;
-        }
-        .muted {
-          color: #8b8580 !important;
-        }
-      }
     </style>
   </head>
-  <body class="page" style="margin: 0; padding: 0; background: #f5f5f4">
+  <body style="margin: 0; padding: 0; background: #f5f5f4">
     <div
       style="
         display: none;
@@ -85,7 +60,6 @@
       cellpadding="0"
       cellspacing="0"
       border="0"
-      class="page"
       style="background: #f5f5f4"
     >
       <tr>
@@ -132,7 +106,6 @@
                       &#10003;
                     </td>
                     <td
-                      class="strong"
                       style="
                         padding-left: 10px;
                         font-family:
@@ -153,7 +126,6 @@
             </tr>
             <tr>
               <td
-                class="card"
                 style="
                   background: #ffffff;
                   border: 1px solid #e7e5e4;
@@ -194,7 +166,6 @@
                       "
                     >
                       <h1
-                        class="strong"
                         style="
                           margin: 0 0 20px;
                           font-size: 22px;
@@ -208,7 +179,6 @@
                       </h1>
                       {{- with .Greeting}}
                       <p
-                        class="body"
                         style="
                           margin: 0 0 14px;
                           font-size: 15px;
@@ -220,7 +190,6 @@
                       </p>
                       {{- end}} {{- range .Body}}
                       <p
-                        class="body"
                         style="
                           margin: 0 0 14px;
                           font-size: 15px;
@@ -237,7 +206,6 @@
                         cellpadding="0"
                         cellspacing="0"
                         border="0"
-                        class="panel"
                         style="
                           margin: 22px 0 4px;
                           background: #fafaf9;
@@ -255,7 +223,6 @@
                           </td>
                           <td style="padding: 14px 18px 15px">
                             <div
-                              class="muted"
                               style="
                                 font-size: 11px;
                                 line-height: 1.4;
@@ -268,7 +235,6 @@
                               {{.Label}}
                             </div>
                             <div
-                              class="strong"
                               style="
                                 margin-top: 4px;
                                 font-size: 16px;
@@ -281,7 +247,6 @@
                             </div>
                             {{- with .Detail}}
                             <div
-                              class="body"
                               style="
                                 margin-top: 4px;
                                 font-size: 13px;
@@ -328,7 +293,6 @@
                         </tr>
                       </table>
                       <p
-                        class="muted"
                         style="
                           margin: 14px 0 0;
                           font-size: 12px;
@@ -337,7 +301,7 @@
                           word-break: break-all;
                         "
                       >
-                        Or paste this link into your browser:
+                        {{.PasteLink}}
                         <a
                           href="{{.Action.URL}}"
                           target="_blank"
@@ -356,7 +320,6 @@
                       >
                         <tr>
                           <td
-                            class="rule"
                             style="
                               border-top: 1px solid #e7e5e4;
                               padding-top: 18px;
@@ -364,7 +327,6 @@
                           >
                             {{- range .Notes}}
                             <p
-                              class="muted"
                               style="
                                 margin: 0 0 8px;
                                 font-size: 13px;
@@ -395,7 +357,6 @@
                 "
               >
                 <p
-                  class="muted"
                   style="
                     margin: 0 0 6px;
                     font-size: 12px;
@@ -406,7 +367,6 @@
                   {{.Reason}}
                 </p>
                 <p
-                  class="muted"
                   style="
                     margin: 0;
                     font-size: 12px;
@@ -414,7 +374,7 @@
                     color: #a8a29e;
                   "
                 >
-                  Todo · tasks, together ·
+                  {{.Tagline}} ·
                   <a
                     href="{{.Home}}"
                     target="_blank"

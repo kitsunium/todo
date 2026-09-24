@@ -188,7 +188,7 @@ func TestSharingATask(t *testing.T) {
 	if again := call[task](alice, http.StatusOK, "POST", "/api/tasks/"+milk.ID+"/share", map[string]any{"userId": bobID}); len(again.SharedWith) != 1 {
 		t.Fatalf("shared twice %+v", again)
 	}
-	mail := h.mail("bob@example.com", "Alice shared “Buy milk” with you")
+	mail := h.mail("bob@example.com", "Alice a partagé « Buy milk » avec vous")
 	if !strings.Contains(mail.Text, "http://localhost:4000/app/tasks/"+milk.ID) || !strings.Contains(mail.HTML, "Buy milk") {
 		t.Errorf("the shared mail: %q", mail.Text)
 	}
@@ -214,7 +214,7 @@ func TestSharingATask(t *testing.T) {
 	if assigned.Assignee == nil || assigned.Assignee.ID != bobID {
 		t.Fatalf("assigned %+v", assigned)
 	}
-	h.mail("bob@example.com", "Alice assigned you “Buy milk”")
+	h.mail("bob@example.com", "Alice vous a attribué « Buy milk »")
 	if got := bob.titles("?view=assigned"); !slices.Equal(got, []string{"Buy milk"}) {
 		t.Errorf("bob's assigned view %q", got)
 	}
@@ -244,6 +244,7 @@ func TestRemindersGoOutBeforeTheDueDate(t *testing.T) {
 	h := start(t, false)
 	alice := h.signup("Alice", "alice@example.com")
 	bob := h.signup("Bob", "bob@example.com")
+	bob.expect(http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"locale": "en"}) // each is reminded in their language
 	befriend(alice, bob, "bob@example.com")
 
 	due := h.clk.Now().Add(time.Hour).Truncate(time.Second)
@@ -255,16 +256,16 @@ func TestRemindersGoOutBeforeTheDueDate(t *testing.T) {
 
 	h.clk.Set(due.Add(-16 * time.Minute))
 	h.drain()
-	if n := len(mailsTo("alice@example.com", "Due in")); n != 0 {
+	if n := len(mailsTo("alice@example.com", "Échéance dans")); n != 0 {
 		t.Fatalf("%d reminders sixteen minutes before", n)
 	}
 	h.clk.Set(due.Add(-15 * time.Minute))
-	h.mail("alice@example.com", "Due in 15 minutes: Review the launch post")
+	h.mail("alice@example.com", "Échéance dans 15 minutes : Review the launch post")
 	h.mail("bob@example.com", "Due in 15 minutes: Review the launch post")
 	h.clk.Advance(10 * time.Minute)
 	h.drain()
 	for _, addr := range []string{"alice@example.com", "bob@example.com"} {
-		if got := mailsTo(addr, "Due in"); len(got) != 1 {
+		if got := append(mailsTo(addr, "Due in"), mailsTo(addr, "Échéance dans")...); len(got) != 1 {
 			t.Errorf("%s got %d reminders", addr, len(got))
 		}
 	}

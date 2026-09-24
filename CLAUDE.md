@@ -1,4 +1,4 @@
-<!-- updated: 2026-09-24T02:10:00Z -->
+<!-- updated: 2026-09-24T09:17:28Z -->
 # kitsunium/todo
 
 The reference product of kit (`github.com/kitsunium/platform`), and its
@@ -10,16 +10,16 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 | Path | Service | Role |
 |---|---|---|
 | `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck |
-| `identity/` | identity | accounts (workflow `accounts`), one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (`UsersAPI`, `UserByEmailAPI`), the hand-written `session-reaper` loop |
+| `identity/` | identity | accounts (workflow `accounts`) and their language, one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (`UsersAPI` → `Directory`, `People` with each user's locale; `UserByEmailAPI`), the hand-written `session-reaper` loop |
 | `contacts/` | contacts | links between users (workflow `requests`), invitations by email, `claim-invites` on `identity.AccountEvents`, `CheckAPI` |
 | `groups/` | groups | groups and roles, invitations (workflow `invitations`), `RoleAPI` `BatchAPI` `MembershipsAPI` `MembersAPI` |
 | `tasks/` | tasks | the model other services import: `Task`, the `Tasks` store, the `Events` topic, `CensusAPI` `OpenByGroupAPI` `AudienceAPI` |
 | `tasks/api/` | tasks | the `lifecycle` workflow, the whole `/api/tasks` API, views and counts, `group-changes` |
-| `notify/` | notify | the `mail` mailer, `SendAPI` for identity's transactional mails, the mails and their one design (`templates/`) |
+| `notify/` | notify | the `mail` mailer, `SendAPI` for identity's transactional mails, the mails, their one light design (`templates/`) and their words (`locales/fr.json`, `locales/en.json`) |
 | `notify/dispatch/` | notify | who is mailed when: `task-mail` `contact-mail` `group-mail` `track-due`, the `reminders` store and declared loop |
 | `activity/` | activity | the feeds: `entries`, three subscriptions, `UnreadAPI` |
 | `stats/` | stats | the `sample` job and `GET /api/stats` |
-| `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code) |
+| `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code), `Locale` (`fr` first, `en`; `NegotiateLocale`, `CheckLocale`, `Resolve`) |
 | `web/` | web | the SPA (`web/src` → committed `web/dist`), owned by the web agent |
 | `*_test.go` | — | end-to-end tests, including `TestTheDiagramMatchesTheCode` |
 
@@ -54,6 +54,19 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
   `password.Hash`.
 - Ask "is there one?" with `Find` on an index, not `Get`: a missing key is
   an error span, and the Studio paints the store red.
+- The product speaks French first, and English. An account's `Locale` is
+  set at sign-up (the form's `locale`, else the SDK's `i18n.Negotiator` over
+  `Accept-Language`, else French) and changed by `PATCH /api/auth/me`; an
+  account without one reads French (`Locale.Resolve`). A service that
+  writes to a user gets the language from the directory (`identity.People`)
+  or the call (`SendInput.Locale`), never from identity's store.
+- Every word of a mail comes from `notify/locales/{fr,en}.json` (flat keys,
+  `{name}` placeholders, CLDR plural forms for a count) through the SDK's
+  `i18n` printers. A new mail adds its keys to both files: the process
+  refuses to start on a key one language lacks or a missing plural form.
+  French is written for French readers — vous, `’`, `\u00a0` before
+  `: ? !` and inside `« »`, no elision a name could break ("envoyée par
+  {actor}", not "de {actor}") — and mails stay light: no dark mode.
 - The README's Mermaid diagram is generated: after a change to the graph,
   replace it with `go run . graph -format mermaid`
   (`TestTheReadmeDiagramIsCurrent`).

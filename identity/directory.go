@@ -14,7 +14,8 @@ var (
 	// whether to send a contact request or an invitation.
 	UserByEmailAPI = Service.Endpoint("GET /internal/users/by-email", UserByEmail, kit.Private())
 
-	// UsersAPI turns user IDs into the names and addresses other users see.
+	// UsersAPI turns user IDs into the names and addresses other users see,
+	// and the language each reads — notify writes to them in it.
 	UsersAPI = Service.Endpoint("POST /internal/users/batch", Users, kit.Private())
 )
 
@@ -45,15 +46,24 @@ type IDs struct {
 	IDs []string `json:"ids"`
 }
 
+// Person is a user as the product's services see them: what other users
+// see, and the language they read. It stays behind the private endpoints —
+// no user learns another's language.
+type Person struct {
+	UserRef
+	// Locale is "fr" or "en"; an account that never chose reads French.
+	Locale wire.Locale `json:"locale"`
+}
+
 // UsersOutput are the users found, in the order asked; an unknown ID is
 // left out.
 type UsersOutput struct {
-	Users []UserRef `json:"users"`
+	Users []Person `json:"users"`
 }
 
 // Users returns the users with the given IDs.
 func Users(ctx context.Context, in IDs) (UsersOutput, error) {
-	out := UsersOutput{Users: []UserRef{}}
+	out := UsersOutput{Users: []Person{}}
 	seen := map[string]bool{}
 	for _, id := range in.IDs {
 		if id == "" || seen[id] {
@@ -67,7 +77,24 @@ func Users(ctx context.Context, in IDs) (UsersOutput, error) {
 		if err != nil {
 			return UsersOutput{}, err
 		}
-		out.Users = append(out.Users, a.ref())
+		out.Users = append(out.Users, Person{UserRef: a.ref(), Locale: a.locale()})
+	}
+	return out, nil
+}
+
+// People resolves user IDs through UsersAPI into a map, for the services
+// that write to users: an unknown ID is left out — nobody to write to.
+func People(ctx context.Context, ids ...string) (map[string]Person, error) {
+	out := map[string]Person{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	found, err := UsersAPI.Call(ctx, IDs{IDs: ids})
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range found.Users {
+		out[p.ID] = p
 	}
 	return out, nil
 }
@@ -76,16 +103,13 @@ func Users(ctx context.Context, in IDs) (UsersOutput, error) {
 // that show users: an unknown ID maps to a placeholder rather than failing a
 // whole list.
 func Directory(ctx context.Context, ids ...string) (map[string]UserRef, error) {
-	out := map[string]UserRef{}
-	if len(ids) == 0 {
-		return out, nil
-	}
-	found, err := UsersAPI.Call(ctx, IDs{IDs: ids})
+	people, err := People(ctx, ids...)
 	if err != nil {
 		return nil, err
 	}
-	for _, u := range found.Users {
-		out[u.ID] = u
+	out := make(map[string]UserRef, len(people))
+	for id, p := range people {
+		out[id] = p.UserRef
 	}
 	for _, id := range ids {
 		if _, ok := out[id]; !ok && id != "" {

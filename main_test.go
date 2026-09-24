@@ -112,6 +112,8 @@ type client struct {
 	name   string
 	hc     *http.Client
 	bearer string
+	// languages is the browser's Accept-Language, if any.
+	languages string
 }
 
 // client opens a browser with an empty cookie jar.
@@ -144,6 +146,9 @@ func (c *client) do(method, path string, body any) (int, []byte, http.Header) {
 		}
 		if c.bearer != "" {
 			req.Header.Set("Authorization", "Bearer "+c.bearer)
+		}
+		if c.languages != "" {
+			req.Header.Set("Accept-Language", c.languages)
 		}
 		resp, err := c.hc.Do(req)
 		if err != nil {
@@ -213,6 +218,7 @@ type user struct {
 	ID        string
 	Name      string
 	Email     string
+	Locale    string
 	CreatedAt time.Time
 }
 
@@ -257,7 +263,8 @@ func token(t *testing.T, m model.MailMessage) string {
 	return match[1]
 }
 
-// signup opens a verified account and returns its signed-in browser.
+// signup opens a verified account and returns its signed-in browser. The
+// browser sends no Accept-Language: the account reads French.
 func (h *harness) signup(name, email string) *client {
 	h.t.Helper()
 	c := h.client(name)

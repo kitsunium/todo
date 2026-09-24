@@ -22,7 +22,7 @@ func exercise(h *harness) {
 
 	// Accounts: a failed sign-in, a password change, a reset, sessions.
 	h.client("anon").fails(http.StatusUnauthorized, "invalid_credentials", "POST", "/api/auth/login", map[string]any{"email": "bob@example.com", "password": "wrong password"})
-	bob.expect(http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"name": "Bob B."})
+	bob.expect(http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"name": "Bob B.", "locale": "en"})
 	bob.expect(http.StatusNoContent, "POST", "/api/auth/password", map[string]any{"current": testPassword, "password": testPassword})
 	h.client("anon").expect(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "alice@example.com"})
 	h.client("anon").expect(http.StatusOK, "POST", "/api/auth/password/reset", map[string]any{"token": token(h.t, h.mail("alice@example.com", "/reset?token=")), "password": testPassword})

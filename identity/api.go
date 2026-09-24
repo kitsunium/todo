@@ -26,7 +26,7 @@ var (
 	_ = Service.Endpoint("POST /api/auth/login", Login, kit.RateLimitPerClient(2, 5))
 	_ = Service.Endpoint("POST /api/auth/logout", Logout, kit.Auth(), kit.RateLimitPerClient(10, 20))
 	_ = Service.Endpoint("GET /api/auth/me", Me, kit.Auth())
-	_ = Service.Endpoint("PATCH /api/auth/me", Rename, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("PATCH /api/auth/me", UpdateProfile, kit.Auth(), kit.RateLimitPerClient(10, 20))
 	_ = Service.Endpoint("POST /api/auth/password", ChangePassword, kit.Auth(), kit.RateLimitPerClient(2, 5))
 	_ = Service.Endpoint("POST /api/auth/password/forgot", ForgotPassword, kit.RateLimitPerClient(2, 5))
 	_ = Service.Endpoint("POST /api/auth/password/reset", ResetPassword, kit.RateLimitPerClient(2, 5))
@@ -66,6 +66,12 @@ type SignupInput struct {
 	Email    string `json:"email" validate:"required,maxlen=254"`
 	Name     string `json:"name" validate:"required,maxlen=80"`
 	Password string `json:"password" validate:"required,minlen=10,maxlen=128"`
+	// Locale is the language of the account, "fr" or "en" — the one the
+	// sign-up form was shown in. Without it, AcceptLanguage decides.
+	Locale string `json:"locale,omitempty"`
+	// AcceptLanguage is the browser's preference, negotiated over the
+	// product's languages: French when it names neither.
+	AcceptLanguage string `header:"Accept-Language"`
 }
 
 // SignupOutput says a verification mail is on its way — whether or not the
@@ -75,10 +81,11 @@ type SignupOutput struct {
 	Email  string `json:"email"`
 }
 
-// Signup opens an unverified account and mails the link that verifies it.
+// Signup opens an unverified account and mails the link that verifies it,
+// in the account's language: the one the form asked for, or the browser's.
 // An address that already has an account gets an "account exists" mail
-// instead, and the caller the very same answer: sign-up never tells a
-// stranger who uses the product.
+// instead — in its owner's language — and the caller the very same answer:
+// sign-up never tells a stranger who uses the product.
 func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	email := NormalizeEmail(in.Email)
 	if !ValidEmail(email) {
@@ -87,6 +94,12 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	name, err := wire.Line("name", in.Name, 80)
 	if err != nil {
 		return SignupOutput{}, err
+	}
+	locale := wire.NegotiateLocale(in.AcceptLanguage)
+	if in.Locale != "" {
+		if locale, err = wire.CheckLocale("locale", in.Locale); err != nil {
+			return SignupOutput{}, err
+		}
 	}
 	out := SignupOutput{Status: "verification_sent", Email: email}
 	// Hash before looking the address up, so both answers take as long.
@@ -103,7 +116,7 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	}
 	now := wire.Now(ctx)
 	acct, err := AccountLifecycle.Start(ctx, Account{
-		ID: kit.NewID("user"), Email: email, Name: name, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
+		ID: kit.NewID("user"), Email: email, Name: name, Locale: locale, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
 	})
 	if wire.Is(err, kit.CodeConflict) {
 		// A concurrent sign-up took the address first: it is now an
@@ -117,7 +130,7 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	if err != nil {
 		return SignupOutput{}, err
 	}
-	logger.Info(ctx, kit.Log(ctx), "account created", logger.String("user", acct.ID))
+	logger.Info(ctx, kit.Log(ctx), "account created", logger.String("user", acct.ID), logger.String("locale", string(acct.Locale)))
 	return out, sendVerification(ctx, acct)
 }
 
@@ -128,7 +141,7 @@ func sendVerification(ctx context.Context, a Account) error {
 		return err
 	}
 	_, err = notify.SendAPI.Call(ctx, notify.SendInput{
-		Template: notify.TemplateVerifyEmail, To: a.Email, Name: a.Name, Data: map[string]string{"token": secret},
+		Template: notify.TemplateVerifyEmail, To: a.Email, Name: a.Name, Locale: a.locale(), Data: map[string]string{"token": secret},
 	})
 	return err
 }
@@ -136,7 +149,7 @@ func sendVerification(ctx context.Context, a Account) error {
 // sendAccountExists tells the owner of an address that someone tried to
 // sign up with it.
 func sendAccountExists(ctx context.Context, a Account) error {
-	_, err := notify.SendAPI.Call(ctx, notify.SendInput{Template: notify.TemplateAccountExists, To: a.Email, Name: a.Name})
+	_, err := notify.SendAPI.Call(ctx, notify.SendInput{Template: notify.TemplateAccountExists, To: a.Email, Name: a.Name, Locale: a.locale()})
 	return err
 }
 
@@ -283,24 +296,49 @@ func Me(ctx context.Context, _ kit.Empty) (UserOutput, error) {
 	return UserOutput{User: a.user()}, nil
 }
 
-// RenameInput is a new display name.
-type RenameInput struct {
-	Name string `json:"name" validate:"required,maxlen=80"`
+// ProfileInput is what the caller changes of their account: the display
+// name, the language, or both. A member left out stays as it is.
+type ProfileInput struct {
+	// Name is the new display name: one line, at most 80 characters.
+	Name *string `json:"name,omitempty"`
+	// Locale is the new language: "fr" or "en". The next mails are in it.
+	Locale *string `json:"locale,omitempty"`
 }
 
-// Rename changes the caller's display name.
-func Rename(ctx context.Context, in RenameInput) (UserOutput, error) {
+// UpdateProfile changes the caller's display name and language.
+func UpdateProfile(ctx context.Context, in ProfileInput) (UserOutput, error) {
 	uid, _, err := caller(ctx)
 	if err != nil {
 		return UserOutput{}, err
 	}
-	name, err := wire.Line("name", in.Name, 80)
-	if err != nil {
-		return UserOutput{}, err
+	var name string
+	if in.Name != nil {
+		if name, err = wire.Line("name", *in.Name, 80); err != nil {
+			return UserOutput{}, err
+		}
+	}
+	var locale wire.Locale
+	if in.Locale != nil {
+		if locale, err = wire.CheckLocale("locale", *in.Locale); err != nil {
+			return UserOutput{}, err
+		}
+	}
+	if in.Name == nil && in.Locale == nil {
+		a, err := Accounts.Get(ctx, uid)
+		if err != nil {
+			return UserOutput{}, err
+		}
+		return UserOutput{User: a.user()}, nil
 	}
 	now := wire.Now(ctx)
 	a, err := Accounts.Update(ctx, uid, func(a *Account) error {
-		a.Name, a.UpdatedAt = name, now
+		if in.Name != nil {
+			a.Name = name
+		}
+		if in.Locale != nil {
+			a.Locale = locale
+		}
+		a.UpdatedAt = now
 		return nil
 	})
 	if err != nil {
@@ -367,7 +405,7 @@ func ForgotPassword(ctx context.Context, in EmailInput) (SentOutput, error) {
 		return SentOutput{}, err
 	}
 	_, err = notify.SendAPI.Call(ctx, notify.SendInput{
-		Template: notify.TemplateResetPassword, To: a.Email, Name: a.Name, Data: map[string]string{"token": secret},
+		Template: notify.TemplateResetPassword, To: a.Email, Name: a.Name, Locale: a.locale(), Data: map[string]string{"token": secret},
 	})
 	return out, err
 }

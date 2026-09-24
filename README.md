@@ -8,9 +8,10 @@ Sign up, confirm your address, and your tasks have priorities (urgent, high,
 medium, low), due dates, notes and views (Inbox, Today, Upcoming, Shared with
 me, Assigned to me, Completed). Add people as contacts, share tasks with them
 and assign them work; make groups with owners, admins and members who share a
-list. Everyone concerned hears about it — in their activity feed, and by mail:
-a verification link, a password reset, contact requests, invitations, shared
-and assigned tasks, and a reminder fifteen minutes before a task is due.
+list. Everyone concerned hears about it — in their activity feed, and by mail,
+in their own language (French first, or English): a verification link, a
+password reset, contact requests, invitations, shared and assigned tasks, and
+a reminder fifteen minutes before a task is due.
 
 | Today | A task |
 |---|---|
@@ -24,7 +25,7 @@ and assigned tasks, and a reminder fifteen minutes before a task is due.
 | **contacts** | who works with whom: requests, and invitations by email for people without an account | `requests` expire after 14 days; `claim-invites` turns an invitation into a request once its address is verified |
 | **groups** | teams, roles, invitations | `invitations` expire after 7 days |
 | **tasks** | the list: priorities, due dates, sharing, assignment, views and counts | `lifecycle` marks a task overdue the moment its due date passes and archives a done task after a day; `group-changes` follows deleted groups and departures |
-| **notify** | every mail: one outbox, one design, HTML and plain text | `task-mail`, `contact-mail`, `group-mail`; `reminders`, a loop kit runs, sleeps until the next reminder is due and wakes early when a task changes |
+| **notify** | every mail, in its recipient's language: one outbox, one light design, HTML and plain text, the words in `notify/locales/` | `task-mail`, `contact-mail`, `group-mail`; `reminders`, a loop kit runs, sleeps until the next reminder is due and wakes early when a task changes |
 | **activity** | a feed per user | three subscriptions write it from the events of tasks, contacts and groups |
 | **stats** | the list's vital signs | a job samples the census every 30 seconds |
 | **web** | the single page application (`web/dist`, embedded) | — |
@@ -114,11 +115,11 @@ flowchart LR
     n47["POST /api/auth/login"]
     n48["POST /api/auth/logout · auth"]
     n49["GET /api/auth/me · auth"]
-    n50["PATCH /api/auth/me · auth"]
-    n51["POST /api/auth/verify/resend"]
-    n52["POST /api/auth/password/reset"]
-    n53["DELETE /api/auth/sessions/{id} · auth"]
-    n54["POST /api/auth/signup"]
+    n50["POST /api/auth/verify/resend"]
+    n51["POST /api/auth/password/reset"]
+    n52["DELETE /api/auth/sessions/{id} · auth"]
+    n53["POST /api/auth/signup"]
+    n54["PATCH /api/auth/me · auth"]
     n55["GET /internal/users/by-email"]
     n56["POST /internal/users/batch"]
     n57["POST /api/auth/verify"]
@@ -283,23 +284,24 @@ flowchart LR
   n47 -.->|writes| n60
   n48 -.->|writes| n60
   n49 -.->|reads| n59
-  n50 -.->|writes| n59
-  n51 -.->|calls| n66
-  n51 -.->|reads| n59
-  n51 -.->|transitions create| n64
-  n52 -.->|publishes| n62
+  n50 -.->|calls| n66
+  n50 -.->|reads| n59
+  n50 -.->|transitions create| n64
+  n51 -.->|publishes| n62
+  n51 -.->|reads| n60
+  n51 -.->|reads| n61
+  n51 -.->|transitions reset| n63
+  n51 -.->|transitions use| n64
+  n51 -.->|writes| n59
+  n51 -.->|writes| n60
   n52 -.->|reads| n60
-  n52 -.->|reads| n61
-  n52 -.->|transitions reset| n63
-  n52 -.->|transitions use| n64
-  n52 -.->|writes| n59
   n52 -.->|writes| n60
-  n53 -.->|reads| n60
-  n53 -.->|writes| n60
-  n54 -.->|calls| n66
+  n53 -.->|calls| n66
+  n53 -.->|reads| n59
+  n53 -.->|transitions create| n63
+  n53 -.->|transitions create| n64
   n54 -.->|reads| n59
-  n54 -.->|transitions create| n63
-  n54 -.->|transitions create| n64
+  n54 -.->|writes| n59
   n55 -.->|reads| n59
   n56 -.->|reads| n59
   n57 -.->|reads| n61
@@ -455,12 +457,34 @@ stateDiagram-v2
   locked --> active: reset
 ```
 
+## Languages
+
+The product speaks **French first**, and English. Every account has a
+language, `fr` or `en`, and every mail it receives is written in it —
+subject, text, button, footer, dates ("jeudi 24 septembre à 17:00 UTC",
+"Thursday, September 24 at 17:00 UTC") and plurals.
+
+| When | The language is |
+|---|---|
+| signing up | the form's `locale`; without one, the browser's `Accept-Language` negotiated over `fr`, `en` (`en-US,en;q=0.9` → `en`); when it names neither, or is absent: **French** |
+| later | whatever `PATCH /api/auth/me {"locale": "en"}` sets — the next mails follow |
+| an account from before languages | French |
+| mailing someone without an account (an invitation to join) | the inviter's |
+
+The words live in `notify/locales/fr.json` and `en.json`, one flat catalogue
+per language rendered by the SDK's `i18n` (placeholders like `{actor}`, CLDR
+plural forms for counts). The process refuses to start when a key is missing
+from one language or a count lacks a plural form its language needs.
+
 ## API
 
 Every route but sign-up, sign-in, recovery and `/api/stats` needs a session:
 the `todo_session` cookie (HttpOnly, SameSite=Lax, Secure outside dev, 30
 days, sliding), or the same secret as `Authorization: Bearer`. Errors are
-`{"error":{"code","message","violations?"}}`.
+`{"error":{"code","message","violations?"}}`. The user the account routes
+answer carries its `locale`; sign-up takes an optional `locale` and reads
+`Accept-Language`; `PATCH /api/auth/me` takes `{name?, locale?}` — a
+language other than `fr` or `en` is a violation on `locale`.
 
 | Area | Routes |
 |---|---|
@@ -507,9 +531,11 @@ go test -race ./...
 ```
 
 Every test runs the whole product in-process, on a manual clock it moves:
-accounts from sign-up to sign-out, the lock and its timer, resets, contacts
-and invitations by email, groups and roles, the task list with its views,
-counts, guard and timer, sharing, and the reminders loop.
+accounts from sign-up to sign-out and the language each reads, the lock and
+its timer, resets, contacts and invitations by email, groups and roles, the
+task list with its views, counts, guard and timer, sharing, and the reminders
+loop. Every mail is rendered in both languages, and no word of the English
+catalogue may appear in a French mail.
 `TestTheDiagramMatchesTheCode` uses the product end to end with its static
 analysis on, then checks that the process runs exactly the nodes the source
 declares, that every edge the code proves is drawn, and that every edge the

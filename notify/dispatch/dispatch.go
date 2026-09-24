@@ -6,6 +6,10 @@
 // A subscription is delivered at least once, so each handler does everything
 // that can fail — reading the directory, rendering — before the one thing it
 // cannot take back: putting the mail in the outbox, last.
+//
+// Every mail is written in its recipient's language, which the directory
+// (identity.People, over the private UsersAPI) gives with their name; an
+// invitation to someone without an account, in the inviter's.
 package dispatch
 
 import (
@@ -31,18 +35,18 @@ func MailTaskEvent(ctx context.Context, e tasks.Event) error {
 	if (e.Kind != tasks.KindShared && e.Kind != tasks.KindAssigned) || e.UserID == "" || e.UserID == e.ActorID {
 		return nil
 	}
-	names, err := identity.Directory(ctx, e.ActorID, e.UserID)
+	people, err := identity.People(ctx, e.ActorID, e.UserID)
 	if err != nil {
 		return err
 	}
-	to := names[e.UserID]
+	to := people[e.UserID]
 	if to.Email == "" {
 		return nil // the account is gone
 	}
 	task := notify.Task{ID: e.TaskID, Title: e.Title, Priority: int(e.Priority), Due: e.Due}
-	m := notify.TaskShared(to.Name, names[e.ActorID].Name, task)
+	m := notify.TaskShared(to.Locale, to.Name, people[e.ActorID].Name, task)
 	if e.Kind == tasks.KindAssigned {
-		m = notify.TaskAssigned(to.Name, names[e.ActorID].Name, task)
+		m = notify.TaskAssigned(to.Locale, to.Name, people[e.ActorID].Name, task)
 	}
 	_, err = notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, m)
 	return err
@@ -51,20 +55,21 @@ func MailTaskEvent(ctx context.Context, e tasks.Event) error {
 // MailContactEvent mails the addressee of a contact request, the requester
 // of an accepted one, and the address an invitation to join is for.
 func MailContactEvent(ctx context.Context, e contacts.Event) error {
-	names, err := identity.Directory(ctx, e.ActorID, e.UserID)
+	people, err := identity.People(ctx, e.ActorID, e.UserID)
 	if err != nil {
 		return err
 	}
-	actor, to := names[e.ActorID].Name, names[e.UserID]
+	actor, to := people[e.ActorID], people[e.UserID]
 	var m notify.Message
 	switch e.Kind {
 	case contacts.KindRequested:
-		m = notify.ContactRequest(to.Name, actor)
+		m = notify.ContactRequest(to.Locale, to.Name, actor.Name)
 	case contacts.KindAccepted:
-		m = notify.ContactAccepted(to.Name, actor)
+		m = notify.ContactAccepted(to.Locale, to.Name, actor.Name)
 	case contacts.KindInvited:
-		to = identity.UserRef{Email: e.Email}
-		m = notify.InviteToJoin(actor, e.Email)
+		// No account, no language: the inviter's.
+		to = identity.Person{UserRef: identity.UserRef{Email: e.Email}, Locale: actor.Locale}
+		m = notify.InviteToJoin(actor.Locale, actor.Name, e.Email)
 	default:
 		return nil
 	}
@@ -80,15 +85,15 @@ func MailGroupEvent(ctx context.Context, e groups.Event) error {
 	if e.Kind != groups.KindInvited || e.UserID == "" {
 		return nil
 	}
-	names, err := identity.Directory(ctx, e.ActorID, e.UserID)
+	people, err := identity.People(ctx, e.ActorID, e.UserID)
 	if err != nil {
 		return err
 	}
-	to := names[e.UserID]
+	to := people[e.UserID]
 	if to.Email == "" {
 		return nil
 	}
-	m := notify.GroupInvitation(to.Name, names[e.ActorID].Name, e.GroupID, e.GroupName, e.Color)
+	m := notify.GroupInvitation(to.Locale, to.Name, people[e.ActorID].Name, e.GroupID, e.GroupName, e.Color)
 	_, err = notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, m)
 	return err
 }

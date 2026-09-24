@@ -1,5 +1,6 @@
 // Package notify is every mail the product sends: one outbox, one design,
-// and the mails themselves. identity sends its transactional mails through
+// and the mails themselves, each in its recipient's language — French, or
+// English (locales/). identity sends its transactional mails through
 // SendAPI, a synchronous call, so a one-time link never travels on a topic.
 // The rules that decide who hears about what — the subscriptions and the
 // reminders loop — live in notify/dispatch, on this same service: they listen
@@ -14,6 +15,7 @@ import (
 
 	"github.com/kitsunium/platform/kit"
 	"github.com/kitsunium/sdk/pkg/v1/mail"
+	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Service owns every mail the product sends.
@@ -43,6 +45,8 @@ type SendInput struct {
 	To string `json:"to" validate:"required,maxlen=254"`
 	// Name is the recipient's name, for the greeting.
 	Name string `json:"name" validate:"maxlen=80"`
+	// Locale is the language the recipient reads: fr or en.
+	Locale wire.Locale `json:"locale" validate:"required,oneof=fr|en"`
 	// Data is what the template needs: the one-time token of its link. It is
 	// a secret, redacted wherever kit shows a payload.
 	Data map[string]string `json:"data,omitempty" kit:"secret"`
@@ -54,18 +58,18 @@ type SendOutput struct {
 	ID string `json:"id"`
 }
 
-// Send renders a transactional mail in the product's design and puts it in
-// the outbox. It returns once the mail is safely queued; the mailer's own
+// Send renders a transactional mail in the product's design and the
+// recipient's language, and puts it in the outbox. It returns once the mail is safely queued; the mailer's own
 // loop delivers it, retrying a failure.
 func Send(ctx context.Context, in SendInput) (SendOutput, error) {
 	var m Message
 	switch in.Template {
 	case TemplateVerifyEmail:
-		m = VerifyEmail(in.Name, in.Data["token"])
+		m = VerifyEmail(in.Locale, in.Name, in.Data["token"])
 	case TemplateResetPassword:
-		m = ResetPassword(in.Name, in.Data["token"])
+		m = ResetPassword(in.Locale, in.Name, in.Data["token"])
 	case TemplateAccountExists:
-		m = AccountExists(in.Name)
+		m = AccountExists(in.Locale, in.Name)
 	default:
 		return SendOutput{}, kit.Invalid("unknown template")
 	}

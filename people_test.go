@@ -75,7 +75,7 @@ func TestContactsAndInvitations(t *testing.T) {
 	if l := call[contactList](alice, http.StatusOK, "GET", "/api/contacts", nil); len(l.Outgoing) != 1 || len(l.Contacts) != 0 {
 		t.Fatalf("alice's contacts %+v", l)
 	}
-	h.mail("bob@example.com", "Alice wants to add you as a contact")
+	h.mail("bob@example.com", "Alice souhaite vous ajouter à ses contacts")
 	bob.hasEntry("contact.requested", "Alice wants to add you as a contact.")
 
 	alice.fails(http.StatusForbidden, "permission_denied", "POST", "/api/contacts/"+added.Request.ID+"/accept", nil)
@@ -94,7 +94,7 @@ func TestContactsAndInvitations(t *testing.T) {
 			t.Fatalf("%s's contacts %+v", c.name, l)
 		}
 	}
-	h.mail("alice@example.com", "Bob accepted your contact request")
+	h.mail("alice@example.com", "Bob a accepté votre demande de contact")
 	alice.hasEntry("contact.accepted", "Bob accepted your contact request.")
 
 	// Someone without an account is invited by mail.
@@ -106,7 +106,7 @@ func TestContactsAndInvitations(t *testing.T) {
 		t.Fatalf("inviting dan: %+v", invited)
 	}
 	alice.fails(http.StatusConflict, "conflict", "POST", "/api/contacts", map[string]any{"email": "dan@example.com"})
-	join := h.mail("dan@example.com", "Alice invited you to Todo")
+	join := h.mail("dan@example.com", "Alice vous invite sur Todo")
 	if !strings.Contains(join.Text, "http://localhost:4000/signup?email=dan%40example.com") {
 		t.Errorf("the invitation links to %q", join.Text)
 	}
@@ -184,7 +184,7 @@ func TestGroups(t *testing.T) {
 		t.Fatalf("invitation %+v", invitation)
 	}
 	alice.fails(http.StatusConflict, "conflict", "POST", "/api/groups/"+design.ID+"/invitations", map[string]any{"userId": bobID})
-	h.mail("bob@example.com", "Alice invited you to join Design")
+	h.mail("bob@example.com", "Alice vous invite à rejoindre Design")
 	bob.hasEntry("group.invited", "Alice invited you to join Design.")
 
 	bob.fails(http.StatusNotFound, "not_found", "GET", "/api/groups/"+design.ID, nil)
@@ -208,7 +208,7 @@ func TestGroups(t *testing.T) {
 	if g := call[group](bob, http.StatusOK, "GET", "/api/groups/"+design.ID, nil); g.OpenTasks != 1 {
 		t.Errorf("open tasks %d", g.OpenTasks)
 	}
-	h.mail("bob@example.com", "Alice assigned you “Draw the logo”")
+	h.mail("bob@example.com", "Alice vous a attribué « Draw the logo »")
 	carol.fails(http.StatusNotFound, "not_found", "GET", "/api/tasks/"+task.ID, nil)
 	carol.fails(http.StatusNotFound, "not_found", "GET", "/api/tasks?view=group&group="+design.ID, nil)
 

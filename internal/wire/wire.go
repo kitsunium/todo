@@ -1,7 +1,8 @@
 // Package wire holds the conventions every service of the todo follows on
 // the wire: what a timestamp looks like, what a one-line text may contain,
-// and how a request that breaks a rule is refused. It declares no building
-// block — it is shared code, not a service, and owns no data.
+// which languages the product speaks, and how a request that breaks a rule
+// is refused. It declares no building block — it is shared code, not a
+// service, and owns no data.
 package wire
 
 import (

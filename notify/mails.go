@@ -1,24 +1,29 @@
 package notify
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Message is the content of one mail, before the design is applied. Every
 // mail has one headline, one primary action and a footer saying why the
-// recipient got it; render turns it into HTML and plain text.
+// recipient got it; render turns it into HTML and plain text. Every word of
+// it comes from the catalogue of its language (locales/), French first.
 type Message struct {
+	// Lang is the language the mail is written in.
+	Lang wire.Locale
 	// Subject is the subject line.
 	Subject string
 	// Preheader is the preview line a mail client shows after the subject.
 	Preheader string
 	// Headline is the title of the mail.
 	Headline string
-	// Greeting opens the body: "Hi Alice,". Empty for none.
+	// Greeting opens the body: "Bonjour Alice,". Empty for none.
 	Greeting string
 	// Body is the paragraphs before the action.
 	Body []string
@@ -30,11 +35,15 @@ type Message struct {
 	Notes []string
 	// Reason says, in the footer, why the recipient got this mail.
 	Reason string
+
+	// err is the first message the catalogue could not render: render
+	// refuses the mail rather than send a key in place of a sentence.
+	err error
 }
 
 // Card is a highlighted block: the task or the group a mail is about.
 type Card struct {
-	// Label names what it is: "Task", "Group".
+	// Label names what it is: "Tâche", "Group".
 	Label string
 	// Title is its name.
 	Title string
@@ -61,11 +70,9 @@ type Task struct {
 // accent is the brand's fox orange.
 const accent = "#f26b1d"
 
-// priorityNames and priorityColors follow the web app: 1 urgent … 4 low.
-var (
-	priorityNames  = map[int]string{1: "Urgent", 2: "High priority", 3: "Medium priority", 4: "Low priority"}
-	priorityColors = map[int]string{1: "#e5484d", 2: "#f76b15", 3: "#ffb224", 4: "#8e8c99"}
-)
+// priorityColors follow the web app: 1 urgent … 4 low. Their names are the
+// catalogue's priority.1 … priority.4.
+var priorityColors = map[int]string{1: "#e5484d", 2: "#f76b15", 3: "#ffb224", 4: "#8e8c99"}
 
 // groupColors maps the web app's group colors to their hexadecimal values.
 var groupColors = map[string]string{
@@ -73,195 +80,198 @@ var groupColors = map[string]string{
 	"teal": "#14b8a6", "blue": "#3b82f6", "indigo": "#6366f1", "violet": "#8b5cf6", "pink": "#ec4899",
 }
 
-// greeting opens a mail with the recipient's first name.
-func greeting(name string) string {
-	first, _, _ := strings.Cut(strings.TrimSpace(name), " ")
-	if first == "" {
-		return "Hi,"
-	}
-	return "Hi " + first + ","
-}
+// What a subject line keeps of a name and of a title, so that every subject
+// stays under 120 characters in every language.
+const (
+	nameInSubject  = 30
+	titleInSubject = 60
+)
 
 // VerifyEmail is the mail that confirms a new account's address.
-func VerifyEmail(name, token string) Message {
-	return Message{
-		Subject:   "Confirm your email address",
-		Preheader: "One click and your Todo account is ready.",
-		Headline:  "Confirm your email address",
-		Greeting:  greeting(name),
-		Body:      []string{"Thanks for signing up for Todo. Confirm that this address is yours, and your account is ready to use."},
-		Action:    Action{Label: "Confirm email address", URL: link("/verify", "token", token)},
-		Notes: []string{
-			"This link works once and expires in 24 hours.",
-			"If you did not create an account, ignore this email: nothing happens without the link.",
-		},
-		Reason: "You received this email because someone signed up for Todo with this address.",
-	}
+func VerifyEmail(l wire.Locale, name, token string) Message {
+	w := wordsIn(l)
+	return w.done(Message{
+		Subject:   w.say("verify.subject"),
+		Preheader: w.say("verify.preheader"),
+		Headline:  w.say("verify.headline"),
+		Greeting:  w.greeting(name),
+		Body:      []string{w.say("verify.body")},
+		Action:    Action{Label: w.say("verify.action"), URL: link("/verify", "token", token)},
+		Notes:     []string{w.say("verify.note_expiry"), w.say("verify.note_ignore")},
+		Reason:    w.say("verify.reason"),
+	})
 }
 
 // ResetPassword is the mail whose link chooses a new password.
-func ResetPassword(name, token string) Message {
-	return Message{
-		Subject:   "Reset your Todo password",
-		Preheader: "Choose a new password. The link expires in one hour.",
-		Headline:  "Reset your password",
-		Greeting:  greeting(name),
-		Body:      []string{"We received a request to reset the password of your Todo account. Choose a new one below; every device signed in to your account will be signed out."},
-		Action:    Action{Label: "Choose a new password", URL: link("/reset", "token", token)},
-		Notes: []string{
-			"This link works once and expires in one hour.",
-			"If you did not ask for this, ignore this email: your password stays as it is.",
-		},
-		Reason: "You received this email because a password reset was requested for this address.",
-	}
+func ResetPassword(l wire.Locale, name, token string) Message {
+	w := wordsIn(l)
+	return w.done(Message{
+		Subject:   w.say("reset.subject"),
+		Preheader: w.say("reset.preheader"),
+		Headline:  w.say("reset.headline"),
+		Greeting:  w.greeting(name),
+		Body:      []string{w.say("reset.body")},
+		Action:    Action{Label: w.say("reset.action"), URL: link("/reset", "token", token)},
+		Notes:     []string{w.say("reset.note_expiry"), w.say("reset.note_ignore")},
+		Reason:    w.say("reset.reason"),
+	})
 }
 
 // AccountExists answers a sign-up with an address that already has an
 // account, so the sign-up itself never tells a stranger who is a user.
-func AccountExists(name string) Message {
-	return Message{
-		Subject:   "You already have a Todo account",
-		Preheader: "Someone tried to sign up with your address.",
-		Headline:  "You already have an account",
-		Greeting:  greeting(name),
-		Body:      []string{"Someone, hopefully you, just tried to create a Todo account with this email address. You already have one, so nothing changed."},
-		Action:    Action{Label: "Sign in", URL: link("/login")},
-		Notes: []string{
-			"Forgot your password? Reset it at " + link("/forgot") + ".",
-			"If this was not you, you can safely ignore this email.",
-		},
-		Reason: "You received this email because a sign-up was attempted with this address.",
-	}
+func AccountExists(l wire.Locale, name string) Message {
+	w := wordsIn(l)
+	return w.done(Message{
+		Subject:   w.say("exists.subject"),
+		Preheader: w.say("exists.preheader"),
+		Headline:  w.say("exists.headline"),
+		Greeting:  w.greeting(name),
+		Body:      []string{w.say("exists.body")},
+		Action:    Action{Label: w.say("exists.action"), URL: link("/login")},
+		Notes:     []string{w.say("exists.note_forgot", "url", link("/forgot")), w.say("exists.note_ignore")},
+		Reason:    w.say("exists.reason"),
+	})
 }
 
 // ContactRequest tells a user someone wants to add them as a contact.
-func ContactRequest(to, actor string) Message {
-	return Message{
-		Subject:   actor + " wants to add you as a contact",
-		Preheader: "Contacts share tasks and invite each other to groups.",
-		Headline:  actor + " wants to add you as a contact",
-		Greeting:  greeting(to),
-		Body:      []string{"Contacts can share tasks with each other and invite each other to their groups. Accept the request to start working together."},
-		Action:    Action{Label: "Review the request", URL: link("/app/contacts")},
-		Reason:    "You received this email because " + actor + " sent you a contact request on Todo.",
-	}
+func ContactRequest(l wire.Locale, to, actor string) Message {
+	w := wordsIn(l)
+	actor = w.someone(actor)
+	return w.done(Message{
+		Subject:   w.say("contact_request.subject", "actor", clip(actor, nameInSubject)),
+		Preheader: w.say("contact_request.preheader"),
+		Headline:  w.say("contact_request.headline", "actor", actor),
+		Greeting:  w.greeting(to),
+		Body:      []string{w.say("contact_request.body")},
+		Action:    Action{Label: w.say("contact_request.action"), URL: link("/app/contacts")},
+		Reason:    w.say("contact_request.reason", "actor", actor),
+	})
 }
 
 // ContactAccepted tells a user their contact request was accepted.
-func ContactAccepted(to, actor string) Message {
-	return Message{
-		Subject:   actor + " accepted your contact request",
-		Preheader: "You can now share tasks with " + actor + ".",
-		Headline:  "You and " + actor + " are now contacts",
-		Greeting:  greeting(to),
-		Body:      []string{"You can now share tasks with " + actor + " and invite them to your groups."},
-		Action:    Action{Label: "Open your contacts", URL: link("/app/contacts")},
-		Reason:    "You received this email because " + actor + " accepted your contact request on Todo.",
-	}
+func ContactAccepted(l wire.Locale, to, actor string) Message {
+	w := wordsIn(l)
+	actor = w.someone(actor)
+	return w.done(Message{
+		Subject:   w.say("contact_accepted.subject", "actor", clip(actor, nameInSubject)),
+		Preheader: w.say("contact_accepted.preheader", "actor", actor),
+		Headline:  w.say("contact_accepted.headline", "actor", actor),
+		Greeting:  w.greeting(to),
+		Body:      []string{w.say("contact_accepted.body", "actor", actor)},
+		Action:    Action{Label: w.say("contact_accepted.action"), URL: link("/app/contacts")},
+		Reason:    w.say("contact_accepted.reason", "actor", actor),
+	})
 }
 
-// InviteToJoin invites someone who has no account yet.
-func InviteToJoin(actor, email string) Message {
-	return Message{
-		Subject:   actor + " invited you to Todo",
-		Preheader: "A calm, fast task list for you and the people you work with.",
-		Headline:  actor + " invited you to Todo",
-		Greeting:  "Hi,",
-		Body:      []string{"Todo is a calm, fast task list for you and the people you work with. Create your account with this address, and " + actor + "'s contact request will be waiting for you."},
-		Action:    Action{Label: "Create your account", URL: link("/signup", "email", email)},
-		Notes:     []string{"Not interested? Ignore this email: you will not hear from us unless someone invites you again."},
-		Reason:    "You received this email because " + actor + " invited " + email + " to Todo.",
-	}
+// InviteToJoin invites someone who has no account yet — and so no language:
+// it is written in the inviter's.
+func InviteToJoin(l wire.Locale, actor, email string) Message {
+	w := wordsIn(l)
+	actor = w.someone(actor)
+	return w.done(Message{
+		Subject:   w.say("invite.subject", "actor", clip(actor, nameInSubject)),
+		Preheader: w.say("invite.preheader"),
+		Headline:  w.say("invite.headline", "actor", actor),
+		Greeting:  w.greeting(""),
+		Body:      []string{w.say("invite.body", "actor", actor)},
+		Action:    Action{Label: w.say("invite.action"), URL: link("/signup", "email", email)},
+		Notes:     []string{w.say("invite.note")},
+		Reason:    w.say("invite.reason", "actor", actor, "email", email),
+	})
 }
 
 // GroupInvitation invites a contact into a group.
-func GroupInvitation(to, actor, groupID, group, color string) Message {
+func GroupInvitation(l wire.Locale, to, actor, groupID, group, color string) Message {
+	w := wordsIn(l)
+	actor = w.someone(actor)
 	hex, ok := groupColors[color]
 	if !ok {
 		hex = accent
 	}
-	return Message{
-		Subject:   actor + " invited you to join " + clip(group, 60),
-		Preheader: "Members of a group share one task list.",
-		Headline:  "Join " + group + " on Todo",
-		Greeting:  greeting(to),
-		Body:      []string{actor + " invited you to join a group. Its members share a task list and see each other's progress."},
-		Card:      &Card{Label: "Group", Title: group, Color: hex},
-		Action:    Action{Label: "View the invitation", URL: link("/app/groups/" + groupID)},
-		Reason:    "You received this email because " + actor + " invited you to a group on Todo.",
-	}
+	return w.done(Message{
+		Subject:   w.say("group_invitation.subject", "actor", clip(actor, nameInSubject), "group", clip(group, titleInSubject)),
+		Preheader: w.say("group_invitation.preheader"),
+		Headline:  w.say("group_invitation.headline", "group", group),
+		Greeting:  w.greeting(to),
+		Body:      []string{w.say("group_invitation.body", "actor", actor)},
+		Card:      &Card{Label: w.say("card.group"), Title: group, Color: hex},
+		Action:    Action{Label: w.say("group_invitation.action"), URL: link("/app/groups/" + groupID)},
+		Reason:    w.say("group_invitation.reason", "actor", actor),
+	})
 }
 
 // TaskShared tells a user a task was shared with them.
-func TaskShared(to, actor string, t Task) Message {
-	return Message{
-		Subject:   actor + " shared “" + clip(t.Title, 60) + "” with you",
-		Preheader: "You can now see, edit and complete it.",
-		Headline:  actor + " shared a task with you",
-		Greeting:  greeting(to),
-		Body:      []string{"You can now see, edit and complete this task. It is in your Shared with me list."},
-		Card:      taskCard(t),
-		Action:    Action{Label: "Open the task", URL: link("/app/tasks/" + t.ID)},
-		Reason:    "You received this email because " + actor + " shared a task with you on Todo.",
-	}
+func TaskShared(l wire.Locale, to, actor string, t Task) Message {
+	w := wordsIn(l)
+	actor = w.someone(actor)
+	return w.done(Message{
+		Subject:   w.say("task_shared.subject", "actor", clip(actor, nameInSubject), "title", clip(t.Title, titleInSubject)),
+		Preheader: w.say("task_shared.preheader"),
+		Headline:  w.say("task_shared.headline", "actor", actor),
+		Greeting:  w.greeting(to),
+		Body:      []string{w.say("task_shared.body")},
+		Card:      w.taskCard(t),
+		Action:    Action{Label: w.say("mail.open_task"), URL: link("/app/tasks/" + t.ID)},
+		Reason:    w.say("task_shared.reason", "actor", actor),
+	})
 }
 
 // TaskAssigned tells a user a task was assigned to them.
-func TaskAssigned(to, actor string, t Task) Message {
-	return Message{
-		Subject:   actor + " assigned you “" + clip(t.Title, 60) + "”",
-		Preheader: "It is in your Assigned to me list.",
-		Headline:  actor + " assigned you a task",
-		Greeting:  greeting(to),
-		Body:      []string{"This task is now yours to do. It is in your Assigned to me list."},
-		Card:      taskCard(t),
-		Action:    Action{Label: "Open the task", URL: link("/app/tasks/" + t.ID)},
-		Reason:    "You received this email because " + actor + " assigned you a task on Todo.",
-	}
+func TaskAssigned(l wire.Locale, to, actor string, t Task) Message {
+	w := wordsIn(l)
+	actor = w.someone(actor)
+	return w.done(Message{
+		Subject:   w.say("task_assigned.subject", "actor", clip(actor, nameInSubject), "title", clip(t.Title, titleInSubject)),
+		Preheader: w.say("task_assigned.preheader"),
+		Headline:  w.say("task_assigned.headline", "actor", actor),
+		Greeting:  w.greeting(to),
+		Body:      []string{w.say("task_assigned.body")},
+		Card:      w.taskCard(t),
+		Action:    Action{Label: w.say("mail.open_task"), URL: link("/app/tasks/" + t.ID)},
+		Reason:    w.say("task_assigned.reason", "actor", actor),
+	})
 }
 
 // DueSoon reminds everyone a task concerns that it is due in a moment.
-func DueSoon(to string, t Task, in time.Duration) Message {
-	when := "Due in " + minutes(in)
-	return Message{
-		Subject:   when + ": " + clip(t.Title, 60),
-		Preheader: "A task you are part of is due soon.",
+func DueSoon(l wire.Locale, to string, t Task, left time.Duration) Message {
+	w := wordsIn(l)
+	when := w.dueIn(left)
+	return w.done(Message{
+		Subject:   w.say("due_soon.subject", "when", when, "title", clip(t.Title, titleInSubject)),
+		Preheader: w.say("due_soon.preheader"),
 		Headline:  when,
-		Greeting:  greeting(to),
-		Body:      []string{"A task you own, are assigned or share is due soon."},
-		Card:      taskCard(t),
-		Action:    Action{Label: "Open the task", URL: link("/app/tasks/" + t.ID)},
-		Reason:    "You received this email because you own, are assigned or share this task on Todo. You get one reminder per due date.",
+		Greeting:  w.greeting(to),
+		Body:      []string{w.say("due_soon.body")},
+		Card:      w.taskCard(t),
+		Action:    Action{Label: w.say("mail.open_task"), URL: link("/app/tasks/" + t.ID)},
+		Reason:    w.say("due_soon.reason"),
+	})
+}
+
+// dueIn says how soon a task is due, to the minute: "Échéance dans
+// 15 minutes", "Due in 1 minute" — with the plural rules of the language.
+func (w *words) dueIn(d time.Duration) string {
+	n := int(d.Round(time.Minute) / time.Minute)
+	if n <= 0 {
+		return w.say("due_soon.when_now")
 	}
+	return w.count("due_soon.when", n)
 }
 
 // taskCard shows a task: its title, its due date and its priority, on the
 // priority's color.
-func taskCard(t Task) *Card {
+func (w *words) taskCard(t Task) *Card {
 	var detail []string
 	if t.Due != nil {
-		detail = append(detail, "Due "+t.Due.UTC().Format("Mon, Jan 2 at 15:04")+" UTC")
-	}
-	if p, ok := priorityNames[t.Priority]; ok {
-		detail = append(detail, p)
+		detail = append(detail, w.say("card.due", "date", w.date(*t.Due)))
 	}
 	color, ok := priorityColors[t.Priority]
-	if !ok {
+	if ok {
+		detail = append(detail, w.say("priority."+strconv.Itoa(t.Priority)))
+	} else {
 		color = accent
 	}
-	return &Card{Label: "Task", Title: t.Title, Detail: strings.Join(detail, " · "), Color: color}
-}
-
-// minutes renders a short wait: "15 minutes", "1 minute", "a moment".
-func minutes(d time.Duration) string {
-	n := int(d.Round(time.Minute) / time.Minute)
-	switch {
-	case n <= 0:
-		return "a moment"
-	case n == 1:
-		return "1 minute"
-	}
-	return fmt.Sprintf("%d minutes", n)
+	return &Card{Label: w.say("card.task"), Title: t.Title, Detail: strings.Join(detail, " · "), Color: color}
 }
 
 // clip shortens text for a subject line, on a word boundary when it can,

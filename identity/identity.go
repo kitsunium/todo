@@ -10,6 +10,7 @@ import (
 
 	"github.com/kitsunium/platform/kit"
 	"github.com/kitsunium/sdk/pkg/v1/mail"
+	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Service owns accounts, passwords and sessions.
@@ -25,7 +26,10 @@ type UserRef struct {
 // User is a user as they see their own account.
 type User struct {
 	UserRef
-	CreatedAt time.Time `json:"createdAt"`
+	// Locale is the language the user reads the product and its mails in:
+	// "fr" or "en".
+	Locale    wire.Locale `json:"locale"`
+	CreatedAt time.Time   `json:"createdAt"`
 }
 
 // UserOutput is the answer of every endpoint that returns the caller: {user}.
