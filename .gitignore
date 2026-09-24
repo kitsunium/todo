@@ -1,0 +1,9 @@
+# kit's local state: the dev binary and the dev data.
+.kit/
+
+# Go workspaces are local to a machine.
+go.work
+go.work.sum
+
+/todo
+.DS_Store

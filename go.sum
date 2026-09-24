@@ -1,0 +1,16 @@
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+github.com/kitsunium/sdk/internal/core v0.4.6 h1:tRgKlWp8/eSZFIEG3oAKM3qpiPHUwoQXY5KinU7LzNE=
+github.com/kitsunium/sdk/internal/core v0.4.6/go.mod h1:uTvfFVVT/ZCaB20N65EmJcxzEhURftJFo4gemN7Qx3k=
+github.com/kitsunium/sdk/internal/kernel v0.4.6 h1:HfSpNzizW1kCpIKpjhyJPSTkdaWFh6xCmQebkCgjnFk=
+github.com/kitsunium/sdk/internal/kernel v0.4.6/go.mod h1:NF4SM0nwK0mi5wxPYki4tD8HxD67rggaGqEBaW/bbDg=
+github.com/kitsunium/sdk/internal/service v0.4.6 h1:tsOJtKQbTdgN9hJLuPRuHhHh1gIjco8wJj/or4gWGRA=
+github.com/kitsunium/sdk/internal/service v0.4.6/go.mod h1:Dr2uzCtuoL20kDjWaPItqgj44qOJcnYIynfOAnL7lHM=
+github.com/kitsunium/sdk/pkg v0.4.6 h1:XiHt8I0eEUBHP3BbI1pW3VwZrND39uVXiwTCvbJ5nXU=
+github.com/kitsunium/sdk/pkg v0.4.6/go.mod h1:wCKphnS67PVGlI273AeIbigK6h/46JKEAidA5IJtQxk=
+golang.org/x/mod v0.41.0 h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c=
+golang.org/x/mod v0.41.0/go.mod h1:Ek9pY8RKWXwsWvd3rQiHYtMqkjSUV+s1Rj7j4H5Ur6o=
+golang.org/x/sync v0.23.0 h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk=
+golang.org/x/sync v0.23.0/go.mod h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0=
+golang.org/x/tools v0.50.0 h1:c2ifzfcuY7L90lZ2aKd8S4K2NpASF08SZx9ZuJkHmSU=
+golang.org/x/tools v0.50.0/go.mod h1:7ulVMw3831Mwi5EZD6RomGyffr4VFjuNYXf2BbCEAV0=

@@ -1,0 +1,5 @@
+.git
+.kit
+go.work
+go.work.sum
+*.md
