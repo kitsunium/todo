@@ -15,8 +15,9 @@
 #                       unset, mails are only captured and a warning says so —
 #                       set it in production
 #   TODO_ARCHIVE_AFTER  how long a done task stays listed (default 24h)
-#   KIT_TRUST_PROXY=on  behind a reverse proxy: the client address is the first
-#                       X-Forwarded-For hop (sessions list it)
+#   KIT_TRUST_PROXY=on  behind one reverse proxy: the client address is the last
+#                       X-Forwarded-For hop, the one the proxy appended (sessions
+#                       list it)
 
 FROM golang:1.27 AS build
 WORKDIR /src/todo

@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/google/pprof v0.0.0-20260802141513-ef3492d7dac3 // indirect
 	github.com/kitsunium/sdk/internal/core v0.4.6 // indirect
 	github.com/kitsunium/sdk/internal/kernel v0.4.6 // indirect
 	github.com/kitsunium/sdk/internal/service v0.4.6 // indirect
