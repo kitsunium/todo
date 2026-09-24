@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { format, formatDistanceToNowStrict } from "date-fns";
 import { BookUser, Ellipsis, Mail, UserMinus, UserRoundPlus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import * as ep from "../../api/endpoints";
@@ -16,10 +15,13 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "../../components/ui/me
 import { Skeleton } from "../../components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { toast } from "../../components/ui/toast";
+import { tr, useT, type Key } from "../../i18n";
+import { distance, formatDate } from "../../lib/dates";
 import { Page } from "../shell/Page";
 import { AddContactDialog } from "./AddContactDialog";
 
 export function ContactsPage() {
+  const t = useT();
   const q = useContacts();
   const [adding, setAdding] = useState(false);
   const [tab, setTab] = useState<string | null>(null);
@@ -27,12 +29,12 @@ export function ContactsPage() {
   const current = tab ?? (d && d.contacts.length === 0 && d.incoming.length ? "requests" : "contacts");
   return (
     <Page
-      title="Contacts"
+      title={t("contacts.title")}
       icon={<BookUser className="text-[#3e63dd]" strokeWidth={2} />}
-      subtitle="The people you share tasks and groups with."
+      subtitle={t("contacts.subtitle")}
       actions={
         <Button size="sm" variant="primary" icon={<UserRoundPlus className="size-4" />} onClick={() => setAdding(true)}>
-          Add contact
+          {t("contacts.add")}
         </Button>
       }
     >
@@ -44,14 +46,14 @@ export function ContactsPage() {
         <Tabs value={current} onValueChange={setTab}>
           <TabsList className="mb-5">
             <TabsTrigger value="contacts" count={d!.contacts.length}>
-              Contacts
+              {t("contacts.tabContacts")}
             </TabsTrigger>
             <TabsTrigger value="requests" count={d!.incoming.length + d!.outgoing.length || undefined}>
-              Requests
-              {d!.incoming.length ? <span className="size-1.5 rounded-full bg-accent" aria-label="new" /> : null}
+              {t("contacts.tabRequests")}
+              {d!.incoming.length ? <span className="size-1.5 rounded-full bg-accent" aria-label={t("common.new")} /> : null}
             </TabsTrigger>
             <TabsTrigger value="invites" count={d!.invites.length || undefined}>
-              Invitations sent
+              {t("contacts.tabInvites")}
             </TabsTrigger>
           </TabsList>
           <TabsContent value="contacts" className="outline-none">
@@ -91,10 +93,19 @@ function ListSkeleton() {
 }
 
 function ContactList({ data, onAdd }: { data: ContactsPayload; onAdd: () => void }) {
+  const t = useT();
   if (!data.contacts.length) {
     return (
-      <EmptyState art={<ContactsIllo />} title="No contacts yet" action={<Button variant="primary" onClick={onAdd} icon={<UserRoundPlus className="size-4" />}>Add your first contact</Button>}>
-        Add people by email to share tasks with them and work in groups together.
+      <EmptyState
+        art={<ContactsIllo />}
+        title={t("contacts.emptyTitle")}
+        action={
+          <Button variant="primary" onClick={onAdd} icon={<UserRoundPlus className="size-4" />}>
+            {t("contacts.addFirst")}
+          </Button>
+        }
+      >
+        {t("contacts.emptyBody")}
       </EmptyState>
     );
   }
@@ -108,6 +119,7 @@ function ContactList({ data, onAdd }: { data: ContactsPayload; onAdd: () => void
 }
 
 function ContactRow({ c }: { c: Contact }) {
+  const t = useT();
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   return (
@@ -117,33 +129,38 @@ function ContactRow({ c }: { c: Contact }) {
         <p className="truncate text-sm font-medium text-fg">{c.user.name}</p>
         <p className="truncate text-xs text-fg-3">{c.user.email}</p>
       </div>
-      <span className="text-xs text-fg-4 max-sm:hidden">Since {format(new Date(c.since), "MMM yyyy")}</span>
+      <span className="text-xs whitespace-nowrap text-fg-4 max-sm:hidden">
+        {t("contacts.since", { date: formatDate(new Date(c.since), "date.pattern.shortMonthYear", t.locale) })}
+      </span>
       <Menu>
         <MenuTrigger asChild>
-          <IconButton label={`Actions for ${c.user.name}`} size="sm">
+          <IconButton label={t("contacts.actionsFor", { name: c.user.name })} size="sm">
             <Ellipsis className="size-4" />
           </IconButton>
         </MenuTrigger>
         <MenuContent align="end">
-          <MenuItem icon={<Mail className="size-4" />} onSelect={() => void navigator.clipboard?.writeText(c.user.email).then(() => toast.success("Email copied"))}>
-            Copy email
+          <MenuItem
+            icon={<Mail className="size-4" />}
+            onSelect={() => void navigator.clipboard?.writeText(c.user.email).then(() => toast.success(tr()("contacts.emailCopied")))}
+          >
+            {t("contacts.copyEmail")}
           </MenuItem>
           <MenuItem danger icon={<UserMinus className="size-4" />} onSelect={() => setConfirm(true)}>
-            Remove contact…
+            {t("contacts.remove")}
           </MenuItem>
         </MenuContent>
       </Menu>
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Remove ${c.user.name}?`}
-        description="You’ll no longer be able to share new tasks with each other. Tasks already shared stay shared."
-        confirm="Remove"
+        title={t("contacts.removeTitle", { name: c.user.name })}
+        description={t("contacts.removeBody")}
+        confirm={t("common.remove")}
         onConfirm={async () => {
           try {
             await ep.contacts.remove(c.id);
             await qc.invalidateQueries({ queryKey: qk.contacts });
-            toast(`${c.user.name} was removed from your contacts`);
+            toast(tr()("contacts.removed", { name: c.user.name }));
           } catch (err) {
             toast.error(errorMessage(err));
           }
@@ -154,10 +171,11 @@ function ContactRow({ c }: { c: Contact }) {
 }
 
 function Requests({ data }: { data: ContactsPayload }) {
+  const t = useT();
   if (!data.incoming.length && !data.outgoing.length) {
     return (
-      <EmptyState art={<ContactsIllo />} title="No pending requests">
-        Requests you send and receive wait here until someone answers.
+      <EmptyState art={<ContactsIllo />} title={t("contacts.noRequestsTitle")}>
+        {t("contacts.noRequestsBody")}
       </EmptyState>
     );
   }
@@ -165,7 +183,7 @@ function Requests({ data }: { data: ContactsPayload }) {
     <div className="flex flex-col gap-6">
       {data.incoming.length ? (
         <section>
-          <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg">Waiting for you</h2>
+          <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg">{t("contacts.waiting")}</h2>
           <Card>
             {data.incoming.map((r) => (
               <RequestRow key={r.id} r={r} incoming />
@@ -175,7 +193,7 @@ function Requests({ data }: { data: ContactsPayload }) {
       ) : null}
       {data.outgoing.length ? (
         <section>
-          <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg">Sent by you</h2>
+          <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg">{t("contacts.sent")}</h2>
           <Card>
             {data.outgoing.map((r) => (
               <RequestRow key={r.id} r={r} />
@@ -188,20 +206,22 @@ function Requests({ data }: { data: ContactsPayload }) {
 }
 
 function RequestRow({ r, incoming }: { r: ContactRequest; incoming?: boolean }) {
+  const t = useT();
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   async function run(kind: "accept" | "decline" | "cancel") {
     setBusy(kind);
+    const say = tr();
     try {
       if (kind === "accept") {
         await ep.contacts.accept(r.id);
-        toast.success(`You and ${r.user.name} are now contacts`);
+        toast.success(say("contacts.accepted", { name: r.user.name }));
       } else if (kind === "decline") {
         await ep.contacts.decline(r.id);
-        toast(`Declined ${r.user.name}’s request`);
+        toast(say("contacts.declined", { name: r.user.name }));
       } else {
         await ep.contacts.cancel(r.id);
-        toast("Request cancelled");
+        toast(say("contacts.cancelled"));
       }
       await Promise.all([qc.invalidateQueries({ queryKey: qk.contacts }), qc.invalidateQueries({ queryKey: qk.counts })]);
     } catch (err) {
@@ -216,23 +236,23 @@ function RequestRow({ r, incoming }: { r: ContactRequest; incoming?: boolean }) 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-fg">{r.user.name}</p>
         <p className="truncate text-xs text-fg-3">
-          {r.user.email} · {formatDistanceToNowStrict(new Date(r.createdAt), { addSuffix: true })}
+          {r.user.email} · {distance(r.createdAt, t.locale)}
         </p>
       </div>
       {incoming ? (
         <div className="flex items-center gap-1.5 max-sm:w-full max-sm:justify-end">
           <Button size="sm" variant="ghost" loading={busy === "decline"} disabled={!!busy} onClick={() => run("decline")}>
-            Decline
+            {t("common.decline")}
           </Button>
           <Button size="sm" variant="primary" loading={busy === "accept"} disabled={!!busy} onClick={() => run("accept")}>
-            Accept
+            {t("common.accept")}
           </Button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <Chip tone="warn">Pending</Chip>
+          <Chip tone="warn">{t("contacts.pending")}</Chip>
           <Button size="sm" variant="ghost" loading={busy === "cancel"} onClick={() => run("cancel")}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       )}
@@ -241,6 +261,7 @@ function RequestRow({ r, incoming }: { r: ContactRequest; incoming?: boolean }) 
 }
 
 function WithdrawButton({ id, email }: { id: string; email: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   return (
@@ -253,7 +274,7 @@ function WithdrawButton({ id, email }: { id: string; email: string }) {
         try {
           await ep.contacts.cancel(id);
           await qc.invalidateQueries({ queryKey: qk.contacts });
-          toast(`Withdrew the invitation to ${email}`);
+          toast(tr()("contacts.withdrawn", { email }));
         } catch (err) {
           toast.error(errorMessage(err));
         } finally {
@@ -261,16 +282,35 @@ function WithdrawButton({ id, email }: { id: string; email: string }) {
         }
       }}
     >
-      Withdraw
+      {t("contacts.withdraw")}
     </Button>
   );
 }
 
+const INVITE_STATUS: Record<string, Key> = {
+  pending: "contacts.invite.pending",
+  accepted: "contacts.invite.accepted",
+  cancelled: "contacts.invite.cancelled",
+  canceled: "contacts.invite.cancelled",
+  revoked: "contacts.invite.cancelled",
+  expired: "contacts.invite.expired",
+  declined: "contacts.invite.declined",
+};
+
 function Invites({ data, onAdd }: { data: ContactsPayload; onAdd: () => void }) {
+  const t = useT();
   if (!data.invites.length) {
     return (
-      <EmptyState art={<ContactsIllo />} title="No invitations sent" action={<Button variant="secondary" onClick={onAdd}>Invite someone</Button>}>
-        Invite someone who isn’t on Todo yet — they’ll become a contact when they join.
+      <EmptyState
+        art={<ContactsIllo />}
+        title={t("contacts.noInvitesTitle")}
+        action={
+          <Button variant="secondary" onClick={onAdd}>
+            {t("contacts.inviteSomeone")}
+          </Button>
+        }
+      >
+        {t("contacts.noInvitesBody")}
       </EmptyState>
     );
   }
@@ -283,10 +323,10 @@ function Invites({ data, onAdd }: { data: ContactsPayload; onAdd: () => void }) 
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-fg">{i.email}</p>
-            <p className="truncate text-xs text-fg-3">Sent {formatDistanceToNowStrict(new Date(i.createdAt), { addSuffix: true })}</p>
+            <p className="truncate text-xs text-fg-3">{t("contacts.sentAgo", { ago: distance(i.createdAt, t.locale) })}</p>
           </div>
-          <Chip tone={i.status === "pending" ? "warn" : i.status === "accepted" ? "success" : "neutral"} className="capitalize">
-            {i.status === "accepted" ? "Joined" : i.status}
+          <Chip tone={i.status === "pending" ? "warn" : i.status === "accepted" ? "success" : "neutral"}>
+            {INVITE_STATUS[i.status] ? t(INVITE_STATUS[i.status]!) : i.status}
           </Chip>
           {i.status === "pending" ? <WithdrawButton id={i.id} email={i.email} /> : null}
         </li>

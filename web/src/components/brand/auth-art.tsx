@@ -1,5 +1,36 @@
 // The brand panel of the sign-in pages: three task cards in a loose stack,
-// the fox keeping an eye on them. Drawn by hand; text uses the page's Inter.
+// the fox keeping an eye on them. Drawn by hand; text uses the page's Inter,
+// in the page's language — the pills are sized to their words.
+import { useEffect, useState } from "react";
+import { capitalize, useT } from "../../i18n";
+import { formatTime } from "../../lib/dates";
+
+const FONT = "Inter Variable, system-ui, sans-serif";
+
+let canvas: HTMLCanvasElement | null = null;
+/** The width of a line of text in Inter, measured by the browser. */
+function textWidth(text: string, size: number, weight: number): number {
+  const ctx = typeof document !== "undefined" ? (canvas ??= document.createElement("canvas")).getContext("2d") : null;
+  if (!ctx) return text.length * size * 0.62;
+  ctx.font = `${weight} ${size}px ${FONT}`;
+  return ctx.measureText(text).width;
+}
+
+/** Re-renders once the web font is in: widths measured before it are the fallback's. */
+function useFontsReady(): boolean {
+  const [ready, setReady] = useState(() => typeof document === "undefined" || document.fonts?.status === "loaded");
+  useEffect(() => {
+    if (ready || !document.fonts) return;
+    let live = true;
+    void document.fonts.ready.then(() => live && setReady(true));
+    return () => {
+      live = false;
+    };
+  }, [ready]);
+  return ready;
+}
+
+const pillWidth = (text: string) => Math.ceil(textWidth(text, 11, 600)) + 16;
 
 function Check({ x, y, done, ring }: { x: number; y: number; done?: boolean; ring: string }) {
   return done ? (
@@ -16,7 +47,7 @@ function Pill({ x, y, w, text, color, bg }: { x: number; y: number; w: number; t
   return (
     <g>
       <rect x={x} y={y} width={w} height="20" rx="6" fill={bg} />
-      <text x={x + 8} y={y + 14} fontSize="11" fontWeight="600" fill={color} fontFamily="Inter Variable, system-ui, sans-serif">
+      <text x={x + 8} y={y + 14} fontSize="11" fontWeight="600" fill={color} fontFamily={FONT}>
         {text}
       </text>
     </g>
@@ -35,7 +66,7 @@ function Face({ cx, cy, r, hue, letters }: { cx: number; cy: number; r: number; 
         fontSize="10"
         fontWeight="700"
         fill={`oklch(0.42 0.11 ${hue})`}
-        fontFamily="Inter Variable, system-ui, sans-serif"
+        fontFamily={FONT}
       >
         {letters}
       </text>
@@ -44,9 +75,24 @@ function Face({ cx, cy, r, hue, letters }: { cx: number; cy: number; r: number; 
 }
 
 export function AuthArt({ className }: { className?: string }) {
-  const font = "Inter Variable, system-ui, sans-serif";
+  const t = useT();
+  useFontsReady();
+  const font = FONT;
+  const upper = (s: string) => s.toLocaleUpperCase(t.locale);
+  const home = t("auth.art.home");
+  const time = formatTime(new Date(2026, 0, 1, 17, 0), t.locale);
+  const launch = t("auth.art.launch");
+  const venue = t("auth.art.venue");
+  const deck = t("auth.art.deck");
+  const homeW = pillWidth(home);
+  const timeW = pillWidth(time);
+  const launchW = pillWidth(launch);
+  // The venue and its pill share the middle card's line: the pill follows the words.
+  const homeX = Math.min(52 + Math.ceil(textWidth(venue, 14, 500)) + 12, 304 - 16 - homeW);
+  const launchX = 56 + timeW + 6;
+  const facesX = launchX + launchW + 24;
   return (
-    <svg viewBox="0 0 440 400" className={className} role="img" aria-label="Task cards, stacked, with the todo fox">
+    <svg viewBox="0 0 440 400" className={className} role="img" aria-label={t("auth.art.label")}>
       <defs>
         <filter id="aa-shadow" x="-30%" y="-30%" width="160%" height="170%">
           <feDropShadow dx="0" dy="18" stdDeviation="18" floodColor="#7a2a06" floodOpacity="0.28" />
@@ -71,39 +117,39 @@ export function AuthArt({ className }: { className?: string }) {
       <g transform="rotate(4 220 200) translate(80 96)" filter="url(#aa-shadow)">
         <rect width="304" height="150" rx="18" fill="url(#aa-card)" />
         <text x="24" y="34" fontSize="12" fontWeight="600" fill="#a8a29e" fontFamily={font} letterSpacing="0.02em">
-          TOMORROW
+          {upper(t("section.tomorrow"))}
         </text>
         <Check x={33} y={62} ring="#ffb224" />
         <text x="52" y="66.5" fontSize="14" fontWeight="500" fill="#1c1917" fontFamily={font}>
-          Book the offsite venue
+          {venue}
         </text>
-        <Pill x={214} y={52} w={56} text="#Home" color="#218358" bg="#e6f6ec" />
+        <Pill x={homeX} y={52} w={homeW} text={home} color="#218358" bg="#e6f6ec" />
       </g>
 
       {/* front card */}
       <g transform="translate(40 186)" filter="url(#aa-shadow)">
         <rect width="336" height="182" rx="20" fill="url(#aa-card)" />
         <text x="26" y="38" fontSize="12" fontWeight="600" fill="#c2410c" fontFamily={font} letterSpacing="0.02em">
-          TODAY
-        </text>
-        <text x="75" y="38" fontSize="12" fontWeight="600" fill="#a8a29e" fontFamily={font}>
-          3
+          {upper(capitalize(t("section.today"), t.locale))}
+          <tspan dx="9" fill="#a8a29e" letterSpacing="0">
+            3
+          </tspan>
         </text>
 
         <Check x={35} y={70} done ring="#30a46c" />
         <text x="56" y="74.5" fontSize="14" fontWeight="500" fill="#a8a29e" fontFamily={font}>
-          Send the launch deck
+          {deck}
         </text>
-        <line x1="56" y1="70" x2="196" y2="70" stroke="#a8a29e" strokeWidth="1.4" />
+        <line x1="56" y1="70" x2={56 + Math.ceil(textWidth(deck, 14, 500)) + 2} y2="70" stroke="#a8a29e" strokeWidth="1.4" />
 
         <Check x={35} y={110} ring="#e5484d" />
         <text x="56" y="114.5" fontSize="14" fontWeight="600" fill="#1c1917" fontFamily={font}>
-          Ship the landing page
+          {t("auth.art.landing")}
         </text>
-        <Pill x={56} y={124} w={58} text="5 PM" color="#c2410c" bg="#fdeee4" />
-        <Pill x={120} y={124} w={66} text="#Launch" color="#b24c0c" bg="#fff1e6" />
-        <Face cx={210} cy={134} r={10} hue={250} letters="SR" />
-        <Face cx={231} cy={134} r={10} hue={150} letters="NH" />
+        <Pill x={56} y={124} w={timeW} text={time} color="#c2410c" bg="#fdeee4" />
+        <Pill x={launchX} y={124} w={launchW} text={launch} color="#b24c0c" bg="#fff1e6" />
+        <Face cx={facesX} cy={134} r={10} hue={250} letters="SR" />
+        <Face cx={facesX + 21} cy={134} r={10} hue={150} letters="NH" />
 
         <Check x={35} y={160} ring="#f76b15" />
         <rect x="56" y="155" width="150" height="9" rx="4.5" fill="#e7e5e4" />

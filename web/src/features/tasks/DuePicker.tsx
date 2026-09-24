@@ -13,8 +13,9 @@ import {
 } from "date-fns";
 import { CalendarArrowUp, CalendarX, ChevronLeft, ChevronRight, Clock, Star, Sunrise, X } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { capitalize, dateLocale, useT } from "../../i18n";
 import { cn } from "../../lib/cn";
-import { dueAt, formatTime, isDateOnly, nextWeek } from "../../lib/dates";
+import { dueAt, formatDate, formatTime, isDateOnly, nextWeek } from "../../lib/dates";
 import { useNow } from "../../lib/now";
 import { parseTime } from "../../lib/quickadd";
 
@@ -54,10 +55,14 @@ export function DuePicker({
   onPicked?: () => void;
 }) {
   const now = useNow();
+  const t = useT();
+  const loc = t.locale;
+  // The week starts on Monday in French, on Sunday in (US) English.
+  const weekStartsOn = dateLocale(loc).options?.weekStartsOn ?? 1;
   const current = value ? new Date(value) : null;
   const [month, setMonth] = useState(() => startOfMonth(current ?? now));
   const [time, setTime] = useState(() => (current && !isDateOnly(current) ? { h: current.getHours(), m: current.getMinutes() } : null));
-  const [timeText, setTimeText] = useState(() => (current && !isDateOnly(current) ? formatTime(current) : ""));
+  const [timeText, setTimeText] = useState(() => (current && !isDateOnly(current) ? formatTime(current, loc) : ""));
   const [timeError, setTimeError] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
 
@@ -68,8 +73,8 @@ export function DuePicker({
   };
 
   const days = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }),
-    end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
+    start: startOfWeek(startOfMonth(month), { weekStartsOn }),
+    end: endOfWeek(endOfMonth(month), { weekStartsOn }),
   });
 
   const focusDay = current && isSameMonth(current, month) ? current : isSameMonth(now, month) ? now : month;
@@ -88,7 +93,7 @@ export function DuePicker({
     }
     setTimeError(false);
     setTime(t);
-    setTimeText(formatTime(dueAt(now, t)));
+    setTimeText(formatTime(dueAt(now, t), loc));
     set(current ?? (dueAt(now, t) > now ? now : addDays(now, 1)), t);
   }
 
@@ -106,13 +111,23 @@ export function DuePicker({
 
   return (
     <div className="w-[280px] p-1.5">
-      <Shortcut icon={<Star className="size-4" />} label="Today" hint={format(now, "EEE")} onClick={() => pick(now)} />
-      <Shortcut icon={<Sunrise className="size-4" />} label="Tomorrow" hint={format(addDays(now, 1), "EEE")} onClick={() => pick(addDays(now, 1))} />
-      <Shortcut icon={<CalendarArrowUp className="size-4" />} label="Next week" hint={format(nextWeek(now), "EEE MMM d")} onClick={() => pick(nextWeek(now))} />
+      <Shortcut icon={<Star className="size-4" />} label={t("due.today")} hint={formatDate(now, "date.pattern.weekday", loc)} onClick={() => pick(now)} />
+      <Shortcut
+        icon={<Sunrise className="size-4" />}
+        label={t("due.tomorrow")}
+        hint={formatDate(addDays(now, 1), "date.pattern.weekday", loc)}
+        onClick={() => pick(addDays(now, 1))}
+      />
+      <Shortcut
+        icon={<CalendarArrowUp className="size-4" />}
+        label={t("due.nextWeek")}
+        hint={formatDate(nextWeek(now), "date.pattern.weekdayDayMonth", loc)}
+        onClick={() => pick(nextWeek(now))}
+      />
       {value ? (
         <Shortcut
           icon={<CalendarX className="size-4" />}
-          label="No date"
+          label={t("due.noDate")}
           onClick={() => {
             onChange("");
             onPicked?.();
@@ -123,22 +138,24 @@ export function DuePicker({
       <div className="-mx-1.5 my-1.5 h-px bg-line-soft" />
 
       <div className="flex items-center justify-between px-1.5 pt-1 pb-2">
-        <span className="text-sm font-semibold text-fg">{format(month, "MMMM yyyy")}</span>
+        <span className="text-sm font-semibold text-fg">{capitalize(formatDate(month, "date.pattern.monthYear", loc), loc)}</span>
         <div className="flex items-center">
-          <button type="button" aria-label="Previous month" onClick={() => setMonth((m) => addMonths(m, -1))} className="flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg">
+          <button type="button" aria-label={t("due.previousMonth")} onClick={() => setMonth((m) => addMonths(m, -1))} className="flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg">
             <ChevronLeft className="size-4" />
           </button>
-          <button type="button" aria-label="Next month" onClick={() => setMonth((m) => addMonths(m, 1))} className="flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg">
+          <button type="button" aria-label={t("due.nextMonth")} onClick={() => setMonth((m) => addMonths(m, 1))} className="flex size-7 items-center justify-center rounded-md text-fg-3 hover:bg-hover hover:text-fg">
             <ChevronRight className="size-4" />
           </button>
         </div>
       </div>
       <div className="grid grid-cols-7 px-0.5 text-center text-2xs font-medium text-fg-4" aria-hidden="true">
-        {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
-          <span key={d} className="py-1">{d}</span>
+        {days.slice(0, 7).map((d) => (
+          <span key={d.toISOString()} className="py-1">
+            {capitalize(format(d, "EEEEEE", { locale: dateLocale(loc) }), loc)}
+          </span>
         ))}
       </div>
-      <div ref={grid} role="grid" aria-label={format(month, "MMMM yyyy")} className="grid grid-cols-7 gap-y-0.5 px-0.5" onKeyDown={onGridKey}>
+      <div ref={grid} role="grid" aria-label={capitalize(formatDate(month, "date.pattern.monthYear", loc), loc)} className="grid grid-cols-7 gap-y-0.5 px-0.5" onKeyDown={onGridKey}>
         {days.map((d) => {
           const selected = current && isSameDay(d, current);
           const today = isSameDay(d, now);
@@ -151,7 +168,7 @@ export function DuePicker({
               data-day={`${format(d, "yyyy-MM-dd")}T00:00`}
               tabIndex={focusable ? 0 : -1}
               aria-pressed={!!selected}
-              aria-label={format(d, "EEEE, MMMM d")}
+              aria-label={capitalize(formatDate(d, "date.pattern.long", loc), loc)}
               onClick={() => pick(d)}
               className={cn(
                 "relative mx-auto flex size-8 items-center justify-center rounded-lg text-sm tabular outline-none transition-colors",
@@ -188,8 +205,8 @@ export function DuePicker({
               commitTime(e.currentTarget.value);
             }
           }}
-          placeholder="Add a time — 5pm, 17:30"
-          aria-label="Time"
+          placeholder={t("due.timePlaceholder")}
+          aria-label={t("due.time")}
           aria-invalid={timeError}
           className={cn(
             "h-8 min-w-0 flex-1 rounded-md bg-transparent px-1.5 text-sm text-fg outline-none placeholder:text-fg-4 focus:bg-inset",
@@ -199,7 +216,7 @@ export function DuePicker({
         {time ? (
           <button
             type="button"
-            aria-label="Remove the time"
+            aria-label={t("due.removeTime")}
             onClick={() => {
               setTimeText("");
               commitTime("");
@@ -217,7 +234,7 @@ export function DuePicker({
             type="button"
             onClick={() => {
               setTime(t);
-              setTimeText(formatTime(dueAt(now, t)));
+              setTimeText(formatTime(dueAt(now, t), loc));
               setTimeError(false);
               set(current ?? (dueAt(now, t) > now ? now : addDays(now, 1)), t);
             }}
@@ -226,7 +243,7 @@ export function DuePicker({
               time?.h === t.h && time.m === t.m && "bg-accent-soft text-accent-ink shadow-none",
             )}
           >
-            {formatTime(dueAt(now, t))}
+            {formatTime(dueAt(now, t), loc)}
           </button>
         ))}
       </div>

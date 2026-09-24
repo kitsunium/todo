@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 import { useCurrentUser, useTaskAction, useUpdateTask } from "../../api/queries";
 import type { Priority, Task, TaskView } from "../../api/types";
 import { toast } from "../../components/ui/toast";
+import { tr, useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { dueAt, groupByCompletion, groupByDue, isDateOnly, type Section, type SectionKey } from "../../lib/dates";
 import { useNow } from "../../lib/now";
@@ -33,6 +34,7 @@ export function TaskList({
   empty: ReactNode;
 }) {
   const me = useCurrentUser();
+  const t = useT();
   const now = useNow();
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,8 +62,8 @@ export function TaskList({
       pins[id] = h.key;
       if (h.task.completedAt) pinnedAt[id] = h.task.completedAt;
     }
-    return mode === "completion" ? groupByCompletion(shown, now, pinnedAt) : groupByDue(shown, now, pins);
-  }, [tasks, view, mode, now, held]);
+    return mode === "completion" ? groupByCompletion(shown, now, pinnedAt, t.locale) : groupByDue(shown, now, pins, t.locale);
+  }, [tasks, view, mode, now, held, t.locale]);
 
   const order = useMemo(() => sections.flatMap((s) => s.tasks.map((t) => t.id)), [sections]);
   useEffect(() => setUI({ order }), [order]);
@@ -80,27 +82,28 @@ export function TaskList({
   }, []);
 
   const toggle = useCallback(
-    (t: Task) => {
-      const section = sections.find((s) => s.tasks.some((x) => x.id === t.id));
+    (task: Task) => {
+      const say = tr();
+      const section = sections.find((s) => s.tasks.some((x) => x.id === task.id));
       const now = new Date().toISOString();
       const after: Task =
-        t.status === "open" || t.status === "overdue"
-          ? { ...t, status: "done", completedAt: now, completedBy: { id: me.id, name: me.name, email: me.email } }
-          : { ...t, status: "open" };
+        task.status === "open" || task.status === "overdue"
+          ? { ...task, status: "done", completedAt: now, completedBy: { id: me.id, name: me.name, email: me.email } }
+          : { ...task, status: "open" };
       if (section) hold(after, section.key);
-      if (t.status === "archived") {
-        action.mutate({ id: t.id, action: "restore" });
-        toast(`Restored “${t.title}”`);
+      if (task.status === "archived") {
+        action.mutate({ id: task.id, action: "restore" });
+        toast(say("list.restored", { title: task.title }));
         return;
       }
-      if (t.status === "done") {
-        action.mutate({ id: t.id, action: "reopen" });
+      if (task.status === "done") {
+        action.mutate({ id: task.id, action: "reopen" });
         return;
       }
-      action.mutate({ id: t.id, action: "complete" });
-      toast(`Completed “${t.title}”`, {
-        id: `done-${t.id}`,
-        action: { label: "Undo", onClick: () => action.mutate({ id: t.id, action: "reopen" }) },
+      action.mutate({ id: task.id, action: "complete" });
+      toast(say("list.completed", { title: task.title }), {
+        id: `done-${task.id}`,
+        action: { label: say("common.undo"), onClick: () => action.mutate({ id: task.id, action: "reopen" }) },
       });
     },
     [sections, hold, action, me],
@@ -139,20 +142,20 @@ export function TaskList({
   ]);
 
   const rescheduleOverdue = (list: Task[]) => {
-    for (const t of list) {
-      const d = t.due ? new Date(t.due) : null;
+    for (const task of list) {
+      const d = task.due ? new Date(task.due) : null;
       const time = d && !isDateOnly(d) ? { h: d.getHours(), m: d.getMinutes() } : undefined;
       let next = dueAt(now, time);
       if (next < now) next = dueAt(now);
-      update.mutate({ id: t.id, patch: { due: next.toISOString() } });
+      update.mutate({ id: task.id, patch: { due: next.toISOString() } });
     }
-    toast.success(`Moved ${list.length} task${list.length === 1 ? "" : "s"} to today`);
+    toast.success(t("list.moved", { count: list.length }));
   };
 
   if (sections.length === 0) return <>{empty}</>;
 
   return (
-    <div role="list" aria-label="Tasks" className="pb-6">
+    <div role="list" aria-label={t("list.label")} className="pb-6">
       <AnimatePresence initial={false}>
         {sections.map((s) => (
           <motion.section
@@ -167,13 +170,13 @@ export function TaskList({
             <header className="sticky top-0 z-10 -mx-1 flex h-9 items-center gap-2 bg-sheet/90 px-3.5 backdrop-blur-md supports-[backdrop-filter]:bg-sheet/75">
               <h2 className={cn("text-[13px] font-semibold tracking-[-0.005em]", s.tone === "danger" ? "text-danger-ink" : "text-fg")}>{s.label}</h2>
               <span className="tabular text-xs text-fg-4">{s.tasks.length}</span>
-              {s.key === "overdue" && s.tasks.some((t) => t.can.edit) ? (
+              {s.key === "overdue" && s.tasks.some((x) => x.can.edit) ? (
                 <button
                   type="button"
-                  onClick={() => rescheduleOverdue(s.tasks.filter((t) => t.can.edit && t.status !== "done"))}
+                  onClick={() => rescheduleOverdue(s.tasks.filter((x) => x.can.edit && x.status !== "done"))}
                   className="ml-auto rounded-md px-2 py-1 text-xs font-medium text-fg-3 transition-colors hover:bg-hover hover:text-fg"
                 >
-                  Move to today
+                  {t("list.moveToToday")}
                 </button>
               ) : null}
             </header>

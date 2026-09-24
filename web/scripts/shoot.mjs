@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Screenshots of every screen of the web app, both themes, desktop and
-// mobile, through headless Chrome and the DevTools protocol (Node's own
-// WebSocket, no dependency). Not part of the bundle.
+// Screenshots of every screen of the web app, in French and in English,
+// desktop and mobile, through headless Chrome and the DevTools protocol
+// (Node's own WebSocket, no dependency). Not part of the bundle.
 //
 //   npx vite --mode mock --port 5299 &     # the app, backend in memory
 //   node scripts/shoot.mjs                 # → $OUT (default /tmp/todo-web-shots)
@@ -9,7 +9,7 @@
 //   BASE=http://localhost:5299  where the app is served
 //   OUT=/tmp/todo-web-shots     where the PNGs go
 //   ONLY=today,panel            only the scenes whose name contains one of these
-//   THEMES=light,dark           which themes
+//   LOCALES=fr,en               which languages (the account's, and the signed-out pages')
 //   MOBILE=0                    skip the mobile pass
 //   SCALE=2                     desktop device pixel ratio (details, typography)
 //   REAL=1                      the real app (kit dev): signs in as REAL_EMAIL / REAL_PASSWORD
@@ -24,6 +24,11 @@
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+// The interface's own words, to find buttons and tabs by what they say.
+import { en } from "../src/i18n/en.ts";
+import { fr } from "../src/i18n/fr.ts";
+
+const WORDS = { fr, en };
 
 const CHROME =
   process.env.CHROME ??
@@ -32,7 +37,10 @@ const PORT = Number(process.env.CDP_PORT ?? 9555);
 const BASE = process.env.BASE ?? "http://localhost:5299";
 const OUT = process.env.OUT ?? "/tmp/todo-web-shots";
 const ONLY = (process.env.ONLY ?? "").split(",").filter(Boolean);
-const THEMES = (process.env.THEMES ?? "light,dark").split(",").filter(Boolean);
+const LOCALES = (process.env.LOCALES ?? "fr,en").split(",").filter((l) => l === "fr" || l === "en");
+/** The current scene's language, and its words. */
+let LOC = "fr";
+const say = (key) => WORDS[LOC][key];
 const MOBILE = process.env.MOBILE !== "0";
 
 fs.mkdirSync(OUT, { recursive: true });
@@ -135,12 +143,9 @@ async function setViewport(v) {
   await send("Emulation.setTouchEmulationEnabled", { enabled: v.mobile });
 }
 
-async function theme(name) {
+async function motion() {
   await send("Emulation.setEmulatedMedia", {
-    features: [
-      { name: "prefers-color-scheme", value: name },
-      { name: "prefers-reduced-motion", value: "no-preference" },
-    ],
+    features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
   });
 }
 
@@ -374,14 +379,17 @@ async function fresh(path, signedIn = true) {
       if (r.status !== 200) throw new Error(`sign in: ${r.status}`);
     }
     if (!signedIn && me.status === 200) await inPage("POST", "/api/auth/logout");
-    await evaluate("localStorage.removeItem('todo.theme')");
+    // Signed in, the account's language wins; signed out, the browser's last choice.
+    if (signedIn) await inPage("PATCH", "/api/auth/me", { locale: LOC });
+    await evaluate(`localStorage.setItem('todo.locale', ${JSON.stringify(LOC)})`);
     return go(path, 1300);
   }
   // A known state for every scene: the seed, the right session, a snappy mock.
   await go("/login", 300);
-  await evaluate("localStorage.setItem('todo.mock.latency', '60'); localStorage.removeItem('todo.theme')");
+  await evaluate(`localStorage.setItem('todo.mock.latency', '60'); localStorage.setItem('todo.locale', ${JSON.stringify(LOC)})`);
   await mock.reset();
-  if (!signedIn) await mock.signOut();
+  if (signedIn) await inPage("PATCH", "/api/auth/me", { locale: LOC });
+  else await mock.signOut();
   await go(path);
 }
 
@@ -399,7 +407,7 @@ async function rowButton(n, label, settle = 450) {
   await wait(200);
   const b = await evaluate(`(() => {
     const row = document.querySelectorAll("[data-task-id]")[${n}];
-    const btn = row?.querySelector('button[aria-label="${label}"]');
+    const btn = row?.querySelector(${JSON.stringify(`button[aria-label="${label}"]`)});
     if (!btn) return null;
     const r = btn.getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
@@ -413,7 +421,7 @@ async function rowButton(n, label, settle = 450) {
 
 async function undoIfReal() {
   if (!REAL) return;
-  await click({ text: "Undo", within: "button" }, 1200).catch(() => undefined);
+  await click({ text: say("common.undo"), within: "button" }, 1200).catch(() => undefined);
 }
 
 async function signupAs(email) {
@@ -446,7 +454,7 @@ const desktop = [
       let email = "unverified@example.com";
       let password = "correct-horse-42";
       if (REAL) {
-        email = `una.${stamp}.${scene.length}@example.com`;
+        email = `una.${stamp}.${LOC}@example.com`;
         password = "Unverified-pass-1";
         await fetch(`${BASE}/api/auth/signup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, name: "Una Verified", password }) });
       }
@@ -463,7 +471,7 @@ const desktop = [
     async () => {
       let email = "locked@example.com";
       if (REAL) {
-        email = `lock.${stamp}.${scene.length}@example.com`;
+        email = `lock.${stamp}.${LOC}@example.com`;
         await verifiedUser("Lock Smith", email, "Lock-password-123");
         for (let i = 0; i < 5; i++) {
           await fetch(`${BASE}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: `wrong-${i}-password` }) });
@@ -493,7 +501,7 @@ const desktop = [
   [
     "auth-check-inbox",
     async () => {
-      await signupAs(REAL ? `alex.${stamp}.${scene.length}@example.com` : "alex@example.com");
+      await signupAs(REAL ? `alex.${stamp}.${LOC}@example.com` : "alex@example.com");
       await press("Enter", { settle: 1600 });
     },
   ],
@@ -528,7 +536,7 @@ const desktop = [
     "app-focus-ring",
     async () => {
       await fresh("/app/today");
-      await click('input[aria-label="New task"]');
+      await click(`input[aria-label="${say("quickadd.label")}"]`);
       await press("Escape");
       for (let i = 0; i < 4; i++) await press("Tab", { settle: 120 });
       await wait(200);
@@ -556,16 +564,17 @@ const desktop = [
     "app-quick-add",
     async () => {
       await fresh("/app/inbox");
-      await click('input[aria-label="New task"]');
-      await type(REAL ? "Call the printer tomorrow at 5pm !high #home @hugo" : "Call the printer tomorrow at 5pm !high #launch @sam", 600);
+      await click(`input[aria-label="${say("quickadd.label")}"]`);
+      const who = REAL ? "#home @hugo" : "#launch @sam";
+      await type(LOC === "fr" ? `Appeler l’imprimeur demain à 17h !haute ${who}` : `Call the printer tomorrow at 5pm !high ${who}`, 600);
     },
   ],
   [
     "app-quick-add-suggest",
     async () => {
       await fresh("/app/inbox");
-      await click('input[aria-label="New task"]');
-      await type("Plan the offsite #", 400);
+      await click(`input[aria-label="${say("quickadd.label")}"]`);
+      await type(LOC === "fr" ? "Préparer le séminaire #" : "Plan the offsite #", 400);
     },
   ],
   [
@@ -580,8 +589,8 @@ const desktop = [
     async () => {
       await fresh("/app/today");
       await click("[data-task-id] a", 1000);
-      await click({ text: "Due date", within: "[role=dialog] span" }).catch(() => undefined);
-      const due = await evaluate(`(() => { const row = [...document.querySelectorAll('[role=dialog] span')].find((s) => s.textContent === "Due date")?.closest("div.grid"); const b = row?.querySelector("button"); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+      await click({ text: say("panel.due"), within: "[role=dialog] span" }).catch(() => undefined);
+      const due = await evaluate(`(() => { const row = [...document.querySelectorAll('[role=dialog] span')].find((s) => s.textContent === ${JSON.stringify(say("panel.due"))})?.closest("div.grid"); const b = row?.querySelector("button"); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
       if (!due) throw new Error("no due button");
       await mouse("mouseMoved", due.x, due.y, { button: "none" });
       await mouse("mousePressed", due.x, due.y);
@@ -593,7 +602,7 @@ const desktop = [
     "app-row-menu",
     async () => {
       await fresh("/app/inbox");
-      await rowButton(3, "More actions", 500);
+      await rowButton(3, say("common.moreActions"), 500);
     },
   ],
   [
@@ -609,7 +618,7 @@ const desktop = [
     async () => {
       await fresh("/app/activity");
       await press("c", { settle: 600 });
-      await type("Book flights to Lisbon next week !medium #home", 500);
+      await type(LOC === "fr" ? "Réserver les vols pour Lisbonne la semaine prochaine !moyenne #home" : "Book flights to Lisbon next week !medium #home", 500);
     },
   ],
   [
@@ -627,7 +636,7 @@ const desktop = [
     "app-group-members",
     async () => {
       await fresh(`/app/groups/${mainGroup}`);
-      await click({ text: "Members", within: "[role=tab]" }, 500);
+      await click({ text: say("group.tabMembers"), within: "[role=tab]" }, 500);
     },
   ],
   ["app-group-invited", async () => fresh(`/app/groups/${invitedGroup}`)],
@@ -635,8 +644,8 @@ const desktop = [
     "app-group-create",
     async () => {
       await fresh("/app/today");
-      await click('button[aria-label="New group"]', 500);
-      await type("Garden", 300);
+      await click(`button[aria-label="${say("sidebar.newGroup")}"]`, 500);
+      await type(LOC === "fr" ? "Jardin" : "Garden", 300);
     },
   ],
   ["app-contacts", async () => fresh("/app/contacts")],
@@ -644,21 +653,21 @@ const desktop = [
     "app-contacts-requests",
     async () => {
       await fresh("/app/contacts");
-      await click({ text: "Requests", within: "[role=tab]" }, 400);
+      await click({ text: say("contacts.tabRequests"), within: "[role=tab]" }, 400);
     },
   ],
   [
     "app-contacts-invites",
     async () => {
       await fresh("/app/contacts");
-      await click({ text: "Invitations sent", within: "[role=tab]" }, 400);
+      await click({ text: say("contacts.tabInvites"), within: "[role=tab]" }, 400);
     },
   ],
   [
     "app-contacts-add",
     async () => {
       await fresh("/app/contacts");
-      await click({ text: "Add contact", within: "button" }, 500);
+      await click({ text: say("contacts.add"), within: "button" }, 500);
       await type("jules@studio-nord.com", 200);
     },
   ],
@@ -681,11 +690,11 @@ const desktop = [
   [
     "app-empty-new-account",
     async () => {
-      const email = REAL ? `new.${stamp}.${scene.length}@example.com` : "alex@example.com";
+      const email = REAL ? `new.${stamp}.${LOC}@example.com` : "alex@example.com";
       await signupAs(email);
       await press("Enter", { settle: 1400 });
       if (REAL) await go(await mailLink(email, "/verify?token="), 1500);
-      else await click({ text: "Verify", within: "a" }, 1500);
+      else await click({ text: say("mock.verify"), within: "a" }, 1500);
       await waitFor("location.pathname === '/app/today'");
       await wait(1200);
     },
@@ -700,7 +709,7 @@ const mobile = [
     "m-drawer",
     async () => {
       await fresh("/app/today");
-      await click('button[aria-label="Open the menu"]', 600);
+      await click(`button[aria-label="${say("app.openMenu")}"]`, 600);
     },
   ],
   [
@@ -716,11 +725,12 @@ const mobile = [
 
 async function run(list, prefix, vp) {
   await setViewport(vp);
-  for (const t of THEMES) {
-    await theme(t);
+  await motion();
+  for (const loc of LOCALES) {
+    LOC = loc;
     for (const [name, fn] of list) {
       if (ONLY.length && !ONLY.some((o) => name.includes(o))) continue;
-      scene = `${prefix}${name}-${t}`;
+      scene = `${prefix}${name}-${loc}`;
       try {
         // A scene that takes its own screenshots returns true.
         if ((await fn()) !== true) await shot(scene);
@@ -737,6 +747,14 @@ console.log(`Shooting ${BASE} → ${OUT}${REAL ? " (real app)" : PROD ? " (produ
 if (REAL) await setupReal();
 await run(desktop, "", { width: 1440, height: 900, mobile: false, scale: Number(process.env.SCALE ?? 1) });
 if (MOBILE) await run(mobile, "", { width: 390, height: 844, mobile: true, scale: 2 });
+// Camille speaks French again: the seeded account's own language.
+if (REAL) {
+  try {
+    await (await as(EMAIL))("PATCH", "/api/auth/me", { locale: "fr" });
+  } catch (err) {
+    problems.push(`[restore] Camille's locale: ${err instanceof Error ? err.message : err}`);
+  }
+}
 
 fs.writeFileSync(`${OUT}/console.log`, problems.join("\n") + (problems.length ? "\n" : ""));
 console.log(`${problems.length} problem(s)`);

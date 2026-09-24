@@ -3,14 +3,11 @@ import {
   Activity as ActivityIcon,
   BookUser,
   Keyboard,
+  Languages,
   LogOut,
-  Monitor,
-  Moon,
   Plus,
   Search,
   Settings,
-  Sun,
-  SunMoon,
   ChevronsUpDown,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
@@ -26,19 +23,16 @@ import {
   Menu,
   MenuContent,
   MenuItem,
-  MenuRadioGroup,
-  MenuRadioItem,
+  MenuSegmented,
   MenuSeparator,
-  MenuSub,
-  MenuSubContent,
-  MenuSubTrigger,
   MenuTrigger,
 } from "../../components/ui/menu";
 import { Skeleton } from "../../components/ui/skeleton";
 import { toast } from "../../components/ui/toast";
 import { Tooltip } from "../../components/ui/tooltip";
 import { cn } from "../../lib/cn";
-import { setTheme, useTheme, type ThemeChoice } from "../../lib/theme";
+import { LOCALES, tr, useLocale, useT, type Locale } from "../../i18n";
+import { useSwitchLocale } from "../settings/language";
 import { CreateGroupDialog } from "../groups/CreateGroupDialog";
 import { VIEWS } from "./nav";
 import { newTask, setUI } from "./store";
@@ -55,6 +49,7 @@ function Count({ n, tone }: { n: number | undefined; tone?: "danger" }) {
 }
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const t = useT();
   const counts = useCounts();
   const groups = useGroups();
   const contacts = useContacts();
@@ -64,11 +59,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [creating, setCreating] = useState(false);
 
   return (
-    <nav className="flex h-full w-full flex-col bg-sidebar" aria-label="Main">
+    <nav className="flex h-full w-full flex-col bg-sidebar" aria-label={t("app.mainNav")}>
       <div className="flex h-12 shrink-0 items-center justify-between pr-2 pl-4">
         <Logo />
-        <Tooltip content="Search" keys={[MOD, "K"]} side="bottom">
-          <IconButton label="Search and commands" size="sm" onClick={() => setUI({ palette: true, paletteMode: "all" })}>
+        <Tooltip content={t("common.search")} keys={[MOD, "K"]} side="bottom">
+          <IconButton label={t("common.searchAndCommands")} size="sm" onClick={() => setUI({ palette: true, paletteMode: "all" })}>
             <Search className="size-4" />
           </IconButton>
         </Tooltip>
@@ -86,7 +81,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <span className="flex size-[18px] items-center justify-center rounded-full bg-accent text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]">
             <Plus className="size-3" strokeWidth={3} />
           </span>
-          New task
+          {t("sidebar.newTask")}
           <Kbd className="ml-auto">C</Kbd>
         </button>
       </div>
@@ -107,7 +102,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         strokeWidth={isActive ? 2.1 : 1.8}
                         aria-hidden="true"
                       />
-                      <span className="truncate">{v.label}</span>
+                      <span className="truncate">{t(v.label)}</span>
                       {c ? <Count n={v.count(c)} {...(overdue ? { tone: "danger" as const } : {})} /> : null}
                     </>
                   )}
@@ -118,9 +113,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </ul>
 
         <div className="mt-5 flex h-7 items-center justify-between pr-1 pl-2">
-          <span className="text-2xs font-semibold tracking-[0.06em] text-fg-4 uppercase">Groups</span>
-          <Tooltip content="New group" side="right">
-            <IconButton label="New group" size="xs" onClick={() => setCreating(true)}>
+          <span className="text-2xs font-semibold tracking-[0.06em] text-fg-4 uppercase">{t("sidebar.groups")}</span>
+          <Tooltip content={t("sidebar.newGroup")} side="right">
+            <IconButton label={t("sidebar.newGroup")} size="xs" onClick={() => setCreating(true)}>
               <Plus className="size-3.5" />
             </IconButton>
           </Tooltip>
@@ -150,7 +145,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 onClick={() => setCreating(true)}
                 className="flex h-[30px] w-full items-center gap-2.5 rounded-md px-2 text-[13.5px] text-fg-3 hover:bg-hover hover:text-fg"
               >
-                <Plus className="size-4" aria-hidden="true" /> Create a group
+                <Plus className="size-4" aria-hidden="true" /> {t("sidebar.createGroup")}
               </button>
             </li>
           )}
@@ -162,8 +157,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               {({ isActive }) => (
                 <>
                   <BookUser className={cn("size-4 shrink-0", isActive ? "text-accent" : "text-fg-3")} strokeWidth={isActive ? 2.1 : 1.8} aria-hidden="true" />
-                  <span className="truncate">Contacts</span>
-                  {pendingContacts ? <Badge className="ml-auto" aria-label={`${pendingContacts} pending requests`}>{pendingContacts}</Badge> : null}
+                  <span className="truncate">{t("sidebar.contacts")}</span>
+                  {pendingContacts ? (
+                    <Badge className="ml-auto" aria-label={t("sidebar.pending", { count: pendingContacts })}>
+                      {pendingContacts}
+                    </Badge>
+                  ) : null}
                 </>
               )}
             </NavLink>
@@ -175,8 +174,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 return (
                   <>
                     <ActivityIcon className={cn("size-4 shrink-0", isActive ? "text-accent" : "text-fg-3")} strokeWidth={isActive ? 2.1 : 1.8} aria-hidden="true" />
-                    <span className="truncate">Activity</span>
-                    {unread && !isActive ? <Badge className="ml-auto" aria-label={`${unread} unread`}>{unread}</Badge> : null}
+                    <span className="truncate">{t("sidebar.activity")}</span>
+                    {unread && !isActive ? (
+                      <Badge className="ml-auto" aria-label={t("sidebar.unread", { count: unread })}>
+                        {unread}
+                      </Badge>
+                    ) : null}
                   </>
                 );
               }}
@@ -195,7 +198,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function UserMenu({ onNavigate }: { onNavigate: (() => void) | undefined }) {
   const me = useCurrentUser();
-  const { choice } = useTheme();
+  const t = useT();
+  const locale = useLocale();
+  const switchLocale = useSwitchLocale();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -207,7 +212,7 @@ function UserMenu({ onNavigate }: { onNavigate: (() => void) | undefined }) {
     }
     qc.clear();
     navigate("/login", { replace: true });
-    toast("Signed out. See you soon.");
+    toast(tr()("app.signedOut"));
   }
 
   return (
@@ -234,24 +239,21 @@ function UserMenu({ onNavigate }: { onNavigate: (() => void) | undefined }) {
             navigate("/app/settings");
           }}
         >
-          Settings
+          {t("user.settings")}
         </MenuItem>
-        <MenuSub>
-          <MenuSubTrigger icon={<SunMoon className="size-4" />}>Theme</MenuSubTrigger>
-          <MenuSubContent>
-            <MenuRadioGroup value={choice} onValueChange={(v) => setTheme(v as ThemeChoice)}>
-              <MenuRadioItem value="light" icon={<Sun className="size-4" />}>Light</MenuRadioItem>
-              <MenuRadioItem value="dark" icon={<Moon className="size-4" />}>Dark</MenuRadioItem>
-              <MenuRadioItem value="system" icon={<Monitor className="size-4" />}>System</MenuRadioItem>
-            </MenuRadioGroup>
-          </MenuSubContent>
-        </MenuSub>
+        <MenuSegmented<Locale>
+          icon={<Languages className="size-4" />}
+          label={t("lang.label")}
+          value={locale}
+          options={LOCALES.map((l) => ({ value: l, short: tr(l)(`lang.${l}.short`), label: tr(l)(`lang.${l}`), lang: l }))}
+          onChange={switchLocale}
+        />
         <MenuItem icon={<Keyboard className="size-4" />} shortcut="?" onSelect={() => setUI({ shortcuts: true })}>
-          Keyboard shortcuts
+          {t("user.shortcuts")}
         </MenuItem>
         <MenuSeparator />
         <MenuItem icon={<LogOut className="size-4" />} onSelect={signOut}>
-          Sign out
+          {t("user.signOut")}
         </MenuItem>
       </MenuContent>
     </Menu>

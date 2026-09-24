@@ -1,5 +1,4 @@
 import { Dialog as D } from "radix-ui";
-import { format } from "date-fns";
 import {
   Archive,
   ArchiveRestore,
@@ -38,8 +37,9 @@ import { PRIORITY_LABEL, PriorityIcon } from "../../components/ui/priority";
 import { Skeleton } from "../../components/ui/skeleton";
 import { toast } from "../../components/ui/toast";
 import { Tooltip } from "../../components/ui/tooltip";
+import { tr, useT, type Key } from "../../i18n";
 import { cn } from "../../lib/cn";
-import { formatDue, formatDueLong, formatTime, timeAgo } from "../../lib/dates";
+import { formatDate, formatDue, formatDueLong, formatTime, relativeDays, timeAgo } from "../../lib/dates";
 import { useNow } from "../../lib/now";
 import { useHotkeys } from "../shell/hotkeys";
 import { useUI } from "../shell/store";
@@ -48,6 +48,7 @@ import { DuePicker } from "./DuePicker";
 import { AssigneeItems, GroupItems, PriorityItems, ShareList } from "./menus";
 
 export function TaskPanel({ id, onClose, onNavigate }: { id: string; onClose: () => void; onNavigate: (id: string) => void }) {
+  const t = useT();
   const [open, setOpen] = useState(true);
   const q = useTask(id);
   const order = useUI((s) => s.order);
@@ -77,7 +78,7 @@ export function TaskPanel({ id, onClose, onNavigate }: { id: string; onClose: ()
   return (
     <D.Root open={open} onOpenChange={(o) => !o && close()}>
       <D.Portal>
-        <D.Overlay className="fixed inset-0 z-[50] bg-[rgb(28_25_23/0.1)] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out dark:bg-[rgb(0_0_0/0.35)]" />
+        <D.Overlay className="fixed inset-0 z-[50] bg-[rgb(28_25_23/0.1)] data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out" />
         <D.Content
           aria-describedby={undefined}
           tabIndex={-1}
@@ -97,21 +98,21 @@ export function TaskPanel({ id, onClose, onNavigate }: { id: string; onClose: ()
           <header className="flex h-12 shrink-0 items-center gap-1 border-b border-line-soft pr-2 pl-4">
             <Crumb task={q.data} />
             <div className="ml-auto flex items-center gap-0.5">
-              <Tooltip content="Previous task" keys={["K"]}>
-                <IconButton label="Previous task" size="sm" disabled={!prev} onClick={() => prev && onNavigate(prev)}>
+              <Tooltip content={t("panel.previous")} keys={["K"]}>
+                <IconButton label={t("panel.previous")} size="sm" disabled={!prev} onClick={() => prev && onNavigate(prev)}>
                   <ChevronUp className="size-4" />
                 </IconButton>
               </Tooltip>
-              <Tooltip content="Next task" keys={["J"]}>
-                <IconButton label="Next task" size="sm" disabled={!next} onClick={() => next && onNavigate(next)}>
+              <Tooltip content={t("panel.next")} keys={["J"]}>
+                <IconButton label={t("panel.next")} size="sm" disabled={!next} onClick={() => next && onNavigate(next)}>
                   <ChevronDown className="size-4" />
                 </IconButton>
               </Tooltip>
               <span className="mx-1 h-4 w-px bg-line" aria-hidden="true" />
               {q.data ? <PanelMenu task={q.data} onDeleted={close} /> : null}
-              <Tooltip content="Close" keys={["Esc"]}>
+              <Tooltip content={t("common.close")} keys={["Esc"]}>
                 <D.Close asChild>
-                  <IconButton label="Close" size="sm">
+                  <IconButton label={t("common.close")} size="sm">
                     <X className="size-4" />
                   </IconButton>
                 </D.Close>
@@ -132,8 +133,9 @@ export function TaskPanel({ id, onClose, onNavigate }: { id: string; onClose: ()
 }
 
 function Crumb({ task }: { task: Task | undefined }) {
+  const t = useT();
   const me = useCurrentUser();
-  if (!task) return <D.Title className="text-sm text-fg-3">Task</D.Title>;
+  if (!task) return <D.Title className="text-sm text-fg-3">{t("panel.task")}</D.Title>;
   return (
     <D.Title className="flex min-w-0 items-center gap-1.5 text-sm text-fg-3">
       {task.group ? (
@@ -144,7 +146,9 @@ function Crumb({ task }: { task: Task | undefined }) {
       ) : (
         <>
           {task.owner.id === me.id ? <Inbox className="size-3.5" aria-hidden="true" /> : <UsersRound className="size-3.5" aria-hidden="true" />}
-          <span className="shrink-0">{task.owner.id === me.id ? "Inbox" : `${task.owner.name.split(" ")[0]}’s`}</span>
+          <span className="shrink-0">
+            {task.owner.id === me.id ? t("view.inbox") : t("panel.ownersTasks", { name: task.owner.name.split(" ")[0] ?? task.owner.name })}
+          </span>
         </>
       )}
       <span className="text-fg-4" aria-hidden="true">/</span>
@@ -154,15 +158,16 @@ function Crumb({ task }: { task: Task | undefined }) {
 }
 
 function PanelMenu({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
+  const t = useT();
   const action = useTaskAction();
   const remove = useDeleteTask();
   const [confirm, setConfirm] = useState(false);
   return (
     <>
       <Menu>
-        <Tooltip content="More">
+        <Tooltip content={t("common.more")}>
           <MenuTrigger asChild>
-            <IconButton label="More actions" size="sm">
+            <IconButton label={t("common.moreActions")} size="sm">
               <Ellipsis className="size-4" />
             </IconButton>
           </MenuTrigger>
@@ -172,28 +177,28 @@ function PanelMenu({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
             icon={<Link2 className="size-4" />}
             onSelect={() =>
               void navigator.clipboard?.writeText(`${location.origin}/app/tasks/${task.id}`).then(
-                () => toast.success("Link copied"),
-                () => toast.error("Couldn’t copy the link"),
+                () => toast.success(tr()("common.linkCopied")),
+                () => toast.error(tr()("common.linkCopyFailed")),
               )
             }
           >
-            Copy link
+            {t("common.copyLink")}
           </MenuItem>
           {task.status === "done" ? (
             <MenuItem icon={<Archive className="size-4" />} onSelect={() => action.mutate({ id: task.id, action: "archive" })}>
-              Archive
+              {t("task.archive")}
             </MenuItem>
           ) : null}
           {task.status === "archived" ? (
             <MenuItem icon={<ArchiveRestore className="size-4" />} onSelect={() => action.mutate({ id: task.id, action: "restore" })}>
-              Restore
+              {t("task.restore")}
             </MenuItem>
           ) : null}
           {task.can.delete ? (
             <>
               <MenuSeparator />
               <MenuItem danger icon={<Trash2 className="size-4" />} onSelect={() => setConfirm(true)}>
-                Delete…
+                {t("task.delete")}
               </MenuItem>
             </>
           ) : null}
@@ -202,12 +207,12 @@ function PanelMenu({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title="Delete this task?"
-        description={`“${task.title}” will be deleted for everyone who can see it. This can’t be undone.`}
-        confirm="Delete task"
+        title={t("task.deleteTitle")}
+        description={t("task.deleteBody", { title: task.title })}
+        confirm={t("task.deleteConfirm")}
         onConfirm={async () => {
           await remove.mutateAsync(task.id);
-          toast("Task deleted");
+          toast(tr()("task.deleted"));
           onDeleted();
         }}
       />
@@ -215,14 +220,15 @@ function PanelMenu({ task, onDeleted }: { task: Task; onDeleted: () => void }) {
   );
 }
 
-const STATUS: Record<Status, { label: string; icon: ReactNode; cls: string }> = {
-  open: { label: "Open", icon: <CircleDashed className="size-3.5" />, cls: "bg-inset text-fg-2" },
-  overdue: { label: "Overdue", icon: <CircleAlert className="size-3.5" />, cls: "bg-danger-soft text-danger-ink" },
-  done: { label: "Done", icon: <CircleCheck className="size-3.5" />, cls: "bg-success-soft text-success-ink" },
-  archived: { label: "Archived", icon: <Archive className="size-3.5" />, cls: "bg-inset text-fg-3" },
+const STATUS: Record<Status, { label: Key; icon: ReactNode; cls: string }> = {
+  open: { label: "status.open", icon: <CircleDashed className="size-3.5" />, cls: "bg-inset text-fg-2" },
+  overdue: { label: "status.overdue", icon: <CircleAlert className="size-3.5" />, cls: "bg-danger-soft text-danger-ink" },
+  done: { label: "status.done", icon: <CircleCheck className="size-3.5" />, cls: "bg-success-soft text-success-ink" },
+  archived: { label: "status.archived", icon: <Archive className="size-3.5" />, cls: "bg-inset text-fg-3" },
 };
 
 function Body({ task }: { task: Task }) {
+  const t = useT();
   const me = useCurrentUser();
   const now = useNow();
   const update = useUpdateTask();
@@ -247,12 +253,12 @@ function Body({ task }: { task: Task }) {
 
   const saveTitle = () => {
     editingTitle.current = false;
-    const t = title.replace(/\s+/g, " ").trim();
-    if (!t) {
+    const next = title.replace(/\s+/g, " ").trim();
+    if (!next) {
       setTitle(task.title);
       return;
     }
-    if (t !== task.title) update.mutate({ id: task.id, patch: { title: t } });
+    if (next !== task.title) update.mutate({ id: task.id, patch: { title: next } });
   };
   const saveNotes = (value: string) => {
     clearTimeout(notesTimer.current);
@@ -261,7 +267,7 @@ function Body({ task }: { task: Task }) {
     }
   };
 
-  const due = task.due ? formatDue(task.due, now) : null;
+  const due = task.due ? formatDue(task.due, now, t.locale) : null;
   const [dueOpen, setDueOpen] = useState(false);
 
   return (
@@ -282,7 +288,7 @@ function Body({ task }: { task: Task }) {
             <AutoTextarea
               value={title}
               readOnly={ro}
-              aria-label="Title"
+              aria-label={t("panel.title")}
               maxLength={200}
               onFocus={() => (editingTitle.current = true)}
               onChange={(e) => setTitle(e.target.value.replace(/\n/g, ""))}
@@ -310,8 +316,8 @@ function Body({ task }: { task: Task }) {
               readOnly={ro}
               minRows={2}
               maxLength={10000}
-              aria-label="Notes"
-              placeholder={ro ? "No notes" : "Add notes…"}
+              aria-label={t("panel.notes")}
+              placeholder={ro ? t("panel.noNotes") : t("panel.addNotes")}
               onFocus={() => (editingNotes.current = true)}
               onChange={(e) => {
                 const v = e.target.value;
@@ -327,7 +333,7 @@ function Body({ task }: { task: Task }) {
             />
             {savedAt ? (
               <span key={savedAt} className="absolute right-0 -bottom-5 text-2xs text-fg-4 animate-fade-in">
-                Saved
+                {t("panel.saved")}
               </span>
             ) : null}
           </div>
@@ -336,29 +342,29 @@ function Body({ task }: { task: Task }) {
         <div className="mx-5 mt-6 mb-3 h-px bg-line-soft sm:mx-6" />
 
         <div className="flex flex-col gap-0.5 px-3 pb-2 sm:px-4">
-          <Row icon={<CircleDashed className="size-4" />} label="Status">
+          <Row icon={<CircleDashed className="size-4" />} label={t("panel.status")}>
             <span className={cn("inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-xs font-medium", STATUS[task.status].cls)}>
               {STATUS[task.status].icon}
-              {STATUS[task.status].label}
+              {t(STATUS[task.status].label)}
             </span>
             {task.status === "done" ? (
               <button type="button" className="ml-2 text-xs text-fg-3 hover:text-fg" onClick={() => action.mutate({ id: task.id, action: "archive" })}>
-                Archive
+                {t("task.archive")}
               </button>
             ) : null}
             {task.status === "archived" ? (
               <button type="button" className="ml-2 text-xs text-fg-3 hover:text-fg" onClick={() => action.mutate({ id: task.id, action: "restore" })}>
-                Restore
+                {t("task.restore")}
               </button>
             ) : null}
           </Row>
 
-          <Row icon={<Signal className="size-4" />} label="Priority">
+          <Row icon={<Signal className="size-4" />} label={t("panel.priority")}>
             <Menu>
               <MenuTrigger asChild disabled={ro}>
                 <Value>
                   <PriorityIcon priority={task.priority} />
-                  <span className={task.priority ? "text-fg" : "text-fg-3"}>{PRIORITY_LABEL[task.priority]}</span>
+                  <span className={task.priority ? "text-fg" : "text-fg-3"}>{t(PRIORITY_LABEL[task.priority])}</span>
                 </Value>
               </MenuTrigger>
               <MenuContent>
@@ -367,16 +373,21 @@ function Body({ task }: { task: Task }) {
             </Menu>
           </Row>
 
-          <Row icon={<CalendarDays className="size-4" />} label="Due date">
+          <Row icon={<CalendarDays className="size-4" />} label={t("panel.due")}>
             <Popover open={dueOpen} onOpenChange={setDueOpen}>
               <PopoverTrigger asChild disabled={ro}>
                 <Value>
                   {due ? (
-                    <span className={cn(!done && due.overdue ? "font-medium text-danger-ink" : due.soon ? "text-accent-ink" : "text-fg")}>
-                      {formatDueLong(task.due!)}
+                    <span className="min-w-0 truncate">
+                      <span className={cn(!done && due.overdue ? "font-medium text-danger-ink" : due.soon ? "text-accent-ink" : "text-fg")}>
+                        {formatDueLong(task.due!, t.locale, now)}
+                      </span>
+                      {relativeDays(task.due!, now, t.locale) ? (
+                        <span className="text-fg-4 max-sm:hidden"> · {relativeDays(task.due!, now, t.locale)}</span>
+                      ) : null}
                     </span>
                   ) : (
-                    <span className="text-fg-3">No date</span>
+                    <span className="text-fg-3">{t("panel.noDate")}</span>
                   )}
                 </Value>
               </PopoverTrigger>
@@ -386,17 +397,17 @@ function Body({ task }: { task: Task }) {
             </Popover>
           </Row>
 
-          <Row icon={<Hash className="size-4" />} label="Group">
+          <Row icon={<Hash className="size-4" />} label={t("panel.group")}>
             <Menu>
               <MenuTrigger asChild disabled={ro || task.owner.id !== me.id}>
-                <Value title={task.owner.id !== me.id ? "Only the owner can move this task" : undefined}>
+                <Value title={task.owner.id !== me.id ? t("panel.onlyOwnerMoves") : undefined}>
                   {task.group ? (
                     <>
                       <GroupDot color={task.group.color} />
                       <span className="text-fg">{task.group.name}</span>
                     </>
                   ) : (
-                    <span className="text-fg-3">No group</span>
+                    <span className="text-fg-3">{t("task.noGroup")}</span>
                   )}
                 </Value>
               </MenuTrigger>
@@ -406,17 +417,19 @@ function Body({ task }: { task: Task }) {
             </Menu>
           </Row>
 
-          <Row icon={<UserRound className="size-4" />} label="Assignee">
+          <Row icon={<UserRound className="size-4" />} label={t("panel.assignee")}>
             <Menu>
               <MenuTrigger asChild disabled={ro}>
                 <Value>
                   {task.assignee ? (
                     <>
                       <Avatar user={task.assignee} size="sm" />
-                      <span className="text-fg">{task.assignee.id === me.id ? `${task.assignee.name} (you)` : task.assignee.name}</span>
+                      <span className="text-fg">
+                        {task.assignee.id === me.id ? t("common.nameYou", { name: task.assignee.name }) : task.assignee.name}
+                      </span>
                     </>
                   ) : (
-                    <span className="text-fg-3">Unassigned</span>
+                    <span className="text-fg-3">{t("task.unassigned")}</span>
                   )}
                 </Value>
               </MenuTrigger>
@@ -426,16 +439,16 @@ function Body({ task }: { task: Task }) {
             </Menu>
           </Row>
 
-          <Row icon={<UsersRound className="size-4" />} label="Shared with" top>
+          <Row icon={<UsersRound className="size-4" />} label={t("panel.sharedWith")} top>
             <div className="flex min-w-0 flex-wrap items-center gap-1.5 py-1">
               {task.sharedWith.map((u) => (
                 <span key={u.id} className="group/pill inline-flex h-7 items-center gap-1.5 rounded-full bg-inset py-0.5 pr-1 pl-0.5 text-sm text-fg">
                   <Avatar user={u} size="md" />
-                  <span className="max-w-[140px] truncate">{u.id === me.id ? "You" : u.name}</span>
+                  <span className="max-w-[140px] truncate">{u.id === me.id ? t("common.you") : u.name}</span>
                   {task.can.share || u.id === me.id ? (
                     <button
                       type="button"
-                      aria-label={u.id === me.id ? "Leave this task" : `Stop sharing with ${u.name}`}
+                      aria-label={u.id === me.id ? t("panel.leave") : t("panel.stopSharing", { name: u.name })}
                       onClick={() => share.mutate({ id: task.id, userId: u.id, remove: true })}
                       className="flex size-5 items-center justify-center rounded-full text-fg-4 hover:bg-active hover:text-fg"
                     >
@@ -453,7 +466,7 @@ function Body({ task }: { task: Task }) {
                       type="button"
                       className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-sm text-fg-3 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
                     >
-                      <Plus className="size-3.5" /> {task.sharedWith.length ? "Add" : "Share"}
+                      <Plus className="size-3.5" /> {task.sharedWith.length ? t("panel.addPerson") : t("panel.share")}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0">
@@ -461,7 +474,7 @@ function Body({ task }: { task: Task }) {
                   </PopoverContent>
                 </Popover>
               ) : task.sharedWith.length === 0 ? (
-                <span className="text-sm text-fg-3">Only people in its group</span>
+                <span className="text-sm text-fg-3">{t("panel.onlyGroup")}</span>
               ) : null}
             </div>
           </Row>
@@ -472,38 +485,45 @@ function Body({ task }: { task: Task }) {
           <p className="flex items-center gap-2">
             <Avatar user={task.owner} size="xs" />
             <span>
-              Created by <span className="text-fg-2">{task.owner.id === me.id ? "you" : task.owner.name}</span> ·{" "}
-              {format(new Date(task.createdAt), "MMM d, yyyy")} at {formatTime(new Date(task.createdAt))}
+              {t.rich("panel.createdBy", {
+                name: <span className="text-fg-2">{task.owner.id === me.id ? t("common.youInline") : task.owner.name}</span>,
+                date: t("date.at", {
+                  day: formatDate(new Date(task.createdAt), "date.pattern.dayMonthYear", t.locale),
+                  time: formatTime(new Date(task.createdAt), t.locale),
+                }),
+              })}
             </span>
           </p>
           {task.completedAt && task.completedBy ? (
             <p className="flex items-center gap-2">
               <CircleCheck className="size-[18px] text-done" />
               <span>
-                Completed by <span className="text-fg-2">{task.completedBy.id === me.id ? "you" : task.completedBy.name}</span> ·{" "}
-                {timeAgo(task.completedAt, now)}
+                {t.rich("panel.completedBy", {
+                  name: <span className="text-fg-2">{task.completedBy.id === me.id ? t("common.youInline") : task.completedBy.name}</span>,
+                  ago: timeAgo(task.completedAt, now, t.locale, true),
+                })}
               </span>
             </p>
           ) : null}
-          <p className="pl-[26px] text-fg-4">Updated {timeAgo(task.updatedAt, now)}</p>
+          <p className="pl-[26px] text-fg-4">{t("panel.updated", { ago: timeAgo(task.updatedAt, now, t.locale, true) })}</p>
         </div>
       </div>
       <footer className="flex shrink-0 items-center gap-2 border-t border-line-soft bg-sheet/60 px-4 py-3">
         <span className="text-xs text-fg-4 max-sm:hidden">
-          {ro ? "You can view this task." : "Changes save as you go."}
+          {ro ? t("panel.readOnly") : t("panel.autosave")}
         </span>
         <div className="ml-auto flex items-center gap-2">
           {task.status === "archived" ? (
             <Button variant="secondary" icon={<ArchiveRestore className="size-4" />} onClick={() => action.mutate({ id: task.id, action: "restore" })}>
-              Restore
+              {t("task.restore")}
             </Button>
           ) : task.status === "done" ? (
             <Button variant="secondary" icon={<RotateCcw className="size-4" />} onClick={() => action.mutate({ id: task.id, action: "reopen" })}>
-              Mark as not done
+              {t("task.reopen")}
             </Button>
           ) : (
             <Button variant="primary" icon={<CircleCheck className="size-4" />} onClick={() => action.mutate({ id: task.id, action: "complete" })}>
-              Complete
+              {t("task.complete")}
             </Button>
           )}
         </div>
@@ -537,8 +557,9 @@ function Value({ children, ...rest }: { children: ReactNode } & ComponentProps<"
 }
 
 function PanelSkeleton() {
+  const t = useT();
   return (
-    <div className="flex-1 px-6 pt-6" aria-busy="true" aria-label="Loading the task">
+    <div className="flex-1 px-6 pt-6" aria-busy="true" aria-label={t("panel.loading")}>
       <div className="flex items-center gap-3">
         <Skeleton className="size-5 rounded-full" />
         <Skeleton className="h-5 w-2/3" />
@@ -558,16 +579,15 @@ function PanelSkeleton() {
 }
 
 function Gone({ error, onClose }: { error: unknown; onClose: () => void }) {
+  const t = useT();
   const missing = error instanceof ApiError && (error.status === 404 || error.status === 403);
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
       <LostIllo />
-      <h3 className="mt-3 text-md font-semibold text-fg">{missing ? "This task isn’t here" : "Couldn’t open this task"}</h3>
-      <p className="mt-1 max-w-[300px] text-sm text-fg-3">
-        {missing ? "It was deleted, or it’s no longer shared with you." : errorMessage(error)}
-      </p>
+      <h3 className="mt-3 text-md font-semibold text-fg">{missing ? t("panel.goneTitle") : t("panel.cantOpen")}</h3>
+      <p className="mt-1 max-w-[300px] text-sm text-fg-3">{missing ? t("panel.goneBody") : errorMessage(error)}</p>
       <Button className="mt-5" variant="secondary" onClick={onClose}>
-        Close
+        {t("common.close")}
       </Button>
     </div>
   );

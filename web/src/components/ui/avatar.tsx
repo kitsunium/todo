@@ -32,7 +32,6 @@ export function Avatar({
       className={cn(
         "relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold tracking-[0.02em] select-none",
         "bg-[oklch(0.9_0.055_var(--h))] text-[oklch(0.42_0.11_var(--h))]",
-        "dark:bg-[oklch(0.36_0.07_var(--h))] dark:text-[oklch(0.9_0.06_var(--h))]",
         ring && "ring-[1.5px] ring-sheet",
         SIZES[size],
         className,

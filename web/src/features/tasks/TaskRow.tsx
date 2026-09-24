@@ -27,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/pop
 import { PriorityIcon } from "../../components/ui/priority";
 import { toast } from "../../components/ui/toast";
 import { Tooltip } from "../../components/ui/tooltip";
+import { tr, useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { formatDue } from "../../lib/dates";
 import { useNow } from "../../lib/now";
@@ -54,10 +55,11 @@ export function peopleOn(t: Task, meId: string) {
 }
 
 export const TaskRow = memo(function TaskRow({ task, meId, selected, showGroup, onToggle, onSelect }: RowProps) {
+  const t = useT();
   const now = useNow();
   const location = useLocation();
   const done = task.status === "done" || task.status === "archived";
-  const due = task.due ? formatDue(task.due, now) : null;
+  const due = task.due ? formatDue(task.due, now, t.locale) : null;
   const overdue = !done && !!due?.overdue;
   const people = peopleOn(task, meId);
   const assignedToMe = task.assignee?.id === meId && task.owner.id !== meId;
@@ -97,9 +99,9 @@ export const TaskRow = memo(function TaskRow({ task, meId, selected, showGroup, 
             />
           </span>
           {task.notes ? (
-            <span className="inline-flex shrink-0 text-fg-4" title="Has notes">
+            <span className="inline-flex shrink-0 text-fg-4" title={t("row.hasNotes")}>
               <AlignLeft className="size-3.5" aria-hidden="true" />
-              <span className="sr-only">Has notes</span>
+              <span className="sr-only">{t("row.hasNotes")}</span>
             </span>
           ) : null}
         </span>
@@ -125,13 +127,13 @@ export const TaskRow = memo(function TaskRow({ task, meId, selected, showGroup, 
             {assignedToMe ? (
               <span className="inline-flex shrink-0 items-center gap-1">
                 <UserRoundCheck className="size-3" aria-hidden="true" />
-                For you
+                {t("row.forYou")}
               </span>
             ) : null}
             {task.status === "archived" ? (
               <span className="inline-flex shrink-0 items-center gap-1">
                 <Archive className="size-3" aria-hidden="true" />
-                Archived
+                {t("status.archived")}
               </span>
             ) : null}
             {people.length ? (
@@ -151,6 +153,7 @@ export const TaskRow = memo(function TaskRow({ task, meId, selected, showGroup, 
 });
 
 function QuickActions({ task }: { task: Task }) {
+  const t = useT();
   const me = useCurrentUser();
   const [dueOpen, setDueOpen] = useState(false);
   const navigate = useNavigate();
@@ -171,9 +174,9 @@ function QuickActions({ task }: { task: Task }) {
       )}
     >
       <Popover open={dueOpen} onOpenChange={setDueOpen}>
-        <Tooltip content="Due date">
+        <Tooltip content={t("row.dueDate")}>
           <PopoverTrigger asChild>
-            <IconButton label="Set the due date" size="xs">
+            <IconButton label={t("row.setDue")} size="xs">
               <CalendarDays className="size-3.5" />
             </IconButton>
           </PopoverTrigger>
@@ -183,9 +186,9 @@ function QuickActions({ task }: { task: Task }) {
         </PopoverContent>
       </Popover>
       <Menu>
-        <Tooltip content="Priority">
+        <Tooltip content={t("panel.priority")}>
           <MenuTrigger asChild>
-            <IconButton label="Set the priority" size="xs">
+            <IconButton label={t("row.setPriority")} size="xs">
               <PriorityIcon priority={task.priority} className="size-3.5" />
             </IconButton>
           </MenuTrigger>
@@ -196,9 +199,9 @@ function QuickActions({ task }: { task: Task }) {
       </Menu>
       {task.can.share ? (
         <Popover>
-          <Tooltip content="Share">
+          <Tooltip content={t("row.share")}>
             <PopoverTrigger asChild>
-              <IconButton label="Share" size="xs">
+              <IconButton label={t("row.share")} size="xs">
                 <UserRoundPlus className="size-3.5" />
               </IconButton>
             </PopoverTrigger>
@@ -209,9 +212,9 @@ function QuickActions({ task }: { task: Task }) {
         </Popover>
       ) : null}
       <Menu>
-        <Tooltip content="More">
+        <Tooltip content={t("common.more")}>
           <MenuTrigger asChild>
-            <IconButton label="More actions" size="xs">
+            <IconButton label={t("common.moreActions")} size="xs">
               <Ellipsis className="size-4" />
             </IconButton>
           </MenuTrigger>
@@ -222,7 +225,7 @@ function QuickActions({ task }: { task: Task }) {
             shortcut="E"
             onSelect={() => navigate(`/app/tasks/${task.id}`, { state: { background: here } })}
           >
-            Open
+            {t("task.open")}
           </MenuItem>
           <MenuItem
             icon={done ? <RotateCcw className="size-4" /> : <CircleCheck className="size-4" />}
@@ -231,25 +234,25 @@ function QuickActions({ task }: { task: Task }) {
               action.mutate({ id: task.id, action: task.status === "archived" ? "restore" : done ? "reopen" : "complete" })
             }
           >
-            {task.status === "archived" ? "Restore" : done ? "Mark as not done" : "Complete"}
+            {task.status === "archived" ? t("task.restore") : done ? t("task.reopen") : t("task.complete")}
           </MenuItem>
           <MenuSeparator />
           <MenuSub>
-            <MenuSubTrigger icon={<Signal className="size-4" />}>Priority</MenuSubTrigger>
+            <MenuSubTrigger icon={<Signal className="size-4" />}>{t("panel.priority")}</MenuSubTrigger>
             <MenuSubContent>
               <PriorityItems value={task.priority} onPick={(priority) => update.mutate({ id: task.id, patch: { priority } })} />
             </MenuSubContent>
           </MenuSub>
           {task.owner.id === me.id ? (
             <MenuSub>
-              <MenuSubTrigger icon={<FolderInput className="size-4" />}>Move to group</MenuSubTrigger>
+              <MenuSubTrigger icon={<FolderInput className="size-4" />}>{t("task.moveToGroup")}</MenuSubTrigger>
               <MenuSubContent>
                 <GroupItems value={task.group?.id} onPick={(groupId) => update.mutate({ id: task.id, patch: { groupId } })} />
               </MenuSubContent>
             </MenuSub>
           ) : null}
           <MenuSub>
-            <MenuSubTrigger icon={<UserRoundCheck className="size-4" />}>Assign</MenuSubTrigger>
+            <MenuSubTrigger icon={<UserRoundCheck className="size-4" />}>{t("task.assign")}</MenuSubTrigger>
             <MenuSubContent className="w-[240px]">
               <AssigneeItems task={task} />
             </MenuSubContent>
@@ -259,21 +262,21 @@ function QuickActions({ task }: { task: Task }) {
             icon={<Link2 className="size-4" />}
             onSelect={() => {
               void navigator.clipboard?.writeText(`${location.origin}/app/tasks/${task.id}`).then(
-                () => toast.success("Link copied"),
-                () => toast.error("Couldn’t copy the link"),
+                () => toast.success(tr()("common.linkCopied")),
+                () => toast.error(tr()("common.linkCopyFailed")),
               );
             }}
           >
-            Copy link
+            {t("common.copyLink")}
           </MenuItem>
           {task.status === "done" ? (
             <MenuItem icon={<Archive className="size-4" />} onSelect={() => action.mutate({ id: task.id, action: "archive" })}>
-              Archive
+              {t("task.archive")}
             </MenuItem>
           ) : null}
           {task.can.delete ? (
             <MenuItem danger icon={<Trash2 className="size-4" />} onSelect={() => setConfirm(true)}>
-              Delete…
+              {t("task.delete")}
             </MenuItem>
           ) : null}
         </MenuContent>
@@ -281,12 +284,12 @@ function QuickActions({ task }: { task: Task }) {
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title="Delete this task?"
-        description={`“${task.title}” will be deleted for everyone who can see it. This can’t be undone.`}
-        confirm="Delete task"
+        title={t("task.deleteTitle")}
+        description={t("task.deleteBody", { title: task.title })}
+        confirm={t("task.deleteConfirm")}
         onConfirm={async () => {
           await remove.mutateAsync(task.id);
-          toast("Task deleted");
+          toast(tr()("task.deleted"));
         }}
       />
     </div>

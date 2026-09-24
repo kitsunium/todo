@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The committed build is not a source: its old class names must not come back. */
+@source not "../../dist";
 
 /* ── Inter, self-hosted (latin + latin-ext, with the optical-size axis) ── */
 @font-face {
@@ -24,8 +26,6 @@
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
     U+A720-A7FF;
 }
-
-@custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 :root {
@@ -82,71 +82,6 @@
   --illo-ink-2: #a8a29e;
   --illo-shadow: rgb(28 25 23 / 0.07);
   color-scheme: light;
-}
-
-:root.dark {
-  --canvas: #0e0e10;
-  --sidebar: #0e0e10;
-  --sheet: #141416;
-  --surface: #18181b;
-  --raised: #1e1e21;
-  --inset: #1b1b1e;
-  --line: #2a2a2e;
-  --line-soft: #222226;
-  --line-strong: #3a3a40;
-  --fg: #ededef;
-  --fg-2: #a9a9b2;
-  --fg-3: #8b8b95;
-  --fg-4: #5c5c66;
-  --hover: rgb(255 255 255 / 0.045);
-  --active: rgb(255 255 255 / 0.08);
-  --selected: rgb(242 107 29 / 0.1);
-  --accent: #f4772f;
-  --accent-hover: #ff8642;
-  --accent-ink: #ff9a5c;
-  --accent-soft: rgb(244 119 47 / 0.15);
-  --accent-fg: #ffffff;
-  --primary: #ededef;
-  --primary-hover: #ffffff;
-  --primary-fg: #141416;
-  --urgent: #ec5d5e;
-  --high: #ff801f;
-  --medium: #ffca16;
-  --low: #8b8d98;
-  --done: #3dd68c;
-  --danger: #ec5d5e;
-  --danger-ink: #ff9592;
-  --danger-soft: rgb(236 93 94 / 0.14);
-  --success-ink: #4cc38a;
-  --success-soft: rgb(61 214 140 / 0.12);
-  --warn-ink: #ffca16;
-  --warn-soft: rgb(255 202 22 / 0.12);
-  --ring: rgb(244 119 47 / 0.6);
-  --scrim: rgb(0 0 0 / 0.5);
-  --shadow-sheet: 0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 3px rgb(0 0 0 / 0.4);
-  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-pop: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 0 0 1px rgb(255 255 255 / 0.08),
-    0 8px 16px -4px rgb(0 0 0 / 0.5), 0 24px 48px -12px rgb(0 0 0 / 0.6);
-  --shadow-dialog: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 0 0 1px rgb(255 255 255 / 0.08),
-    0 32px 80px -16px rgb(0 0 0 / 0.75);
-  --shadow-panel: -1px 0 0 rgb(255 255 255 / 0.07), -24px 0 64px -24px rgb(0 0 0 / 0.7);
-  --row-hover-solid: color-mix(in srgb, #141416 95.5%, #ffffff);
-  --illo-paper: #1e1e21;
-  --illo-line: #2e2e33;
-  --illo-ink: #3a3a40;
-  --illo-ink-2: #5c5c66;
-  --illo-shadow: rgb(0 0 0 / 0.35);
-  color-scheme: dark;
-}
-
-/* Before the script runs, follow the system: no flash of the wrong theme. */
-@media (prefers-color-scheme: dark) {
-  :root:not(.light):not(.dark) {
-    --canvas: #0e0e10;
-    --sheet: #141416;
-    --fg: #ededef;
-    color-scheme: dark;
-  }
 }
 
 @theme inline {

@@ -1,4 +1,4 @@
-import { addDays, format } from "date-fns";
+import { addDays } from "date-fns";
 import { BookUser } from "lucide-react";
 import { Link } from "react-router";
 import { useCounts, useCurrentUser, useTasks } from "../../api/queries";
@@ -16,7 +16,8 @@ import { Button } from "../../components/ui/button";
 import { EmptyState, ErrorState } from "../../components/ui/empty";
 import { Kbd } from "../../components/ui/kbd";
 import { TaskListSkeleton } from "../../components/ui/skeleton";
-import { dueAt } from "../../lib/dates";
+import { useT } from "../../i18n";
+import { dueAt, formatDayLong } from "../../lib/dates";
 import { useNow } from "../../lib/now";
 import { InvitationBanner } from "../groups/InvitationBanner";
 import { VIEWS, type ViewDef } from "../shell/nav";
@@ -25,56 +26,66 @@ import { QuickAdd } from "./QuickAdd";
 import { TaskList } from "./TaskList";
 
 function Empty({ view }: { view: ViewDef["view"] }) {
+  const t = useT();
+  const me = useCurrentUser();
   switch (view) {
     case "inbox":
       return (
-        <EmptyState art={<InboxIllo />} title="Inbox zero">
-          Nothing is waiting for a decision. Capture a task above — or press <Kbd>C</Kbd> anywhere.
+        <EmptyState art={<InboxIllo />} title={t("empty.inbox.title")}>
+          {t.rich("empty.inbox.body", { key: <Kbd>C</Kbd> })}
         </EmptyState>
       );
     case "today":
       return (
-        <EmptyState art={<TodayIllo />} title="Nothing due today">
-          Enjoy the calm. Anything due today — or overdue — shows up here.
+        <EmptyState art={<TodayIllo />} title={t("empty.today.title")}>
+          {t("empty.today.body")}
         </EmptyState>
       );
     case "upcoming":
       return (
-        <EmptyState art={<UpcomingIllo />} title="Nothing planned">
-          Give a task a date — type “fri” or “next week” — and it lands here.
+        <EmptyState art={<UpcomingIllo />} title={t("empty.upcoming.title")}>
+          {t("empty.upcoming.body")}
         </EmptyState>
       );
     case "shared":
       return (
         <EmptyState
           art={<SharedIllo />}
-          title="Nothing shared with you yet"
+          title={t("empty.shared.title")}
           action={
             <Button asChild variant="secondary" icon={<BookUser className="size-4" />}>
-              <Link to="/app/contacts">Find your people</Link>
+              <Link to="/app/contacts">{t("empty.shared.action")}</Link>
             </Button>
           }
         >
-          When a contact shares a task with you, it shows up here.
+          {t("empty.shared.body")}
         </EmptyState>
       );
     case "assigned":
       return (
-        <EmptyState art={<AssignedIllo />} title="Nothing assigned to you">
-          Tasks someone hands to you appear here — so do the ones you take on with “@you”.
+        <EmptyState art={<AssignedIllo />} title={t("empty.assigned.title")}>
+          {t.rich("empty.assigned.body", {
+            mention: <span className="font-medium text-fg-2">@{mentionName(me.name, me.email)}</span>,
+          })}
         </EmptyState>
       );
     case "completed":
       return (
-        <EmptyState art={<CompletedIllo />} title="Nothing completed yet">
-          Check off a task and it moves here. Done tasks are archived a day later.
+        <EmptyState art={<CompletedIllo />} title={t("empty.completed.title")}>
+          {t("empty.completed.body")}
         </EmptyState>
       );
   }
 }
 
+/** The @mention that names me in the quick add: my first name. */
+function mentionName(name: string, email: string): string {
+  return (name.trim().split(/\s+/)[0] || email.split("@")[0] || "").toLowerCase();
+}
+
 export function TaskViewPage({ view }: { view: ViewDef["view"] }) {
   const def = VIEWS.find((v) => v.view === view)!;
+  const t = useT();
   const me = useCurrentUser();
   const now = useNow();
   const q = useTasks(view);
@@ -91,18 +102,23 @@ export function TaskViewPage({ view }: { view: ViewDef["view"] }) {
           : {};
 
   const done = counts.data?.completedThisWeek;
+  const week = done !== undefined ? t("view.completed.week", { count: done }) : "";
   const subtitle =
     view === "today"
-      ? format(now, "EEEE, MMMM d")
+      ? formatDayLong(now, now, t.locale)
       : view === "completed"
         ? done !== undefined
-          ? `${done} completed this week${done >= 5 ? " — nice work" : ""}`
+          ? done >= 5
+            ? t("view.completed.nice", { text: week })
+            : week
           : " "
-        : def.blurb;
+        : def.blurb
+          ? t(def.blurb)
+          : undefined;
 
   return (
     <Page
-      title={def.label}
+      title={t(def.label)}
       icon={<Icon style={{ color: def.color }} fill={view === "today" ? def.color : "none"} strokeWidth={2} />}
       subtitle={subtitle}
     >

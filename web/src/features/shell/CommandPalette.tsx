@@ -5,11 +5,10 @@ import {
   BookUser,
   CornerDownLeft,
   Keyboard,
-  Moon,
+  Languages,
   Plus,
   Search,
   Settings,
-  Sun,
   UserRoundPlus,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -21,7 +20,8 @@ import { Kbd } from "../../components/ui/kbd";
 import { cn } from "../../lib/cn";
 import { formatDue } from "../../lib/dates";
 import { useNow } from "../../lib/now";
-import { resolvedTheme, toggleTheme, useTheme } from "../../lib/theme";
+import { tr, useT } from "../../i18n";
+import { useSwitchLocale } from "../settings/language";
 import { TaskCheckbox } from "../tasks/Checkbox";
 import { VIEWS } from "./nav";
 import { newTask, setUI, useUI } from "./store";
@@ -70,7 +70,9 @@ export function CommandPalette() {
   const tasks = useTasks(undefined, undefined, open);
   const groups = useGroups();
   const counts = useCounts();
-  const { resolved } = useTheme();
+  const t = useT();
+  const switchLocale = useSwitchLocale();
+  const other = t.locale === "fr" ? "en" : "fr";
 
   const close = () => {
     setUI({ palette: false });
@@ -92,25 +94,25 @@ export function CommandPalette() {
           aria-describedby={undefined}
           className="fixed top-[14vh] left-1/2 z-[61] w-[calc(100vw-24px)] max-w-[620px] -translate-x-1/2 overflow-hidden rounded-2xl bg-raised shadow-dialog outline-none data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out"
         >
-          <D.Title className="sr-only">Search and commands</D.Title>
-          <Command label="Search and commands" loop className="flex max-h-[min(560px,70vh)] flex-col">
+          <D.Title className="sr-only">{t("common.searchAndCommands")}</D.Title>
+          <Command label={t("common.searchAndCommands")} loop className="flex max-h-[min(560px,70vh)] flex-col">
             <div className="flex items-center gap-3 border-b border-line-soft px-4">
               <Search className="size-[18px] shrink-0 text-fg-4" aria-hidden="true" />
               <Command.Input
                 value={search}
                 onValueChange={setSearch}
-                placeholder={mode === "tasks" ? "Search tasks…" : "Search tasks, jump to a list, or run a command…"}
+                placeholder={mode === "tasks" ? t("palette.searchTasks") : t("palette.searchAll")}
                 className="h-14 min-w-0 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-fg-4"
               />
               <Kbd>Esc</Kbd>
             </div>
             <Command.List className="min-h-0 flex-1 overflow-y-auto p-2 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:tracking-[0.06em] [&_[cmdk-group-heading]]:text-fg-4 [&_[cmdk-group-heading]]:uppercase">
               <Command.Empty className="px-3 py-10 text-center text-sm text-fg-3">
-                {tasks.isPending ? "Searching…" : `Nothing matches “${q}”.`}
+                {tasks.isPending ? t("palette.searching") : t("palette.nothing", { query: q })}
               </Command.Empty>
 
               {q || mode === "tasks" ? (
-                <Command.Group heading="Tasks">
+                <Command.Group heading={t("palette.tasks")}>
                   {matching.slice(0, q ? 50 : 8).map((t) => (
                     <TaskItem key={t.id} task={t} onSelect={() => go(`/app/tasks/${t.id}`)} />
                   ))}
@@ -118,7 +120,7 @@ export function CommandPalette() {
               ) : null}
 
               {q && mode !== "tasks" ? (
-                <Command.Group heading="Create">
+                <Command.Group heading={t("palette.create")}>
                   <Item
                     value={`create task ${q}`}
                     icon={<Plus className="size-4" />}
@@ -128,21 +130,21 @@ export function CommandPalette() {
                     }}
                     hint={<CornerDownLeft className="size-3.5" />}
                   >
-                    New task “<span className="text-fg">{q}</span>”
+                    {t.rich("palette.newTaskNamed", { title: <span className="text-fg">{q}</span> })}
                   </Item>
                 </Command.Group>
               ) : null}
 
               {mode !== "tasks" ? (
                 <>
-                  <Command.Group heading="Go to">
+                  <Command.Group heading={t("palette.goTo")}>
                     {VIEWS.map((v) => {
                       const Icon = v.icon;
                       const n = counts.data ? v.count(counts.data) : undefined;
                       return (
                         <Item
                           key={v.view}
-                          value={`go ${v.label}`}
+                          value={`go ${t(v.label)}`}
                           icon={<Icon className="size-4" style={{ color: v.color }} />}
                           onSelect={() => go(v.path)}
                           hint={
@@ -153,7 +155,7 @@ export function CommandPalette() {
                             </>
                           }
                         >
-                          {v.label}
+                          {t(v.label)}
                         </Item>
                       );
                     })}
@@ -162,19 +164,19 @@ export function CommandPalette() {
                         {g.name}
                       </Item>
                     ))}
-                    <Item value="go contacts" icon={<BookUser className="size-4" />} onSelect={() => go("/app/contacts")}>
-                      Contacts
+                    <Item value={`go contacts ${t("sidebar.contacts")}`} icon={<BookUser className="size-4" />} onSelect={() => go("/app/contacts")}>
+                      {t("sidebar.contacts")}
                     </Item>
-                    <Item value="go activity" icon={<ActivityIcon className="size-4" />} onSelect={() => go("/app/activity")}>
-                      Activity
+                    <Item value={`go activity ${t("sidebar.activity")}`} icon={<ActivityIcon className="size-4" />} onSelect={() => go("/app/activity")}>
+                      {t("sidebar.activity")}
                     </Item>
-                    <Item value="go settings" icon={<Settings className="size-4" />} onSelect={() => go("/app/settings")}>
-                      Settings
+                    <Item value={`go settings ${t("user.settings")}`} icon={<Settings className="size-4" />} onSelect={() => go("/app/settings")}>
+                      {t("user.settings")}
                     </Item>
                   </Command.Group>
-                  <Command.Group heading="Actions">
+                  <Command.Group heading={t("palette.actions")}>
                     <Item
-                      value="new task"
+                      value={`new task ${t("sidebar.newTask")}`}
                       icon={<Plus className="size-4" />}
                       onSelect={() => {
                         close();
@@ -182,23 +184,24 @@ export function CommandPalette() {
                       }}
                       hint={<Kbd>C</Kbd>}
                     >
-                      New task
+                      {t("sidebar.newTask")}
                     </Item>
-                    <Item value="add contact" icon={<UserRoundPlus className="size-4" />} onSelect={() => go("/app/contacts")}>
-                      Add a contact
+                    <Item value={`add contact ${t("palette.addContact")}`} icon={<UserRoundPlus className="size-4" />} onSelect={() => go("/app/contacts")}>
+                      {t("palette.addContact")}
                     </Item>
                     <Item
-                      value="toggle theme dark light"
-                      icon={resolved === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                      value={`language langue english français ${t("lang.switch")}`}
+                      icon={<Languages className="size-4" />}
                       onSelect={() => {
-                        toggleTheme();
+                        switchLocale(other);
                         close();
                       }}
+                      hint={<span lang={other}>{tr(other)(`lang.${other}`)}</span>}
                     >
-                      Switch to {resolvedTheme() === "dark" ? "light" : "dark"} theme
+                      {t("lang.switch")}
                     </Item>
                     <Item
-                      value="keyboard shortcuts help"
+                      value={`keyboard shortcuts help ${t("user.shortcuts")}`}
                       icon={<Keyboard className="size-4" />}
                       onSelect={() => {
                         close();
@@ -206,7 +209,7 @@ export function CommandPalette() {
                       }}
                       hint={<Kbd>?</Kbd>}
                     >
-                      Keyboard shortcuts
+                      {t("user.shortcuts")}
                     </Item>
                   </Command.Group>
                 </>
@@ -215,10 +218,10 @@ export function CommandPalette() {
             <div className="flex items-center gap-4 border-t border-line-soft px-4 py-2.5 text-xs text-fg-4">
               <span className="flex items-center gap-1.5">
                 <Kbd>↑</Kbd>
-                <Kbd>↓</Kbd> to move
+                <Kbd>↓</Kbd> {t("palette.toMove")}
               </span>
               <span className="flex items-center gap-1.5">
-                <Kbd>↵</Kbd> to open
+                <Kbd>↵</Kbd> {t("palette.toOpen")}
               </span>
             </div>
           </Command>

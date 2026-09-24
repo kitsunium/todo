@@ -1,10 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
-import { applyTheme } from "./lib/theme";
+import { applyLocale } from "./i18n";
 import "./styles/index.css";
 
-applyTheme();
+// <html lang> says the language before the first render.
+applyLocale();
 
 async function boot() {
   // Mock mode (vite --mode mock) answers the API in memory. In a production

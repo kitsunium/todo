@@ -9,9 +9,11 @@ import { Callout } from "../../components/ui/callout";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "../../components/ui/dialog";
 import { Field, Input } from "../../components/ui/input";
 import { toast } from "../../components/ui/toast";
+import { tr, useT } from "../../i18n";
 import { checkEmail } from "../auth/forms";
 
 export function AddContactDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const [email, setEmail] = useState("");
   const [touched, setTouched] = useState(false);
@@ -35,8 +37,12 @@ export function AddContactDialog({ open, onOpenChange }: { open: boolean; onOpen
     setError(null);
     try {
       const r = await ep.contacts.add(email.trim().toLowerCase());
-      if (r.kind === "request") toast.success(`Request sent to ${r.request.user.name}`, { description: "They’ll show up in your contacts once they accept." });
-      else toast.success(`Invitation emailed to ${r.invite.email}`, { description: "You’ll be connected as soon as they join." });
+      const say = tr();
+      if (r.kind === "request") {
+        toast.success(say("addContact.requestSent", { name: r.request.user.name }), { description: say("addContact.requestHint") });
+      } else {
+        toast.success(say("addContact.inviteSent", { email: r.invite.email }), { description: say("addContact.inviteHint") });
+      }
       await qc.invalidateQueries({ queryKey: qk.contacts });
       onOpenChange(false);
     } catch (err) {
@@ -56,33 +62,37 @@ export function AddContactDialog({ open, onOpenChange }: { open: boolean; onOpen
                 <UserRoundPlus className="size-[18px]" />
               </span>
             }
-            title="Add a contact"
-            description="Contacts can share tasks with each other and join the same groups."
+            title={t("palette.addContact")}
+            description={t("addContact.body")}
           />
           <DialogBody className="flex flex-col gap-4">
-            <Field label="Email address" error={(touched && invalid) || server}>
+            <Field label={t("addContact.email")} error={(touched && invalid) || server}>
               {(p) => (
-                <Input {...p} inputSize="lg" type="email" autoFocus autoComplete="off" placeholder="sam@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input {...p} inputSize="lg" type="email" autoFocus autoComplete="off" placeholder={t("addContact.placeholder")} value={email} onChange={(e) => setEmail(e.target.value)} />
               )}
             </Field>
             <div className="grid gap-2 text-xs text-fg-3 sm:grid-cols-2">
               <div className="flex gap-2 rounded-lg bg-inset p-2.5">
                 <UserRoundPlus className="mt-px size-3.5 shrink-0 text-fg-4" />
-                <p><span className="font-medium text-fg-2">Already on Todo?</span> They get a request to accept.</p>
+                <p>
+                  <span className="font-medium text-fg-2">{t("addContact.onTodo")}</span> {t("addContact.onTodoBody")}
+                </p>
               </div>
               <div className="flex gap-2 rounded-lg bg-inset p-2.5">
                 <MailPlus className="mt-px size-3.5 shrink-0 text-fg-4" />
-                <p><span className="font-medium text-fg-2">Not yet?</span> We email them an invitation to join.</p>
+                <p>
+                  <span className="font-medium text-fg-2">{t("addContact.notYet")}</span> {t("addContact.notYetBody")}
+                </p>
               </div>
             </div>
             {error && !server ? <Callout tone="danger">{errorMessage(error)}</Callout> : null}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={busy}>
-              Send
+              {t("common.send")}
             </Button>
           </DialogFooter>
         </form>

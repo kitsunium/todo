@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { studioAvailable } from "../../api/endpoints";
+import { useT } from "../../i18n";
 
 // In mock mode the mailbox is the mock's own; the import disappears from a
 // production build with the branch.
@@ -13,6 +14,7 @@ const MockMailbox = import.meta.env.MODE === "mock" ? lazy(() => import("../../m
  * in mock mode, the mock's.
  */
 export function DevMailbox({ email }: { email?: string }) {
+  const t = useT();
   const studio = useQuery({ queryKey: ["studio"], queryFn: studioAvailable, staleTime: Infinity, retry: false, enabled: !MockMailbox });
   if (MockMailbox) {
     return (
@@ -31,7 +33,7 @@ export function DevMailbox({ email }: { email?: string }) {
     >
       <span>
         <span className="mr-2 rounded bg-accent-soft px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-accent-ink uppercase">Dev</span>
-        Open the dev mailbox
+        {t("dev.mailbox")}
       </span>
       <ArrowUpRight className="size-4" aria-hidden="true" />
     </a>

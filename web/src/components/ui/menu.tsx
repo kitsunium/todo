@@ -106,3 +106,47 @@ export function MenuSeparator({ className }: { className?: string }) {
 export function MenuLabel({ className, ...rest }: ComponentProps<typeof M.Label>) {
   return <M.Label className={cn("px-2 pt-1.5 pb-1 text-2xs font-medium tracking-wide text-fg-4 uppercase", className)} {...rest} />;
 }
+
+/**
+ * A compact choice inside a menu — a label, then segments ("FR | EN").
+ * Picking a segment keeps the menu open: the change shows at once.
+ */
+export function MenuSegmented<V extends string>({
+  icon,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  icon?: ReactNode;
+  label: ReactNode;
+  value: V;
+  options: readonly { value: V; short: string; label: string; lang?: string }[];
+  onChange: (v: V) => void;
+}) {
+  return (
+    <div className="flex h-9 items-center gap-2 pr-1 pl-2">
+      {icon ? <span className="flex size-4 items-center justify-center text-fg-3">{icon}</span> : null}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <M.RadioGroup value={value} onValueChange={(v) => onChange(v as V)} className="flex items-center rounded-md bg-inset p-0.5">
+        {options.map((o) => (
+          <M.RadioItem
+            key={o.value}
+            value={o.value}
+            lang={o.lang}
+            aria-label={o.label}
+            textValue={o.label}
+            onSelect={(e) => e.preventDefault()}
+            className={cn(
+              "flex h-6 min-w-8 items-center justify-center rounded-[5px] px-2 text-xs font-semibold tracking-[0.02em] text-fg-3 outline-none select-none",
+              "data-[highlighted]:text-fg data-[highlighted]:ring-2 data-[highlighted]:ring-ring",
+              "data-[state=checked]:bg-surface data-[state=checked]:text-fg data-[state=checked]:shadow-card",
+            )}
+          >
+            {o.short}
+          </M.RadioItem>
+        ))}
+      </M.RadioGroup>
+    </div>
+  );
+}

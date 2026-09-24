@@ -2,25 +2,28 @@ import type { ReactNode } from "react";
 import { Link, Outlet, useLocation } from "react-router";
 import { AuthArt } from "../../components/brand/auth-art";
 import { Logo } from "../../components/brand/logo";
+import { useT } from "../../i18n";
+import { LanguageSwitch } from "../settings/language";
 
 /** Split screen: the form on the left, the brand on the right (hidden on small screens). */
 export function AuthLayout() {
+  const t = useT();
   const { pathname } = useLocation();
   const onSignup = pathname.startsWith("/signup");
   return (
     <div className="grid min-h-dvh bg-sheet lg:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)]">
       <div className="flex min-h-dvh flex-col px-5 py-5 sm:px-10 sm:py-7">
         <header className="flex items-center justify-between">
-          <Link to="/" className="rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" aria-label="Todo home">
+          <Link to="/" className="rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" aria-label={t("app.home")}>
             <Logo />
           </Link>
           <p className="text-sm text-fg-3">
-            {onSignup ? "Have an account?" : "New to Todo?"}{" "}
+            {onSignup ? t("auth.haveAccount") : t("auth.newHere")}{" "}
             <Link
               to={onSignup ? "/login" : "/signup"}
               className="font-medium text-fg underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
             >
-              {onSignup ? "Sign in" : "Create an account"}
+              {onSignup ? t("auth.signIn") : t("auth.createAccount")}
             </Link>
           </p>
         </header>
@@ -29,9 +32,11 @@ export function AuthLayout() {
             <Outlet />
           </div>
         </main>
-        <footer className="flex items-center justify-between text-xs text-fg-4">
-          <span>© {new Date().getFullYear()} Todo</span>
-          <span>Built with kit</span>
+        <footer className="flex items-center justify-between gap-4 text-xs text-fg-4">
+          <span>
+            © {new Date().getFullYear()} Todo · {t("auth.builtWith")}
+          </span>
+          <LanguageSwitch />
         </footer>
       </div>
       <aside className="relative m-2 hidden overflow-hidden rounded-[20px] lg:block" aria-hidden="false">
@@ -42,6 +47,7 @@ export function AuthLayout() {
 }
 
 function BrandPanel() {
+  const t = useT();
   return (
     <div className="relative flex h-full min-h-[640px] flex-col justify-between overflow-hidden bg-[#f26b1d] p-10 xl:p-14">
       <div
@@ -69,18 +75,17 @@ function BrandPanel() {
           maskImage: "radial-gradient(70% 60% at 50% 45%, black, transparent)",
         }}
       />
-      <div className="pointer-events-none absolute inset-0 hidden bg-[#0e0e10]/25 dark:block" />
       <div className="relative flex items-center gap-2 text-sm font-medium text-white/85">
         <span className="inline-flex size-1.5 rounded-full bg-white" />
-        Tasks, shared the calm way
+        {t("auth.brand.tag")}
       </div>
       <AuthArt className="relative mx-auto my-4 w-full max-w-[540px]" />
       <div className="relative max-w-[440px]">
         <p className="text-[30px] leading-[36px] font-semibold tracking-[-0.025em] text-balance text-white">
-          One calm list for everything you and your people need to get done.
+          {t("auth.brand.title")}
         </p>
         <p className="mt-3 text-[15px] leading-6 text-white/80">
-          Priorities, due dates, shared tasks and groups — and nothing you don’t need.
+          {t("auth.brand.body")}
         </p>
       </div>
     </div>

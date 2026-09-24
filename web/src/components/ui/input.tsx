@@ -1,5 +1,6 @@
 import { CircleAlert, Eye, EyeOff } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 
 const FIELD =
@@ -88,6 +89,7 @@ export function Field({
 }
 
 export function PasswordInput(props: InputProps) {
+  const t = useT();
   const [shown, setShown] = useState(false);
   return (
     <div className="relative">
@@ -95,7 +97,7 @@ export function PasswordInput(props: InputProps) {
       <button
         type="button"
         onClick={() => setShown((s) => !s)}
-        aria-label={shown ? "Hide password" : "Show password"}
+        aria-label={shown ? t("password.hide") : t("password.show")}
         aria-pressed={shown}
         className="absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-fg-4 transition-colors hover:bg-hover hover:text-fg-2 focus-visible:outline-2 focus-visible:outline-ring"
       >

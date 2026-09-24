@@ -9,11 +9,13 @@ import { Button } from "../../components/ui/button";
 import { Callout } from "../../components/ui/callout";
 import { Field, Input, PasswordInput } from "../../components/ui/input";
 import { toast } from "../../components/ui/toast";
+import { setLocale, useT } from "../../i18n";
 import { safeNext } from "../../lib/nav";
 import { AuthHeading } from "./AuthLayout";
 import { checkEmail, useTouched } from "./forms";
 
 export function LoginPage() {
+  const t = useT();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -22,22 +24,23 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<ApiError | Error | null>(null);
   const [resending, setResending] = useState(false);
-  const t = useTouched<"email" | "password">();
+  const touched = useTouched<"email" | "password">();
   const server = fieldErrors(failure);
   const errors = {
     email: checkEmail(email) ?? server.email,
-    password: password ? server.password : "Enter your password.",
+    password: password ? server.password : t("login.passwordEmpty"),
   };
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    t.submit();
+    touched.submit();
     if (checkEmail(email) || !password) return;
     setBusy(true);
     setFailure(null);
     try {
       const user = await ep.auth.login({ email: email.trim().toLowerCase(), password });
       qc.setQueryData(qk.me, user);
+      setLocale(user.locale);
       navigate(safeNext(params.get("next")), { replace: true });
     } catch (err) {
       setFailure(err instanceof Error ? err : new Error(String(err)));
@@ -61,9 +64,9 @@ export function LoginPage() {
   const code = failure instanceof ApiError ? failure.code : "";
   return (
     <>
-      <AuthHeading title="Welcome back">Sign in to pick up where you left off.</AuthHeading>
+      <AuthHeading title={t("login.title")}>{t("login.subtitle")}</AuthHeading>
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-        <Field label="Email" error={t.shown("email") ? errors.email : undefined}>
+        <Field label={t("common.email")} error={touched.shown("email") ? errors.email : undefined}>
           {(p) => (
             <Input
               {...p}
@@ -72,22 +75,22 @@ export function LoginPage() {
               name="email"
               autoComplete="email"
               autoFocus={!email}
-              placeholder="you@example.com"
+              placeholder={t("common.emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onBlur={() => email && t.touch("email")}
+              onBlur={() => email && touched.touch("email")}
             />
           )}
         </Field>
         <Field
-          label="Password"
-          error={t.shown("password") ? errors.password : undefined}
+          label={t("common.password")}
+          error={touched.shown("password") ? errors.password : undefined}
           aside={
             <Link
               to={`/forgot${email ? `?email=${encodeURIComponent(email.trim())}` : ""}`}
               className="text-xs font-medium text-fg-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-ring"
             >
-              Forgot password?
+              {t("login.forgot")}
             </Link>
           }
         >
@@ -107,36 +110,36 @@ export function LoginPage() {
         {failure && code === "email_unverified" ? (
           <Callout
             tone="warn"
-            title="Confirm your email first"
+            title={t("login.unverified.title")}
             action={
               <Button size="sm" variant="secondary" loading={resending} onClick={resend}>
-                Send a new link
+                {t("login.unverified.resend")}
               </Button>
             }
           >
-            We sent a confirmation link to {email.trim()} when you signed up.
+            {t("login.unverified.body", { email: email.trim() })}
           </Callout>
         ) : failure && code === "account_locked" ? (
           <Callout
             tone="danger"
-            title="Account locked for 15 minutes"
+            title={t("login.locked.title")}
             action={
               <Link
                 to={`/forgot?email=${encodeURIComponent(email.trim())}`}
                 className="text-sm font-medium underline underline-offset-4"
               >
-                Reset your password now
+                {t("login.locked.reset")}
               </Link>
             }
           >
-            Too many attempts with the wrong password.
+            {t("login.locked.body")}
           </Callout>
         ) : failure && !Object.keys(server).length ? (
           <Callout tone="danger">{errorMessage(failure)}</Callout>
         ) : null}
 
         <Button type="submit" variant="primary" size="lg" loading={busy} className="mt-1 w-full">
-          Sign in
+          {t("login.submit")}
         </Button>
       </form>
       <MockHint onFill={(e, p) => (setEmail(e), setPassword(p))} />
@@ -146,6 +149,7 @@ export function LoginPage() {
 
 /** In mock mode, the demo account — one click to fill the form. */
 function MockHint({ onFill }: { onFill: (email: string, password: string) => void }) {
+  const t = useT();
   if (import.meta.env.MODE !== "mock") return null;
   return (
     <button
@@ -154,7 +158,7 @@ function MockHint({ onFill }: { onFill: (email: string, password: string) => voi
       className="mt-6 w-full rounded-lg border border-dashed border-line-strong px-3.5 py-2.5 text-left text-xs text-fg-3 transition-colors hover:border-accent hover:text-fg-2"
     >
       <span className="mr-2 rounded bg-accent-soft px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-accent-ink uppercase">Mock</span>
-      camille@example.com · correct-horse-42 — also try unverified@ or locked@example.com
+      {t("login.mockHint")}
     </button>
   );
 }

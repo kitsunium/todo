@@ -1,9 +1,11 @@
 // The HTTP contract of the todo backend (plan "The todo — domain and HTTP
 // contract"). JSON is camelCase, timestamps are RFC 3339 UTC, IDs are kit
 // TypeIDs (user_…, task_…, group_…).
+import type { Locale } from "../i18n/types";
 
 export type UserRef = { id: string; name: string; email: string };
-export type User = UserRef & { createdAt: string };
+/** The signed-in person. locale is the language of their interface and of the mails they get. */
+export type User = UserRef & { createdAt: string; locale: Locale };
 
 /** 0 none, 1 urgent, 2 high, 3 medium, 4 low — Linear's order. */
 export type Priority = 0 | 1 | 2 | 3 | 4;
@@ -125,6 +127,8 @@ export type ActivityEntry = {
   id: string;
   kind: string;
   actor?: UserRef;
+  /** The other person the entry is about: the sharee, the assignee, the removed member… */
+  target?: UserRef;
   task?: { id: string; title: string };
   group?: GroupRef;
   text: string;

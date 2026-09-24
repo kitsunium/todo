@@ -10,6 +10,7 @@ import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from ".
 import { GroupBadge } from "../../components/ui/group-color";
 import { Field, Input } from "../../components/ui/input";
 import { toast } from "../../components/ui/toast";
+import { tr, useT } from "../../i18n";
 import { ColorPicker } from "./ColorPicker";
 
 const PICKS = ["orange", "blue", "green", "violet", "pink", "teal", "indigo", "amber", "red", "slate"];
@@ -24,6 +25,7 @@ export function CreateGroupDialog({
   onOpenChange: (o: boolean) => void;
   group?: Group;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -40,7 +42,7 @@ export function CreateGroupDialog({
     setTouched(false);
   }, [open, group]);
 
-  const invalid = !name.trim() ? "Give the group a name." : undefined;
+  const invalid = !name.trim() ? t("groupForm.nameEmpty") : undefined;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -52,11 +54,11 @@ export function CreateGroupDialog({
       if (group) {
         const g = await ep.groups.update(group.id, { name: name.trim(), color });
         qc.setQueryData(qk.group(g.id), g);
-        toast.success("Group updated");
+        toast.success(tr()("groupForm.updated"));
       } else {
         const g = await ep.groups.create({ name: name.trim(), color });
         qc.setQueryData(qk.group(g.id), g);
-        toast.success(`${g.name} is ready`, { description: "Invite people from its Members tab." });
+        toast.success(tr()("groupForm.ready", { name: g.name }), { description: tr()("groupForm.readyHint") });
         navigate(`/app/groups/${g.id}`);
       }
       await Promise.all([qc.invalidateQueries({ queryKey: qk.groups }), qc.invalidateQueries({ queryKey: qk.tasksRoot })]);
@@ -75,27 +77,27 @@ export function CreateGroupDialog({
         <form onSubmit={submit} noValidate>
           <DialogHeader
             icon={<GroupBadge name={name || "?"} color={color} size="lg" />}
-            title={group ? "Edit group" : "New group"}
-            description={group ? "Rename it or give it another color." : "A shared list for a team, a project or a household."}
+            title={group ? t("groupForm.editTitle") : t("groupForm.newTitle")}
+            description={group ? t("groupForm.editBody") : t("groupForm.newBody")}
           />
           <DialogBody className="flex flex-col gap-5">
-            <Field label="Name" error={(touched && invalid) || server.name}>
+            <Field label={t("common.name")} error={(touched && invalid) || server.name}>
               {(p) => (
-                <Input {...p} inputSize="lg" autoFocus placeholder="Launch, Home, Book club…" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+                <Input {...p} inputSize="lg" autoFocus placeholder={t("groupForm.namePlaceholder")} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
               )}
             </Field>
             <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-fg">Color</span>
+              <span className="text-sm font-medium text-fg">{t("groupForm.color")}</span>
               <ColorPicker value={color} onChange={setColor} />
             </div>
             {error && !server.name ? <p className="text-sm text-danger-ink">{errorMessage(error)}</p> : null}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" variant="primary" loading={busy}>
-              {group ? "Save" : "Create group"}
+              {group ? t("common.save") : t("groupForm.create")}
             </Button>
           </DialogFooter>
         </form>

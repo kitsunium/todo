@@ -1,3 +1,4 @@
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 
 export function Skeleton({ className }: { className?: string }) {
@@ -6,9 +7,10 @@ export function Skeleton({ className }: { className?: string }) {
 
 /** The shape of a task list while it loads. */
 export function TaskListSkeleton({ rows = 6 }: { rows?: number }) {
+  const t = useT();
   const widths = ["w-[62%]", "w-[44%]", "w-[71%]", "w-[38%]", "w-[55%]", "w-[48%]", "w-[66%]", "w-[41%]"];
   return (
-    <div className="mt-2" aria-busy="true" aria-label="Loading tasks">
+    <div className="mt-2" aria-busy="true" aria-label={t("list.loading")}>
       <Skeleton className="mb-3 ml-1 h-3 w-16" />
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="flex items-start gap-3 px-2 py-2.5">

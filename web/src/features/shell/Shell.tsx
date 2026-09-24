@@ -1,13 +1,15 @@
 import { matchPath, Navigate, Route, Routes, useLocation, useNavigate, type Location } from "react-router";
 import { errorMessage, isUnauthenticated } from "../../api/errors";
 import { useMe } from "../../api/queries";
+import type { User } from "../../api/types";
 import { FoxMark } from "../../components/brand/logo";
 import { Button } from "../../components/ui/button";
-import { toggleTheme } from "../../lib/theme";
+import { useT } from "../../i18n";
 import { ActivityPage } from "../activity/ActivityPage";
 import { ContactsPage } from "../contacts/ContactsPage";
 import { GroupPage } from "../groups/GroupPage";
 import { NotFoundPage } from "../NotFoundPage";
+import { useLocaleSync } from "../settings/language";
 import { SettingsPage } from "../settings/SettingsPage";
 import { TaskPanel } from "../tasks/TaskPanel";
 import { TaskViewPage } from "../tasks/TaskViewPage";
@@ -23,6 +25,7 @@ import { newTask, setUI } from "./store";
 
 /** /app/*: signed-in only. */
 export function AppGate() {
+  const t = useT();
   const me = useMe();
   const location = useLocation();
   if (me.isPending) return <Splash />;
@@ -34,21 +37,23 @@ export function AppGate() {
       <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-canvas px-6 text-center">
         <FoxMark className="size-9 opacity-60" />
         <div>
-          <p className="text-md font-semibold text-fg">Todo can’t start right now</p>
+          <p className="text-md font-semibold text-fg">{t("app.cantStart")}</p>
           <p className="mt-1 text-sm text-fg-3">{errorMessage(me.error)}</p>
         </div>
         <Button variant="secondary" onClick={() => void me.refetch()}>
-          Try again
+          {t("common.tryAgain")}
         </Button>
       </div>
     );
   }
-  return <Shell />;
+  return <Shell user={me.data} />;
 }
 
 let lastBackground: Location | null = null;
 
-function Shell() {
+function Shell({ user }: { user: User }) {
+  useLocaleSync(user);
+  const t = useT();
   const location = useLocation();
   const navigate = useNavigate();
   const taskMatch = matchPath("/app/tasks/:taskId", location.pathname);
@@ -63,7 +68,6 @@ function Shell() {
     { key: "c", run: () => newTask({}) },
     { key: "?", run: () => setUI({ shortcuts: true }) },
     { key: ",", mod: true, run: () => navigate("/app/settings") },
-    { key: "t", shift: true, run: () => toggleTheme() },
     ...VIEWS.map((v) => ({ key: `g ${v.keys[1]!.toLowerCase()}`, run: () => navigate(v.path) })),
   ]);
 
@@ -78,9 +82,9 @@ function Shell() {
         href="#main"
         className="sr-only z-[100] rounded-md bg-surface px-3 py-2 text-sm shadow-pop focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
       >
-        Skip to content
+        {t("app.skipToContent")}
       </a>
-      <aside className="hidden w-[248px] shrink-0 min-[900px]:flex" aria-label="Sidebar">
+      <aside className="hidden w-[248px] shrink-0 min-[900px]:flex" aria-label={t("app.sidebar")}>
         <Sidebar />
       </aside>
       <MobileDrawer />

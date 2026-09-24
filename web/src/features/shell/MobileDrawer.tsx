@@ -1,11 +1,13 @@
 import { Dialog as D } from "radix-ui";
 import { useEffect } from "react";
 import { useLocation } from "react-router";
+import { useT } from "../../i18n";
 import { Sidebar } from "./Sidebar";
 import { setUI, useUI } from "./store";
 
 /** Below 900px the sidebar lives in a drawer. */
 export function MobileDrawer() {
+  const t = useT();
   const open = useUI((s) => s.drawer);
   const { pathname } = useLocation();
   useEffect(() => setUI({ drawer: false }), [pathname]);
@@ -28,7 +30,7 @@ export function MobileDrawer() {
           }}
           className="fixed inset-y-0 left-0 outline-none z-[56] flex w-[min(300px,86vw)] flex-col bg-sidebar shadow-dialog outline-none data-[state=open]:animate-drawer-in data-[state=closed]:animate-drawer-out"
         >
-          <D.Title className="sr-only">Navigation</D.Title>
+          <D.Title className="sr-only">{t("app.navigation")}</D.Title>
           <Sidebar onNavigate={() => setUI({ drawer: false })} />
         </D.Content>
       </D.Portal>

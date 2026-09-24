@@ -8,11 +8,13 @@ import { Button } from "../../components/ui/button";
 import { Callout } from "../../components/ui/callout";
 import { Field, PasswordInput } from "../../components/ui/input";
 import { toast } from "../../components/ui/toast";
+import { setLocale, tr, useT } from "../../i18n";
 import { passwordStrength } from "../../lib/password";
 import { AuthHeading } from "./AuthLayout";
 import { StrengthMeter } from "./forms";
 
 export function ResetPage() {
+  const t = useT();
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const navigate = useNavigate();
@@ -22,9 +24,9 @@ export function ResetPage() {
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
-  const strength = passwordStrength(password);
+  const strength = passwordStrength(password, t.locale);
   const server = fieldErrors(failure);
-  const mismatch = confirm && confirm !== password ? "The passwords don’t match." : undefined;
+  const mismatch = confirm && confirm !== password ? t("reset.mismatch") : undefined;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -35,7 +37,8 @@ export function ResetPage() {
     try {
       const user = await ep.auth.reset({ token, password });
       qc.setQueryData(qk.me, user);
-      toast.success("Password updated. You’re signed in.");
+      setLocale(user.locale);
+      toast.success(tr(user.locale)("reset.done"));
       navigate("/app/today", { replace: true });
     } catch (err) {
       setFailure(err);
@@ -47,9 +50,9 @@ export function ResetPage() {
   if (!token) {
     return (
       <>
-        <AuthHeading title="This link is incomplete">Open the link from the email again, or ask for a new one.</AuthHeading>
+        <AuthHeading title={t("reset.incompleteTitle")}>{t("reset.incompleteBody")}</AuthHeading>
         <Button asChild variant="primary" size="lg" className="w-full">
-          <Link to="/forgot">Get a new link</Link>
+          <Link to="/forgot">{t("reset.newLink")}</Link>
         </Button>
       </>
     );
@@ -58,10 +61,10 @@ export function ResetPage() {
   const tokenProblem = failure && !server.password;
   return (
     <>
-      <AuthHeading title="Choose a new password">Use at least 10 characters. Every other device will be signed out.</AuthHeading>
+      <AuthHeading title={t("reset.title")}>{t("reset.subtitle")}</AuthHeading>
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
         <Field
-          label="New password"
+          label={t("reset.new")}
           error={server.password}
           hint={<StrengthMeter password={password} invalid={submitted && !strength.ok} />}
         >
@@ -69,7 +72,7 @@ export function ResetPage() {
             <PasswordInput {...p} inputSize="lg" autoComplete="new-password" autoFocus value={password} maxLength={128} onChange={(e) => setPassword(e.target.value)} />
           )}
         </Field>
-        <Field label="Confirm password" error={(submitted || confirm.length >= password.length) && mismatch ? mismatch : undefined}>
+        <Field label={t("reset.confirm")} error={(submitted || confirm.length >= password.length) && mismatch ? mismatch : undefined}>
           {(p) => (
             <PasswordInput {...p} inputSize="lg" autoComplete="new-password" value={confirm} maxLength={128} onChange={(e) => setConfirm(e.target.value)} />
           )}
@@ -79,7 +82,7 @@ export function ResetPage() {
             tone="danger"
             action={
               <Link to="/forgot" className="text-sm font-medium underline underline-offset-4">
-                Get a new link
+                {t("reset.newLink")}
               </Link>
             }
           >
@@ -87,7 +90,7 @@ export function ResetPage() {
           </Callout>
         ) : null}
         <Button type="submit" variant="primary" size="lg" loading={busy} className="mt-1 w-full">
-          Update password and sign in
+          {t("reset.submit")}
         </Button>
       </form>
     </>

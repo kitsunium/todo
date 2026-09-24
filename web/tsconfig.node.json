@@ -7,6 +7,7 @@
     "types": ["node"],
     "strict": true,
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "checkJs": true,
     "noImplicitAny": false,
     "verbatimModuleSyntax": true,

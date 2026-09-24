@@ -3,6 +3,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { IconButton } from "../../components/ui/button";
 import { MOD } from "../../components/ui/kbd";
 import { Tooltip } from "../../components/ui/tooltip";
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { setUI } from "./store";
 
@@ -25,6 +26,7 @@ export function Page({
   children: ReactNode;
   wide?: boolean;
 }) {
+  const t = useT();
   const [scrolled, setScrolled] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   return (
@@ -35,7 +37,7 @@ export function Page({
           scrolled ? "border-line-soft" : "border-transparent",
         )}
       >
-        <IconButton label="Open the menu" size="sm" className="min-[900px]:hidden" onClick={() => setUI({ drawer: true })}>
+        <IconButton label={t("app.openMenu")} size="sm" className="min-[900px]:hidden" onClick={() => setUI({ drawer: true })}>
           <MenuIcon className="size-[18px]" />
         </IconButton>
         <div
@@ -49,8 +51,8 @@ export function Page({
           <span className="truncate">{title}</span>
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <Tooltip content="Search" keys={[MOD, "K"]}>
-            <IconButton label="Search" size="sm" className="min-[900px]:hidden" onClick={() => setUI({ palette: true, paletteMode: "all" })}>
+          <Tooltip content={t("common.search")} keys={[MOD, "K"]}>
+            <IconButton label={t("common.search")} size="sm" className="min-[900px]:hidden" onClick={() => setUI({ palette: true, paletteMode: "all" })}>
               <Search className="size-4" />
             </IconButton>
           </Tooltip>

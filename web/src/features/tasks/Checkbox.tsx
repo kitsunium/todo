@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Priority } from "../../api/types";
 import { PRIORITY_COLOR } from "../../components/ui/priority";
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 
 /**
@@ -22,13 +23,14 @@ export function TaskCheckbox({
   disabled?: boolean;
   size?: "md" | "lg";
 }) {
+  const t = useT();
   const style = { "--pc": PRIORITY_COLOR[priority] } as CSSProperties;
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
-      aria-label={checked ? `Mark “${title}” as not done` : `Complete “${title}”`}
+      aria-label={checked ? t("check.reopen", { title }) : t("check.complete", { title })}
       disabled={disabled}
       onClick={(e) => {
         e.preventDefault();

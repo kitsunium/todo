@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 
 export function EmptyState({
@@ -26,9 +27,10 @@ export function EmptyState({
 
 /** A failed load, with a way to try again. */
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const t = useT();
   return (
     <div className="mx-auto mt-10 flex max-w-[380px] flex-col items-center rounded-xl bg-surface px-6 py-8 text-center shadow-card">
-      <p className="text-sm font-medium text-fg">Couldn’t load this</p>
+      <p className="text-sm font-medium text-fg">{t("empty.errorTitle")}</p>
       <p className="mt-1 text-sm text-fg-3">{message}</p>
       {onRetry ? (
         <button
@@ -36,7 +38,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
           onClick={onRetry}
           className="mt-4 rounded-md px-3 py-1.5 text-sm font-medium text-accent-ink hover:bg-accent-soft focus-visible:outline-2 focus-visible:outline-ring"
         >
-          Try again
+          {t("common.tryAgain")}
         </button>
       ) : null}
     </div>

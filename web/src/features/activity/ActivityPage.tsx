@@ -21,17 +21,19 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import * as ep from "../../api/endpoints";
 import { errorMessage } from "../../api/errors";
-import { qk, useActivity, useInvitations } from "../../api/queries";
+import { qk, useActivity, useCurrentUser, useInvitations } from "../../api/queries";
 import type { ActivityEntry } from "../../api/types";
 import { ActivityIllo } from "../../components/brand/illustrations";
 import { Avatar } from "../../components/ui/avatar";
 import { EmptyState, ErrorState } from "../../components/ui/empty";
 import { GroupDot } from "../../components/ui/group-color";
 import { Skeleton } from "../../components/ui/skeleton";
+import { useT, type T } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { dayHeading, formatTime } from "../../lib/dates";
 import { useNow } from "../../lib/now";
 import { InvitationCard } from "../groups/InvitationBanner";
+import { sentenceOf } from "./sentence";
 import { Page } from "../shell/Page";
 
 const KINDS: Record<string, { icon: LucideIcon; color: string }> = {
@@ -79,6 +81,7 @@ function emphasize(text: string, marks: { find: string; render: (s: string) => R
 }
 
 export function ActivityPage() {
+  const t = useT();
   const q = useActivity();
   const invitations = useInvitations();
   const qc = useQueryClient();
@@ -114,24 +117,24 @@ export function ActivityPage() {
       const key = d.toISOString();
       let g = groups[groups.length - 1];
       if (!g || g.key !== key) {
-        g = { key, label: dayHeading(d, now), entries: [] };
+        g = { key, label: dayHeading(d, now, t.locale), entries: [] };
         groups.push(g);
       }
       g.entries.push(e);
     }
     return groups;
-  }, [q.data, now]);
+  }, [q.data, now, t.locale]);
 
   const count = unread?.size ?? 0;
   return (
     <Page
-      title="Activity"
+      title={t("activity.title")}
       icon={<ActivityIcon className="text-accent" strokeWidth={2} />}
-      subtitle={count ? `${count} new since your last visit` : "What happened to your tasks, groups and contacts."}
+      subtitle={count ? t("activity.new", { count }) : t("activity.subtitle")}
     >
       {invitations.data?.length ? (
         <section className="mb-7">
-          <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg">Invitations</h2>
+          <h2 className="mb-2 px-1 text-[13px] font-semibold text-fg">{t("activity.invitations")}</h2>
           <div className="flex flex-col gap-2">
             {invitations.data.map((inv) => (
               <InvitationCard key={inv.id} inv={inv} />
@@ -154,8 +157,8 @@ export function ActivityPage() {
       ) : q.isError ? (
         <ErrorState message={errorMessage(q.error)} onRetry={() => void q.refetch()} />
       ) : !q.data.length ? (
-        <EmptyState art={<ActivityIllo />} title="All quiet">
-          When someone shares, assigns or completes a task with you, you’ll see it here.
+        <EmptyState art={<ActivityIllo />} title={t("activity.emptyTitle")}>
+          {t("activity.emptyBody")}
         </EmptyState>
       ) : (
         days.map((d) => (
@@ -174,31 +177,56 @@ export function ActivityPage() {
   );
 }
 
-function Entry({ e, fresh }: { e: ActivityEntry; fresh: boolean }) {
+function TaskLink({ id, title, className }: { id: string; title: string; className?: string }) {
   const location = useLocation();
+  return (
+    <Link
+      to={`/app/tasks/${id}`}
+      state={{ background: location }}
+      className={cn("font-medium text-fg underline decoration-line-strong underline-offset-[3px] hover:decoration-fg-3", className)}
+    >
+      {title}
+    </Link>
+  );
+}
+
+/** The entry's sentence in the reader's language — or the server's words, emphasized, for a kind we don't know. */
+function EntryText({ e, t, meId }: { e: ActivityEntry; t: T; meId: string }) {
+  const s = sentenceOf(e, meId);
+  if (s) {
+    const strong = (x: string) => <span className="font-medium text-fg">{x}</span>;
+    return t.rich(s.key, {
+      actor: strong(e.actor?.name ?? t("common.someone")),
+      task: e.task ? t.rich("common.quote", { text: <TaskLink id={e.task.id} title={e.task.title} /> }) : null,
+      group: e.group ? strong(e.group.name) : null,
+      target: strong(s.target ?? ""),
+    });
+  }
+  const marks: { find: string; render: (s: string) => ReactNode }[] = [];
+  if (e.actor) marks.push({ find: e.actor.name, render: (x) => <span className="font-medium text-fg">{x}</span> });
+  if (e.task) marks.push({ find: e.task.title, render: (x) => <TaskLink id={e.task!.id} title={x} /> });
+  if (e.group) marks.push({ find: e.group.name, render: (x) => <span className="font-medium text-fg">{x}</span> });
+  const taskMentioned = e.task && e.text.includes(e.task.title);
+  return (
+    <>
+      {emphasize(e.text, marks)}
+      {e.task && !taskMentioned ? (
+        <>
+          {" · "}
+          <TaskLink id={e.task.id} title={e.task.title} />
+        </>
+      ) : null}
+    </>
+  );
+}
+
+function Entry({ e, fresh }: { e: ActivityEntry; fresh: boolean }) {
+  const t = useT();
+  const me = useCurrentUser();
   // Kinds are namespaced ("task.completed", "group.invited"); a group deleted
   // reads like a task deleted.
   const kind = KINDS[e.kind.split(".").pop() ?? e.kind] ?? { icon: ActivityIcon, color: "var(--fg-3)" };
   const Icon = kind.icon;
-  const marks: { find: string; render: (s: string) => ReactNode }[] = [];
-  if (e.actor) marks.push({ find: e.actor.name, render: (s) => <span className="font-medium text-fg">{s}</span> });
-  if (e.task) {
-    marks.push({
-      find: e.task.title,
-      render: (s) => (
-        <Link
-          to={`/app/tasks/${e.task!.id}`}
-          state={{ background: location }}
-          className="font-medium text-fg underline decoration-line-strong underline-offset-[3px] hover:decoration-fg-3"
-        >
-          {s}
-        </Link>
-      ),
-    });
-  }
-  if (e.group) marks.push({ find: e.group.name, render: (s) => <span className="font-medium text-fg">{s}</span> });
-  const text = emphasize(e.text, marks);
-  const taskMentioned = e.task && e.text.includes(e.task.title);
   return (
     <li className={cn("relative flex gap-3 rounded-lg py-2.5 pr-2", fresh && "animate-rise")}>
       <span className="relative z-[1] flex size-8 shrink-0 items-center justify-center rounded-full bg-sheet">
@@ -217,18 +245,10 @@ function Entry({ e, fresh }: { e: ActivityEntry; fresh: boolean }) {
       </span>
       <div className="min-w-0 flex-1 pt-[5px]">
         <p className="text-sm leading-5 text-fg-2">
-          {text}
-          {e.task && !taskMentioned ? (
-            <>
-              {" · "}
-              <Link to={`/app/tasks/${e.task.id}`} state={{ background: location }} className="font-medium text-fg underline decoration-line-strong underline-offset-[3px]">
-                {e.task.title}
-              </Link>
-            </>
-          ) : null}
+          <EntryText e={e} t={t} meId={me.id} />
         </p>
         <p className="mt-0.5 flex items-center gap-2 text-xs text-fg-4">
-          <time dateTime={e.at}>{formatTime(new Date(e.at))}</time>
+          <time dateTime={e.at}>{formatTime(new Date(e.at), t.locale)}</time>
           {e.group ? (
             <Link to={`/app/groups/${e.group.id}`} className="inline-flex items-center gap-1.5 hover:text-fg-2">
               <GroupDot color={e.group.color} className="size-[7px]" />
@@ -237,7 +257,7 @@ function Entry({ e, fresh }: { e: ActivityEntry; fresh: boolean }) {
           ) : null}
         </p>
       </div>
-      {fresh ? <span className="mt-3 size-2 shrink-0 rounded-full bg-accent" aria-label="New" /> : null}
+      {fresh ? <span className="mt-3 size-2 shrink-0 rounded-full bg-accent" aria-label={t("common.new")} /> : null}
     </li>
   );
 }

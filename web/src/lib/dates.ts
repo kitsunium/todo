@@ -1,14 +1,17 @@
-// Dates as a person reads them. Pure: every function takes "now".
+// Dates as a person reads them, in their language. Pure: every function
+// takes "now", and the language (the current one by default).
 import {
   addDays,
   differenceInCalendarDays,
   endOfWeek,
   format,
+  formatDistanceToNowStrict,
   isSameDay,
   isSameYear,
   startOfDay,
 } from "date-fns";
 import type { Priority, Task } from "../api/types";
+import { capitalize, dateLocale, getLocale, tr, type Key, type Locale } from "../i18n";
 
 /** A due without a time of day is stored as 23:59 local time. */
 export const DATE_ONLY_HOUR = 23;
@@ -26,7 +29,14 @@ export function dueAt(day: Date, time?: { h: number; m: number }): Date {
   return d;
 }
 
-/** Whether the person's locale reads the clock in 12 hours ("5 PM") or 24 ("17:00"). */
+export type DatePattern = Extract<Key, `date.pattern.${string}`>;
+
+/** A date-fns pattern of the dictionary ("d MMM" in French, "MMM d" in English), applied in that language. */
+export function formatDate(d: Date, pattern: DatePattern, loc: Locale = getLocale()): string {
+  return format(d, tr(loc)(pattern), { locale: dateLocale(loc) });
+}
+
+/** Whether the browser's clock reads 12 hours ("5 PM") or 24 ("17:00"). */
 function uses12h(): boolean {
   try {
     const o = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions();
@@ -39,53 +49,101 @@ const H12 = uses12h();
 const FMT12 = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
 const FMT24 = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-/** "5:00 PM" — or "17:00" where the clock has 24 hours. One format everywhere; the words stay English. */
-export function formatTime(d: Date, twelve = H12): string {
-  return (twelve ? FMT12 : FMT24).format(d);
+/**
+ * "17:00" in French, always. In English the person's own clock: "5:00 PM",
+ * or "17:00" where the browser counts 24 hours.
+ */
+export function formatTime(d: Date, loc: Locale = getLocale(), twelve = H12): string {
+  return loc === "en" && twelve ? FMT12.format(d) : FMT24.format(d);
 }
 
-/** "Today", "Tomorrow 5 PM", "Sat", "Oct 3", "Yesterday" — a due as a chip says it. */
-export function formatDue(iso: string, now: Date): { label: string; overdue: boolean; soon: boolean } {
+/** "Today", "Tomorrow 5 PM", "Sat", "Oct 3", "Yesterday" — "Aujourd’hui", "Demain 17:00", "sam.", "3 oct.", "Hier". */
+export function formatDue(
+  iso: string,
+  now: Date,
+  loc: Locale = getLocale(),
+): { label: string; overdue: boolean; soon: boolean } {
+  const t = tr(loc);
   const d = new Date(iso);
   const days = differenceInCalendarDays(d, now);
-  const time = isDateOnly(d) ? "" : ` ${formatTime(d)}`;
+  const withTime = (day: string) => (isDateOnly(d) ? day : t("date.withTime", { day, time: formatTime(d, loc) }));
   const overdue = d.getTime() < now.getTime();
   let label: string;
-  if (days === 0) label = `Today${time}`;
-  else if (days === 1) label = `Tomorrow${time}`;
-  else if (days === -1) label = "Yesterday";
-  else if (days > 1 && days < 7) label = `${format(d, "EEE")}${time}`;
-  else if (days < -1 && days > -7) label = format(d, "EEE");
-  else label = isSameYear(d, now) ? format(d, "MMM d") : format(d, "MMM d, yyyy");
+  if (days === 0) label = withTime(t("date.today"));
+  else if (days === 1) label = withTime(t("date.tomorrow"));
+  else if (days === -1) label = t("date.yesterday");
+  else if (days > 1 && days < 7) label = withTime(formatDate(d, "date.pattern.weekday", loc));
+  else if (days < -1 && days > -7) label = formatDate(d, "date.pattern.weekday", loc);
+  else label = formatDate(d, isSameYear(d, now) ? "date.pattern.dayMonth" : "date.pattern.dayMonthYear", loc);
   return { label, overdue, soon: !overdue && days === 0 };
 }
 
-/** A due written out in full: "Thursday, September 24 at 5 PM". */
-export function formatDueLong(iso: string): string {
-  const d = new Date(iso);
-  const day = format(d, "EEEE, MMMM d");
-  return isDateOnly(d) ? day : `${day} at ${formatTime(d)}`;
+/** A day written out in full, as a heading starts: "Thursday, September 24", "Jeudi 24 septembre". */
+export function formatDayLong(d: Date, now: Date, loc: Locale = getLocale()): string {
+  return capitalize(formatDate(d, isSameYear(d, now) ? "date.pattern.long" : "date.pattern.longYear", loc), loc);
 }
 
-/** "just now", "5m ago", "3h ago", "Yesterday", "Mon", "Sep 21". */
-export function timeAgo(iso: string, now: Date): string {
+/** A due written out in full: "Thursday, September 24 at 5 PM", "Jeudi 24 septembre à 17:00". */
+export function formatDueLong(iso: string, loc: Locale = getLocale(), now = new Date()): string {
+  const d = new Date(iso);
+  const day = formatDayLong(d, now, loc);
+  return isDateOnly(d) ? day : tr(loc)("date.at", { day, time: formatTime(d, loc) });
+}
+
+const RELATIVE = new Map<Locale, Intl.RelativeTimeFormat>();
+function relative(loc: Locale): Intl.RelativeTimeFormat {
+  let r = RELATIVE.get(loc);
+  // English says "5m ago", French "il y a 5 min": each language's own short form.
+  if (!r) RELATIVE.set(loc, (r = new Intl.RelativeTimeFormat(loc, { style: loc === "en" ? "narrow" : "short", numeric: "always" })));
+  return r;
+}
+
+/**
+ * How long ago, short: "just now", "5m ago", "3h ago", then the day —
+ * "à l’instant", "il y a 5 min", "il y a 3 h". As a label the day is
+ * "Yesterday", "Mon", "Sep 21"; inside a sentence ("Modifiée {ago}") it is
+ * "hier", "lundi", "le 21 sept.".
+ */
+export function timeAgo(iso: string, now: Date, loc: Locale = getLocale(), inline = false): string {
+  const t = tr(loc);
   const d = new Date(iso);
   const s = Math.round((now.getTime() - d.getTime()) / 1000);
-  if (s < 45) return "just now";
-  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}m ago`;
-  if (isSameDay(d, now)) return `${Math.round(s / 3600)}h ago`;
+  if (s < 45) return t("date.justNow");
+  if (s < 3600) return relative(loc).format(-Math.max(1, Math.round(s / 60)), "minute");
+  if (isSameDay(d, now)) return relative(loc).format(-Math.round(s / 3600), "hour");
   const days = differenceInCalendarDays(now, d);
-  if (days === 1) return "Yesterday";
-  if (days < 7) return format(d, "EEE");
-  return isSameYear(d, now) ? format(d, "MMM d") : format(d, "MMM d, yyyy");
+  if (days === 1) return t(inline ? "date.yesterdayInline" : "date.yesterday");
+  if (days < 7) return inline && loc === "fr" ? format(d, "EEEE", { locale: dateLocale(loc) }) : formatDate(d, "date.pattern.weekday", loc);
+  const day = formatDate(d, isSameYear(d, now) ? "date.pattern.dayMonth" : "date.pattern.dayMonthYear", loc);
+  return inline ? t("date.on", { day }) : day;
 }
 
-/** A day heading: "Today", "Yesterday", "Monday, September 21". */
-export function dayHeading(d: Date, now: Date): string {
+const DAYS = new Map<Locale, Intl.RelativeTimeFormat>();
+
+/**
+ * How far a day is, in whole days: "dans 2 jours", "il y a 3 jours", "in 2
+ * days". Nothing for yesterday, today and tomorrow: those have their own word.
+ */
+export function relativeDays(iso: string, now: Date, loc: Locale = getLocale()): string {
+  const days = differenceInCalendarDays(new Date(iso), now);
+  if (Math.abs(days) <= 1) return "";
+  let r = DAYS.get(loc);
+  if (!r) DAYS.set(loc, (r = new Intl.RelativeTimeFormat(loc, { numeric: "always" })));
+  return r.format(days, "day");
+}
+
+/** "3 days ago", "il y a 3 jours", "in 2 days", "dans 2 jours". */
+export function distance(iso: string, loc: Locale = getLocale()): string {
+  return formatDistanceToNowStrict(new Date(iso), { addSuffix: true, locale: dateLocale(loc) });
+}
+
+/** A day heading: "Today", "Yesterday", "Monday, September 21" — "Aujourd’hui", "Hier", "Lundi 21 septembre". */
+export function dayHeading(d: Date, now: Date, loc: Locale = getLocale()): string {
+  const t = tr(loc);
   const days = differenceInCalendarDays(now, d);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return isSameYear(d, now) ? format(d, "EEEE, MMMM d") : format(d, "EEEE, MMMM d, yyyy");
+  if (days === 0) return t("date.today");
+  if (days === 1) return t("date.yesterday");
+  return formatDayLong(d, now, loc);
 }
 
 // ── Sections ──────────────────────────────────────────────────────────
@@ -103,15 +161,15 @@ export type SectionKey =
 
 export type Section = { key: SectionKey; label: string; tone?: "danger"; tasks: Task[] };
 
-const SECTION_LABELS: Record<string, string> = {
-  overdue: "Overdue",
-  today: "Today",
-  tomorrow: "Tomorrow",
-  week: "This week",
-  later: "Later",
-  none: "No date",
-  completed: "Completed",
-  earlier: "Earlier",
+const SECTION_LABELS: Record<Exclude<SectionKey, `day:${string}`>, Key> = {
+  overdue: "section.overdue",
+  today: "section.today",
+  tomorrow: "section.tomorrow",
+  week: "section.week",
+  later: "section.later",
+  none: "section.none",
+  completed: "section.completed",
+  earlier: "section.earlier",
 };
 
 /** Urgent first, "none" last. */
@@ -146,7 +204,12 @@ export function isOverdue(t: Task, now: Date): boolean {
  * pins keeps a task in the section it was in — a task just completed stays
  * in place, checked, for the moment it takes to see it happen.
  */
-export function groupByDue(list: readonly Task[], now: Date, pins: Readonly<Record<string, SectionKey>> = {}): Section[] {
+export function groupByDue(
+  list: readonly Task[],
+  now: Date,
+  pins: Readonly<Record<string, SectionKey>> = {},
+  loc: Locale = getLocale(),
+): Section[] {
   const buckets = new Map<SectionKey, Task[]>();
   const put = (k: SectionKey, t: Task) => {
     const b = buckets.get(k);
@@ -176,7 +239,7 @@ export function groupByDue(list: readonly Task[], now: Date, pins: Readonly<Reco
     const tasks = buckets.get(key);
     if (!tasks?.length) continue;
     tasks.sort(key === "none" ? byPriorityNewest : key === "completed" ? byCompletion : byDue);
-    const s: Section = { key, label: SECTION_LABELS[key]!, tasks };
+    const s: Section = { key, label: tr(loc)(SECTION_LABELS[key as keyof typeof SECTION_LABELS]), tasks };
     if (key === "overdue") s.tone = "danger";
     out.push(s);
   }
@@ -184,7 +247,13 @@ export function groupByDue(list: readonly Task[], now: Date, pins: Readonly<Reco
 }
 
 /** Completed tasks by the day they were completed: Today, Yesterday, Monday…, Earlier. */
-export function groupByCompletion(list: readonly Task[], now: Date, pinnedAt: Readonly<Record<string, string>> = {}): Section[] {
+export function groupByCompletion(
+  list: readonly Task[],
+  now: Date,
+  pinnedAt: Readonly<Record<string, string>> = {},
+  loc: Locale = getLocale(),
+): Section[] {
+  const say = tr(loc);
   const out: Section[] = [];
   const index = new Map<string, Section>();
   const when = (t: Task) => pinnedAt[t.id] ?? t.completedAt ?? t.updatedAt;
@@ -196,10 +265,15 @@ export function groupByCompletion(list: readonly Task[], now: Date, pinnedAt: Re
     let label: string;
     if (days <= 6) {
       key = `day:${format(d, "yyyy-MM-dd")}`;
-      label = days === 0 ? "Today" : days === 1 ? "Yesterday" : format(d, "EEEE");
+      label =
+        days === 0
+          ? say("date.today")
+          : days === 1
+            ? say("date.yesterday")
+            : capitalize(format(d, "EEEE", { locale: dateLocale(loc) }), loc);
     } else {
       key = "earlier";
-      label = SECTION_LABELS.earlier!;
+      label = say(SECTION_LABELS.earlier);
     }
     let s = index.get(key);
     if (!s) {

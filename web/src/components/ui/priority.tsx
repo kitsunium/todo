@@ -1,15 +1,15 @@
 import type { Priority } from "../../api/types";
+import type { Key } from "../../i18n";
 import { cn } from "../../lib/cn";
 
-export const PRIORITY_LABEL: Record<Priority, string> = {
-  0: "No priority",
-  1: "Urgent",
-  2: "High",
-  3: "Medium",
-  4: "Low",
+/** A priority's name, as a dictionary key: t(PRIORITY_LABEL[p]) — "Haute", "High". */
+export const PRIORITY_LABEL: Record<Priority, Key> = {
+  0: "priority.0",
+  1: "priority.1",
+  2: "priority.2",
+  3: "priority.3",
+  4: "priority.4",
 };
-
-export const PRIORITY_SHORT: Record<Priority, string> = { 0: "None", 1: "Urgent", 2: "High", 3: "Medium", 4: "Low" };
 
 /** The CSS color of a priority, for rings and icons. */
 export const PRIORITY_COLOR: Record<Priority, string> = {

@@ -2,7 +2,8 @@
 // the same shapes, codes and rules (as far as a mock can tell). Requests
 // reach it through the fetch interceptor in install.ts.
 import { endOfDay, startOfWeek } from "date-fns";
-import type { Priority, UserRef } from "../api/types";
+import type { Priority, User, UserRef } from "../api/types";
+import type { Locale } from "../i18n/types";
 import { load, save, token, typeid, type DB, type MGroup, type MTask, type MUser } from "./db";
 
 export class MockError extends Error {
@@ -55,6 +56,23 @@ function password(c: Ctx, key = "password"): string {
 // ── Projections ───────────────────────────────────────────────────────
 
 const ref = (u: MUser): UserRef => ({ id: u.id, name: u.name, email: u.email });
+const self = (u: MUser): User => ({ ...ref(u), createdAt: u.createdAt, locale: u.locale });
+
+/** An optional "locale" member: exactly "fr" or "en", as the server wants it. */
+function localeOf(c: Ctx): Locale | undefined {
+  if (!("locale" in c.body)) return undefined;
+  const l = c.body.locale;
+  if (l !== "fr" && l !== "en") throw invalid("locale", "one_of", "must be one of: fr, en");
+  return l;
+}
+
+// The mails the mock "sends", in the language of the account they go to.
+const SUBJECTS: Record<"verify" | "reset" | "exists" | "invite", Record<Locale, (name: string) => string>> = {
+  verify: { fr: () => "Confirmez votre adresse e-mail", en: () => "Confirm your email address" },
+  reset: { fr: () => "Réinitialisez votre mot de passe Todo", en: () => "Reset your Todo password" },
+  exists: { fr: () => "Vous avez déjà un compte Todo", en: () => "You already have a Todo account" },
+  invite: { fr: (n) => `${n} vous invite sur Todo`, en: (n) => `${n} invited you to Todo` },
+};
 function user(db: DB, id: string): MUser {
   const u = db.users.find((x) => x.id === id);
   if (!u) throw new MockError(404, "not_found", "no such user");
@@ -164,13 +182,14 @@ route("POST", "/api/auth/signup", (c) => {
   if (!name) throw invalid("name", "required", "is required");
   if (name.length > 80) throw invalid("name", "maxlen", "must be at most 80 characters");
   const pw = password(c);
+  const locale = localeOf(c) ?? "fr";
   const existing = c.db.users.find((u) => u.email === e);
-  if (existing) mail(c.db, e, "exists", "You already have a Todo account");
+  if (existing) mail(c.db, e, "exists", SUBJECTS.exists[existing.locale](""));
   else {
-    const u: MUser = { id: typeid("user"), name, email: e, password: pw, verified: false, locked: false, failed: 0, createdAt: new Date().toISOString() };
+    const u: MUser = { id: typeid("user"), name, email: e, locale, password: pw, verified: false, locked: false, failed: 0, createdAt: new Date().toISOString() };
     c.db.users.push(u);
     const t = issue(c.db, u.id, "verify", 24);
-    mail(c.db, e, "verify", "Confirm your email address", `/verify?token=${t}`);
+    mail(c.db, e, "verify", SUBJECTS.verify[locale](""), `/verify?token=${t}`);
   }
   return ok({ status: "verification_sent", email: e });
 });
@@ -186,7 +205,7 @@ route("POST", "/api/auth/verify", (c) => {
     inv.status = "accepted";
     c.db.requests.push({ id: typeid("request"), from: inv.fromId, to: u.id, createdAt: new Date().toISOString(), status: "pending" });
   }
-  return ok({ user: { ...ref(u), createdAt: u.createdAt } });
+  return ok({ user: self(u) });
 });
 
 route("POST", "/api/auth/verify/resend", (c) => {
@@ -194,7 +213,7 @@ route("POST", "/api/auth/verify/resend", (c) => {
   const u = c.db.users.find((x) => x.email === e && !x.verified);
   if (u) {
     const t = issue(c.db, u.id, "verify", 24);
-    mail(c.db, e, "verify", "Confirm your email address", `/verify?token=${t}`);
+    mail(c.db, e, "verify", SUBJECTS.verify[u.locale](""), `/verify?token=${t}`);
   }
   return ok({ status: "sent" });
 });
@@ -214,7 +233,7 @@ route("POST", "/api/auth/login", (c) => {
   if (!u.verified) throw new MockError(403, "email_unverified", "confirm your email address first");
   u.failed = 0;
   signIn(c.db, u);
-  return ok({ user: { ...ref(u), createdAt: u.createdAt } });
+  return ok({ user: self(u) });
 });
 
 route("POST", "/api/auth/logout", (c) => {
@@ -226,16 +245,21 @@ route("POST", "/api/auth/logout", (c) => {
 
 route("GET", "/api/auth/me", (c) => {
   const me = need(c);
-  return ok({ user: { ...ref(me), createdAt: me.createdAt } });
+  return ok({ user: self(me) });
 });
 
 route("PATCH", "/api/auth/me", (c) => {
   const me = need(c);
-  const name = str(c, "name").trim();
-  if (!name) throw invalid("name", "required", "is required");
-  if (name.length > 80) throw invalid("name", "maxlen", "must be at most 80 characters");
-  me.name = name;
-  return ok({ user: { ...ref(me), createdAt: me.createdAt } });
+  // {name?, locale?}: a member left out stays as it is.
+  if ("name" in c.body) {
+    const name = str(c, "name").trim();
+    if (!name) throw invalid("name", "required", "is required");
+    if (name.length > 80) throw invalid("name", "maxlen", "must be at most 80 characters");
+    me.name = name;
+  }
+  const locale = localeOf(c);
+  if (locale) me.locale = locale;
+  return ok({ user: self(me) });
 });
 
 route("POST", "/api/auth/password", (c) => {
@@ -251,7 +275,7 @@ route("POST", "/api/auth/password/forgot", (c) => {
   const u = c.db.users.find((x) => x.email === e);
   if (u) {
     const t = issue(c.db, u.id, "reset", 1);
-    mail(c.db, e, "reset", "Reset your Todo password", `/reset?token=${t}`);
+    mail(c.db, e, "reset", SUBJECTS.reset[u.locale](""), `/reset?token=${t}`);
   }
   return ok({ status: "sent" });
 });
@@ -267,7 +291,7 @@ route("POST", "/api/auth/password/reset", (c) => {
   u.verified = true;
   c.db.sessions = c.db.sessions.filter((s) => s.userId !== u.id);
   signIn(c.db, u);
-  return ok({ user: { ...ref(u), createdAt: u.createdAt } });
+  return ok({ user: self(u) });
 });
 
 route("GET", "/api/auth/sessions", (c) => {
@@ -536,7 +560,8 @@ route("POST", "/api/contacts", (c) => {
   }
   const inv = { id: typeid("invite"), fromId: me.id, email: e, createdAt: now, status: "pending" };
   c.db.invites.push(inv);
-  mail(c.db, e, "invite", `${me.name} invited you to Todo`, "/signup");
+  // The invitee has no account yet: the invitation speaks the inviter's language.
+  mail(c.db, e, "invite", SUBJECTS.invite[me.locale](me.name), "/signup");
   return ok({ kind: "invite", invite: { id: inv.id, email: e, createdAt: now, status: "pending" } });
 });
 
@@ -728,6 +753,7 @@ route("GET", "/api/activity", (c) => {
         id: a.id,
         kind: a.kind,
         ...(a.actorId ? { actor: ref(user(c.db, a.actorId)) } : {}),
+        ...(a.targetId ? { target: ref(user(c.db, a.targetId)) } : {}),
         ...(a.taskId ? { task: { id: a.taskId, title: a.taskTitle ?? "" } } : {}),
         ...(g ? { group: { id: g.id, name: g.name, color: g.color } } : {}),
         text: a.text,

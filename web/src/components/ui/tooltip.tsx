@@ -34,7 +34,7 @@ export function Tooltip({
           collisionPadding={8}
           className={cn(
             "z-[80] flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium select-none",
-            "bg-[#1c1917] text-[#fafaf9] shadow-pop dark:bg-[#2a2a2e] dark:text-fg",
+            "bg-[#1c1917] text-[#fafaf9] shadow-pop",
             "data-[state=delayed-open]:animate-pop-in data-[state=instant-open]:animate-pop-in data-[state=closed]:animate-pop-out",
           )}
         >
@@ -44,7 +44,7 @@ export function Tooltip({
               {keys.map((k) => (
                 <kbd
                   key={k}
-                  className="inline-flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-white/12 px-1 font-sans text-[10px] leading-none text-white/80 dark:text-fg-2"
+                  className="inline-flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-white/12 px-1 font-sans text-[10px] leading-none text-white/80"
                 >
                   {k}
                 </kbd>

@@ -1,9 +1,10 @@
-<!-- updated: 2026-09-24T06:36:35Z -->
+<!-- updated: 2026-09-24T09:32:49Z -->
 # web — the todo's user interface
 
 A single page application: React 19, TypeScript (strict), Vite, Tailwind CSS v4,
 Radix primitives, TanStack Query, React Router, cmdk, sonner, motion, date-fns and
-lucide icons, with Inter self-hosted. `npm run build` writes `dist/`, which
+lucide icons, with Inter self-hosted. One light design, and an interface in French
+first, English second. `npm run build` writes `dist/`, which
 `web.go` embeds (`//go:embed dist`) and serves at `/` with
 `Service.Static("app", "/", dist, kit.Root("dist"))`. A path without an extension
 that matches no file serves `index.html`, so client routes survive a reload.
@@ -29,7 +30,7 @@ signup → verify and forgot → reset can be clicked through. State lives in
 
 | Mock account | Result |
 |---|---|
-| `camille@example.com` / `correct-horse-42` | the seeded workspace |
+| `camille@example.com` / `correct-horse-42` | the seeded workspace (in French: switch it in Settings) |
 | `unverified@example.com` / `correct-horse-42` | `email_unverified` |
 | `locked@example.com` / anything | `account_locked` |
 
@@ -41,26 +42,53 @@ replaces with `false` and drops — `grep -r __mock dist` finds nothing.
 With a real app in dev, the "Check your inbox" page links to the Studio's dev
 mailbox (`/_kit/#/mail`), shown only when `/_kit/api/graph` answers JSON.
 
+## Languages
+
+The interface speaks French (the default) and English, with no library:
+`src/i18n/fr.ts` is the source of truth, `en.ts` must have exactly its keys
+(TypeScript refuses a missing or extra one, `tests/i18n.test.ts` checks the
+`{placeholders}` match). `useT()` gives a translator for the current language:
+`t("view.today")`, `t("group.members", { count })` — plurals through
+`Intl.PluralRules` ("0 tâche", "2 tâches") — and `t.rich(key, { name: <b/> })`
+for React nodes in the holes. Dates go through date-fns locales and `Intl`
+(`jeu. 24 sept.`, `17:00`, `il y a 3 h`); the French calendar starts on Monday.
+
+Which language: signed in, the account's (`user.locale` from the API); signed
+out, the last choice made in this browser (`localStorage["todo.locale"]`), else
+French. The FR | EN switch lives in the user menu, in Settings, in the palette and
+at the foot of the signed-out pages; signed in, it saves the account's language
+with `PATCH /api/auth/me {"locale"}` (optimistic, rolled back on failure), which
+also sets the language of the mails the server sends. A signup sends the page's
+language. `<html lang>` follows.
+
+API errors are shown from their code and each violation's rule, in the current
+language; the server's English words are only a fallback for a code the app does
+not know. Activity entries are written from their `kind`, `actor`, `task`, `group`
+and `target` (the person a share, an assignment or a removal was about); the
+server's English `text` is only read for an entry written before `target` existed.
+The quick add understands both languages whatever the interface's:
+`Appeler Marco demain à 10h !haute #lancement`, `Call Sam tomorrow at 5pm !high`.
+
 ## Check
 
 ```sh
 npm run typecheck    # tsc, strict, app and node configs
-npm test             # vitest: quick-add parser, date sections, error mapping, passwords
+npm test             # vitest: quick-add parser (FR and EN), dates, error mapping, dictionaries, passwords
 npm run build        # dist/
 ```
 
 ## Screenshots
 
 `scripts/shoot.mjs` drives headless Chrome through the DevTools protocol (Node's
-own WebSocket; not bundled): every screen in both themes at 1440×900, and a
-390×844 mobile pass, with real mouse and keyboard events (menus, popovers, the
+own WebSocket; not bundled): every screen in French and in English at 1440×900,
+and a 390×844 mobile pass, with real mouse and keyboard events (menus, popovers, the
 panel, the palette, quick-add chips, the completion frames). Console errors and
 exceptions go to `$OUT/console.log`; the script exits 1 if there is any.
 
 ```sh
 npx vite --mode mock --port 5299 &
 node scripts/shoot.mjs                     # → /tmp/todo-web-shots
-ONLY=today,panel THEMES=dark MOBILE=0 SCALE=2 node scripts/shoot.mjs
+ONLY=today,panel LOCALES=en MOBILE=0 SCALE=2 node scripts/shoot.mjs
 
 # The real app (KIT_ENV=dev go run . — seeded users, mails in /_kit/api/mail):
 REAL=1 BASE=http://127.0.0.1:4000 OUT=/tmp/todo-web-real node scripts/shoot.mjs
@@ -81,9 +109,10 @@ signed-out screens of a build without a backend, to check the CSP.
 | Path | Role |
 |---|---|
 | `src/api/` | the contract's types, a fetch client (`ApiError{status,code,message,violations}`, 401 → sign in again), one function per route, TanStack Query hooks with optimistic updates and rollback, error wording |
-| `src/lib/` | pure logic: the quick-add language, dates and sections, avatars, password strength, theme |
+| `src/i18n/` | the dictionaries (`fr.ts`, `en.ts`), the current language, `useT()`, plurals and rich messages |
+| `src/lib/` | pure logic: the quick-add language, dates and sections, avatars, password strength |
 | `src/components/ui/` | the design system: buttons, fields, menus, popovers, dialogs, avatars, chips, tabs, skeletons, toasts |
-| `src/components/brand/` | the fox, the sign-in art, the empty-state illustrations (original SVG, theme-aware) |
+| `src/components/brand/` | the fox, the sign-in art, the empty-state illustrations (original SVG) |
 | `src/features/` | auth pages, the shell (sidebar, palette, shortcuts), tasks (list, row, quick add, panel, pickers), groups, contacts, activity, settings |
 | `src/mock/` | mock mode only |
 | `tests/` | vitest |
@@ -100,12 +129,14 @@ signed-out screens of a build without a backend, to check the CSP.
 - `//go:embed` skips files whose name starts with `.` or `_`: `vite.config.ts`
   renames such chunks.
 - Dependencies are pinned to exact versions; `package-lock.json` is committed.
-- Times follow the person's clock (`17:00` or `5:00 PM`), words stay English. A due
-  without a time is sent as 23:59 local time; lists and counts pass `tz` (the
+- Light only: no dark theme, no `prefers-color-scheme` switch.
+- Every visible string comes from `src/i18n/` — never a literal in a component.
+- Times are `17:00` in French and follow the person's clock in English (`5:00 PM`
+  or `17:00`). A due without a time is sent as 23:59 local time; lists and counts pass `tz` (the
   browser's IANA zone) so "today" ends where the person is.
 
 ## Keyboard
 
-`⌘K` palette · `/` search tasks · `C` new task · `?` shortcuts · `⇧T` theme · `G` then
-`I T U S A C` go to a view · in a list `J`/`K` move, `X` complete, `E`/`↵` open,
+`⌘K` palette · `/` search tasks · `C` new task · `?` shortcuts · `G` then
+`I T U S A C` go to a view (the same letters in both languages) · in a list `J`/`K` move, `X` complete, `E`/`↵` open,
 `1`–`4`/`0` priority, `Esc` let go · in the panel `J`/`K` next/previous task.

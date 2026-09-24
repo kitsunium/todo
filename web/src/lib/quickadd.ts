@@ -1,16 +1,22 @@
-// The quick-add language: "Call Sam tomorrow at 5pm !high #launch @sam".
-// Pure and unit-tested: parseQuickAdd(input, now, options).
+// The quick-add language, French first and English too, whatever the
+// interface's language: "Appeler Marco demain à 10h !haute #lancement @sam",
+// "Call Sam tomorrow at 5pm !high #launch @sam". Pure and unit-tested:
+// parseQuickAdd(input, now, options).
 //
-//   priority  !urgent !high !medium !low, or !1 … !4 (1 = urgent)
-//   due       today · tomorrow · mon…sun · next week · in 3 days · in 2 weeks,
-//             optionally with a time: at 5pm · 5:30pm · 17:30 · at 9
-//             (a time alone means its next occurrence)
-//   group     #name  (matched against the groups, ignoring case, spaces and dashes)
+//   priority  !urgente !haute !moyenne !basse — !urgent !high !medium !low —
+//             or !1 … !4 (1 = urgent)
+//   due       aujourd’hui · demain · après-demain · lundi…dimanche (prochain) ·
+//             (la) semaine prochaine · dans 3 jours · dans 2 semaines —
+//             today · tomorrow · mon…sun · next week · in 3 days · in 2 weeks —
+//             optionally with a time: à 17h · 17h30 · à 17:30 · à midi —
+//             at 5pm · 5:30pm · 17:30 · at 9 (a time alone means its next occurrence)
+//   group     #name  (matched against the groups, ignoring case, accents, spaces and dashes)
 //   person    @name  (first name, full name or email local part)
 //
 // A #group or @person that matches nothing stays in the title.
 import { addDays, startOfDay } from "date-fns";
 import type { Priority } from "../api/types";
+import type { Locale } from "../i18n/types";
 import { dueAt, nextWeek, nextWeekday } from "./dates";
 
 export type TokenKind = "priority" | "due" | "group" | "contact";
@@ -48,11 +54,19 @@ export type QuickAddOptions = {
 const START = String.raw`(?<=^|\s)`;
 const END = String.raw`(?=$|[\s,.;:!?)])`;
 
-const PRIORITY_RE = new RegExp(`${START}!(urgent|high|medium|med|low|p?[1-4])${END}`, "giu");
+const PRIORITY_WORDS: Record<string, Priority> = {
+  urgente: 1, urgent: 1, "1": 1, p1: 1,
+  haute: 2, haut: 2, high: 2, "2": 2, p2: 2,
+  moyenne: 3, moyen: 3, medium: 3, med: 3, "3": 3, p3: 3,
+  basse: 4, bas: 4, low: 4, "4": 4, p4: 4,
+};
+const alternatives = (words: string[]) => [...words].sort((a, b) => b.length - a.length).join("|");
+
+const PRIORITY_RE = new RegExp(`${START}!(${alternatives(Object.keys(PRIORITY_WORDS))})${END}`, "giu");
 const GROUP_RE = new RegExp(`${START}#([\\p{L}\\p{N}][\\p{L}\\p{N}_-]*)${END}`, "gu");
 const CONTACT_RE = new RegExp(`${START}@([\\p{L}\\p{N}][\\p{L}\\p{N}._-]*)${END}`, "gu");
 
-const WEEKDAYS: Record<string, number> = {
+const WEEKDAYS_EN: Record<string, number> = {
   sunday: 0, sun: 0,
   monday: 1, mon: 1,
   tuesday: 2, tues: 2, tue: 2,
@@ -61,29 +75,49 @@ const WEEKDAYS: Record<string, number> = {
   friday: 5, fri: 5,
   saturday: 6, sat: 6,
 };
-const WEEKDAY_ALT = Object.keys(WEEKDAYS)
-  .sort((a, b) => b.length - a.length)
-  .join("|");
-const DAY = String.raw`today|tomorrow|tmrw|tmr|next\s+week|in\s+\d{1,3}\s+(?:days?|weeks?)|` + WEEKDAY_ALT;
-const TIME = String.raw`(?:at\s+)?\d{1,2}(?::\d{2})?\s?(?:am|pm)|(?:at\s+)?\d{1,2}:\d{2}|at\s+\d{1,2}`;
+// Full names only: "mer", "jeu" and "sam" are also a sea, a game and a name.
+const WEEKDAYS_FR: Record<string, number> = {
+  dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6,
+};
+const WEEKDAYS: Record<string, number> = { ...WEEKDAYS_EN, ...WEEKDAYS_FR };
+
+const DAY =
+  String.raw`aujourd['’]?hui|apr[eè]s[\s-]demain|demain|(?:la\s+)?semaine\s+prochaine|dans\s+(?:\d{1,3}|une?)\s+(?:jours?|semaines?)|` +
+  `(?:${alternatives(Object.keys(WEEKDAYS_FR))})(?:\\s+prochain)?|` +
+  String.raw`today|tomorrow|tmrw|tmr|next\s+week|in\s+\d{1,3}\s+(?:days?|weeks?)|` +
+  `(?:next\\s+)?(?:${alternatives(Object.keys(WEEKDAYS_EN))})`;
+const TIME =
+  String.raw`(?:at\s+|[àa]\s+)?\d{1,2}(?::\d{2})?\s?(?:am|pm)|(?:at\s+|[àa]\s+)?\d{1,2}:\d{2}|` +
+  String.raw`(?:[àa]\s+)?\d{1,2}\s?h(?:\d{2})?|(?:at\s+|[àa]\s+)?(?:midi|noon)|at\s+\d{1,2}`;
 const DUE_RE = new RegExp(`${START}(?:(${DAY})(?:\\s+(${TIME}))?|(${TIME})(?:\\s+(${DAY}))?)${END}`, "giu");
 
-const PRIORITY_WORDS: Record<string, Priority> = {
-  urgent: 1, "1": 1, p1: 1,
-  high: 2, "2": 2, p2: 2,
-  medium: 3, med: 3, "3": 3, p3: 3,
-  low: 4, "4": 4, p4: 4,
-};
+// "dans 2h", "en 24h", "in 2h", "for 1h": a duration, not a time of day.
+const DURATION_BEFORE = /(?:^|\s)(?:dans|en|pendant|sous|in|for|within)\s+$/iu;
 
-export const PRIORITY_TOKENS: Record<Exclude<Priority, 0>, string> = { 1: "!urgent", 2: "!high", 3: "!medium", 4: "!low" };
+/** The token that sets a priority, in a language: "!haute", "!high". */
+export function priorityToken(p: Exclude<Priority, 0>, loc: Locale): string {
+  const words: Record<Locale, Record<Exclude<Priority, 0>, string>> = {
+    fr: { 1: "!urgente", 2: "!haute", 3: "!moyenne", 4: "!basse" },
+    en: { 1: "!urgent", 2: "!high", 3: "!medium", 4: "!low" },
+  };
+  return words[loc][p];
+}
 
-/** Parses "5pm", "at 17:30", "at 9", "5:30 pm". */
+/** Parses "17h", "17h30", "à 17:30", "à midi", "5pm", "at 17:30", "at 9", "5:30 pm". */
 export function parseTime(s: string): { h: number; m: number } | null {
-  const m = /^(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s?(am|pm)?$/i.exec(s.trim());
+  const w = s.trim().toLowerCase().replace(/^(?:at|à|a)\s+/u, "");
+  if (w === "midi" || w === "noon") return { h: 12, m: 0 };
+  const fr = /^(\d{1,2})\s?h(?:\s?(\d{2}))?$/.exec(w);
+  if (fr) {
+    const h = Number(fr[1]);
+    const min = fr[2] ? Number(fr[2]) : 0;
+    return h > 23 || min > 59 ? null : { h, m: min };
+  }
+  const m = /^(\d{1,2})(?::(\d{2}))?\s?(am|pm)?$/.exec(w);
   if (!m) return null;
   let h = Number(m[1]);
   const min = m[2] ? Number(m[2]) : 0;
-  const half = m[3]?.toLowerCase();
+  const half = m[3];
   if (min > 59) return null;
   if (half) {
     if (h < 1 || h > 12) return null;
@@ -92,16 +126,20 @@ export function parseTime(s: string): { h: number; m: number } | null {
   return { h, m: min };
 }
 
-/** Parses a day word into the start of that day. */
+/** Parses a day word, in French or in English, into the start of that day. */
 export function parseDay(s: string, now: Date): Date | null {
-  const w = s.trim().toLowerCase().replace(/\s+/g, " ");
+  const w = s.trim().toLowerCase().replace(/\s+/g, " ").replace(/’/g, "'");
   const today = startOfDay(now);
-  if (w === "today") return today;
-  if (w === "tomorrow" || w === "tmrw" || w === "tmr") return addDays(today, 1);
-  if (w === "next week") return nextWeek(now);
-  const inN = /^in (\d{1,3}) (days?|weeks?)$/.exec(w);
-  if (inN) return addDays(today, Number(inN[1]) * (inN[2]!.startsWith("week") ? 7 : 1));
-  const wd = WEEKDAYS[w];
+  if (w === "today" || /^aujourd'?hui$/.test(w)) return today;
+  if (w === "tomorrow" || w === "tmrw" || w === "tmr" || w === "demain") return addDays(today, 1);
+  if (/^apr[eè]s[ -]demain$/.test(w)) return addDays(today, 2);
+  if (w === "next week" || /^(?:la )?semaine prochaine$/.test(w)) return nextWeek(now);
+  const inN = /^(?:in|dans) (\d{1,3}|une?) (days?|weeks?|jours?|semaines?)$/.exec(w);
+  if (inN) {
+    const n = /^\d/.test(inN[1]!) ? Number(inN[1]) : 1;
+    return addDays(today, n * (/^(?:week|semaine)/.test(inN[2]!) ? 7 : 1));
+  }
+  const wd = WEEKDAYS[w.replace(/^next /, "").replace(/ prochain$/, "")];
   if (wd !== undefined) return nextWeekday(now, wd);
   return null;
 }
@@ -210,6 +248,7 @@ export function parseQuickAdd(input: string, now: Date, opts: QuickAddOptions = 
         time = null;
       }
       if (dayText && !day) continue;
+      if (!dayText && DURATION_BEFORE.test(input.slice(0, start))) continue;
       if (overlaps(start, end)) continue;
       found = { start, end, day, time };
     }

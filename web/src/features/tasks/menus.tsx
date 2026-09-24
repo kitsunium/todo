@@ -8,10 +8,12 @@ import { GroupDot } from "../../components/ui/group-color";
 import { MenuItem, MenuLabel, MenuSeparator } from "../../components/ui/menu";
 import { PRIORITY_LABEL, PriorityIcon } from "../../components/ui/priority";
 import { toast } from "../../components/ui/toast";
+import { tr, useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { normalize } from "../../lib/quickadd";
 
 export function PriorityItems({ value, onPick }: { value: Priority; onPick: (p: Priority) => void }) {
+  const t = useT();
   return (
     <>
       {PRIORITIES.map((p) => (
@@ -21,7 +23,7 @@ export function PriorityItems({ value, onPick }: { value: Priority; onPick: (p: 
           shortcut={value === p ? <Check className="size-4 text-accent" /> : String(p)}
           onSelect={() => onPick(p)}
         >
-          {PRIORITY_LABEL[p]}
+          {t(PRIORITY_LABEL[p])}
         </MenuItem>
       ))}
     </>
@@ -29,11 +31,12 @@ export function PriorityItems({ value, onPick }: { value: Priority; onPick: (p: 
 }
 
 export function GroupItems({ value, onPick, onCreate }: { value?: string | undefined; onPick: (groupId: string) => void; onCreate?: () => void }) {
+  const t = useT();
   const { data: groups = [] } = useGroups();
   return (
     <>
       <MenuItem icon={<span className="size-2 rounded-full border border-dashed border-fg-4" />} shortcut={!value ? <Check className="size-4 text-accent" /> : null} onSelect={() => onPick("")}>
-        No group
+        {t("task.noGroup")}
       </MenuItem>
       {groups.length ? <MenuSeparator /> : null}
       {groups.map((g) => (
@@ -45,7 +48,7 @@ export function GroupItems({ value, onPick, onCreate }: { value?: string | undef
         <>
           <MenuSeparator />
           <MenuItem icon={<Plus className="size-4" />} onSelect={onCreate}>
-            New group…
+            {t("task.newGroup")}
           </MenuItem>
         </>
       ) : null}
@@ -72,6 +75,7 @@ export function useAssignable(task: Task): { direct: UserRef[]; viaShare: UserRe
 }
 
 export function AssigneeItems({ task, onDone }: { task: Task; onDone?: () => void }) {
+  const t = useT();
   const me = useCurrentUser();
   const { direct, viaShare } = useAssignable(task);
   const update = useUpdateTask();
@@ -87,7 +91,7 @@ export function AssigneeItems({ task, onDone }: { task: Task; onDone?: () => voi
     try {
       await share.mutateAsync({ id: task.id, userId: u.id });
       await update.mutateAsync({ id: task.id, patch: { assigneeId: u.id } });
-      toast.success(`Shared with and assigned to ${u.name}`);
+      toast.success(tr()("task.sharedAssigned", { name: u.name }));
     } catch {
       /* the mutation cache already said what went wrong */
     }
@@ -95,18 +99,18 @@ export function AssigneeItems({ task, onDone }: { task: Task; onDone?: () => voi
   return (
     <>
       <MenuItem icon={<UserRoundX className="size-4" />} shortcut={!task.assignee ? <Check className="size-4 text-accent" /> : null} onSelect={() => assign(null)}>
-        Unassigned
+        {t("task.unassigned")}
       </MenuItem>
       <MenuSeparator />
       {direct.map((u) => (
         <MenuItem key={u.id} icon={<Avatar user={u} size="xs" />} shortcut={task.assignee?.id === u.id ? <Check className="size-4 text-accent" /> : null} onSelect={() => assign(u)}>
-          {u.id === me.id ? `${u.name} (you)` : u.name}
+          {u.id === me.id ? t("common.nameYou", { name: u.name }) : u.name}
         </MenuItem>
       ))}
       {viaShare.length ? (
         <>
           <MenuSeparator />
-          <MenuLabel>Share and assign</MenuLabel>
+          <MenuLabel>{t("task.shareAndAssign")}</MenuLabel>
           {viaShare.map((u) => (
             <MenuItem
               key={u.id}
@@ -124,6 +128,7 @@ export function AssigneeItems({ task, onDone }: { task: Task; onDone?: () => voi
 
 /** A searchable list of contacts with a check on those the task is shared with. */
 export function ShareList({ task, autoFocus = true }: { task: Task; autoFocus?: boolean }) {
+  const t = useT();
   const { data, isPending } = useContacts();
   const share = useShareTask();
   const [q, setQ] = useState("");
@@ -135,7 +140,10 @@ export function ShareList({ task, autoFocus = true }: { task: Task; autoFocus?: 
     const remove = sharedIds.has(u.id);
     share.mutate(
       { id: task.id, userId: u.id, remove },
-      { onSuccess: () => toast.success(remove ? `Stopped sharing with ${u.name}` : `Shared with ${u.name}`) },
+      {
+        onSuccess: () =>
+          toast.success(tr()(remove ? "task.unsharedWithName" : "task.sharedWithName", { name: u.name })),
+      },
     );
   };
   return (
@@ -146,16 +154,16 @@ export function ShareList({ task, autoFocus = true }: { task: Task; autoFocus?: 
           autoFocus={autoFocus}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Share with…"
-          aria-label="Search contacts"
+          placeholder={t("task.shareWith")}
+          aria-label={t("common.searchContacts")}
           className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-4"
         />
       </div>
       <div className="max-h-[260px] overflow-y-auto p-1">
         {isPending ? (
-          <p className="px-2 py-3 text-sm text-fg-3">Loading contacts…</p>
+          <p className="px-2 py-3 text-sm text-fg-3">{t("task.loadingContacts")}</p>
         ) : shown.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-fg-3">{people.length ? "No one matches." : "Add contacts to share tasks with them."}</p>
+          <p className="px-2 py-3 text-sm text-fg-3">{people.length ? t("common.noOneMatches") : t("task.noContacts")}</p>
         ) : (
           shown.map((u) => {
             const on = sharedIds.has(u.id);

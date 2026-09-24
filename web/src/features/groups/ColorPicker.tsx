@@ -1,10 +1,12 @@
 import { Check } from "lucide-react";
 import { GROUP_COLOR_LIST } from "../../components/ui/group-color";
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 
 export function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const t = useT();
   return (
-    <div role="radiogroup" aria-label="Color" className="flex flex-wrap gap-2">
+    <div role="radiogroup" aria-label={t("groupForm.color")} className="flex flex-wrap gap-2">
       {GROUP_COLOR_LIST.map((c) => {
         const on = c.name === value;
         return (
@@ -13,7 +15,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (c: 
             type="button"
             role="radio"
             aria-checked={on}
-            aria-label={c.name}
+            aria-label={t(`color.${c.name}` as const)}
             onClick={() => onChange(c.name)}
             className={cn(
               "flex size-7 items-center justify-center rounded-full outline-none transition-transform duration-150 hover:scale-110",

@@ -3,11 +3,14 @@
 // `vite --mode mock`.
 import { addDays, format, startOfDay, subDays, subHours, subMinutes } from "date-fns";
 import type { Priority } from "../api/types";
+import type { Locale } from "../i18n/types";
 
 export type MUser = {
   id: string;
   name: string;
   email: string;
+  /** The account's language: its interface and its mails. */
+  locale: Locale;
   password: string;
   verified: boolean;
   locked: boolean;
@@ -42,6 +45,8 @@ export type MActivity = {
   userId: string;
   kind: string;
   actorId?: string;
+  /** The other person the entry is about (the sharee, the assignee…), as the server sends it. */
+  targetId?: string;
   taskId?: string;
   taskTitle?: string;
   groupId?: string;
@@ -71,7 +76,7 @@ export type DB = {
 };
 
 const KEY = "todo.mock.db";
-const VERSION = 4;
+const VERSION = 6;
 
 const ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
 export function typeid(prefix: string): string {
@@ -108,6 +113,7 @@ export function seed(now = new Date()): DB {
     id,
     name,
     email,
+    locale: "fr",
     password: DEMO_PASSWORD,
     verified: true,
     locked: false,
@@ -119,9 +125,9 @@ export function seed(now = new Date()): DB {
   const sam = u("user_01j9samrivera000000000000", "Sam Rivera", "sam@example.com");
   const noor = u("user_01j9noorhaddad00000000000", "Noor Haddad", "noor@example.com");
   const lea = u("user_01j9leadubois0000000000000", "Léa Dubois", "lea@example.com");
-  const tom = u("user_01j9tombecker0000000000000", "Tom Becker", "tom@example.com");
-  const priya = u("user_01j9priyanair000000000000", "Priya Nair", "priya@example.com");
-  const ava = u("user_01j9avachen00000000000000", "Ava Chen", "ava@example.com");
+  const tom = u("user_01j9tombecker0000000000000", "Tom Becker", "tom@example.com", { locale: "en" });
+  const priya = u("user_01j9priyanair000000000000", "Priya Nair", "priya@example.com", { locale: "en" });
+  const ava = u("user_01j9avachen00000000000000", "Ava Chen", "ava@example.com", { locale: "en" });
   const marco = u("user_01j9marcorossi000000000000", "Marco Rossi", "marco@example.com");
   const unverified = u("user_01j9unverified00000000000", "Una Verified", "unverified@example.com", { verified: false });
   const locked = u("user_01j9lockedaccount000000000", "Lock Smith", "locked@example.com", { locked: true });
@@ -225,14 +231,14 @@ export function seed(now = new Date()): DB {
   const a = (p: Omit<MActivity, "id" | "userId">): MActivity => ({ id: typeid("entry"), userId: me.id, ...p });
   const activity: MActivity[] = [
     a({ kind: "task.completed", actorId: sam.id, taskId: task("Set up analytics").id, taskTitle: "Set up analytics", groupId: launch.id, text: "Sam Rivera completed “Set up analytics”.", at: iso(subMinutes(now, 64)), read: false }),
-    a({ kind: "task.shared", actorId: noor.id, taskId: task("Pick a date for the book club").id, taskTitle: "Pick a date for the book club", text: "Noor Haddad shared “Pick a date for the book club” with you.", at: iso(subHours(now, 3)), read: false }),
-    a({ kind: "task.assigned", actorId: sam.id, taskId: task("Review Sam’s pull request").id, taskTitle: "Review Sam’s pull request", groupId: launch.id, text: "Sam Rivera assigned “Review Sam’s pull request” to you.", at: iso(subHours(now, 5)), read: false }),
-    a({ kind: "group.invited", actorId: noor.id, groupId: book.id, text: "Noor Haddad invited you to Book club.", at: iso(subHours(now, 20)), read: true }),
-    a({ kind: "task.assigned", actorId: priya.id, taskId: task("Prepare critique notes").id, taskTitle: "Prepare critique notes", groupId: crit.id, text: "Priya Nair assigned “Prepare critique notes” to you.", at: iso(subHours(subDays(now, 1), 6)), read: true }),
-    a({ kind: "contact.requested", actorId: ava.id, text: "Ava Chen wants to add you as a contact.", at: iso(subDays(now, 2)), read: true }),
+    a({ kind: "task.shared", actorId: noor.id, taskId: task("Pick a date for the book club").id, taskTitle: "Pick a date for the book club", targetId: me.id, text: "Noor Haddad shared “Pick a date for the book club” with you.", at: iso(subHours(now, 3)), read: false }),
+    a({ kind: "task.assigned", actorId: sam.id, taskId: task("Review Sam’s pull request").id, taskTitle: "Review Sam’s pull request", groupId: launch.id, targetId: me.id, text: "Sam Rivera assigned “Review Sam’s pull request” to you.", at: iso(subHours(now, 5)), read: false }),
+    a({ kind: "group.invited", actorId: noor.id, targetId: me.id, groupId: book.id, text: "Noor Haddad invited you to Book club.", at: iso(subHours(now, 20)), read: true }),
+    a({ kind: "task.assigned", actorId: priya.id, taskId: task("Prepare critique notes").id, taskTitle: "Prepare critique notes", groupId: crit.id, targetId: me.id, text: "Priya Nair assigned “Prepare critique notes” to you.", at: iso(subHours(subDays(now, 1), 6)), read: true }),
+    a({ kind: "contact.requested", actorId: ava.id, targetId: me.id, text: "Ava Chen wants to add you as a contact.", at: iso(subDays(now, 2)), read: true }),
     a({ kind: "task.overdue", taskId: task("Pay the electricity bill").id, taskTitle: "Pay the electricity bill", text: "“Pay the electricity bill” is overdue.", at: iso(subDays(now, 2)), read: true }),
     a({ kind: "task.updated", actorId: tom.id, taskId: task("Fix the kitchen tap").id, taskTitle: "Fix the kitchen tap", groupId: home.id, text: "Tom Becker changed the due date of “Fix the kitchen tap”.", at: iso(subDays(now, 3)), read: true }),
-    a({ kind: "contact.accepted", actorId: lea.id, text: "Léa Dubois accepted your contact request.", at: iso(subDays(now, 3)), read: true }),
+    a({ kind: "contact.accepted", actorId: lea.id, targetId: me.id, text: "Léa Dubois accepted your contact request.", at: iso(subDays(now, 3)), read: true }),
     a({ kind: "group.joined", actorId: lea.id, groupId: launch.id, text: "Léa Dubois joined Launch.", at: iso(subDays(now, 12)), read: true }),
   ];
 

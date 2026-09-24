@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { Crown, DoorOpen, Ellipsis, Pencil, Search, Shield, Trash2, UserMinus, UserRoundPlus, UsersRound } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -21,6 +20,8 @@ import { Skeleton, TaskListSkeleton } from "../../components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { toast } from "../../components/ui/toast";
 import { Tooltip } from "../../components/ui/tooltip";
+import { tr, useT, type Key } from "../../i18n";
+import { formatDate } from "../../lib/dates";
 import { normalize } from "../../lib/quickadd";
 import { Page } from "../shell/Page";
 import { QuickAdd } from "../tasks/QuickAdd";
@@ -28,13 +29,16 @@ import { TaskList } from "../tasks/TaskList";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { InvitationCard } from "./InvitationBanner";
 
-const ROLE: Record<Role, { label: string; icon: ReactNode }> = {
-  owner: { label: "Owner", icon: <Crown className="size-3" /> },
-  admin: { label: "Admin", icon: <Shield className="size-3" /> },
-  member: { label: "Member", icon: null },
+const ROLE: Record<Role, { label: Key; icon: ReactNode }> = {
+  owner: { label: "role.owner", icon: <Crown className="size-3" /> },
+  admin: { label: "role.admin", icon: <Shield className="size-3" /> },
+  member: { label: "role.member", icon: null },
 };
 
+const YOU_ARE: Record<Role, Key> = { owner: "group.youAreOwner", admin: "group.youAreAdmin", member: "group.youAreMember" };
+
 export function GroupPage() {
+  const t = useT();
   const { groupId = "" } = useParams();
   const g = useGroup(groupId);
   const invitations = useInvitations();
@@ -49,7 +53,7 @@ export function GroupPage() {
         <Page
           title={invitation.group.name}
           icon={<GroupBadge name={invitation.group.name} color={invitation.group.color} size="md" />}
-          subtitle="You’re invited to this group."
+          subtitle={t("group.invited")}
         >
           <InvitationCard inv={invitation} onAccepted={() => void g.refetch()} />
         </Page>
@@ -63,10 +67,18 @@ export function GroupPage() {
       );
     }
     return (
-      <Page title="Group">
+      <Page title={t("group.fallbackTitle")}>
         {missing ? (
-          <EmptyState art={<LostIllo />} title="This group isn’t here" action={<Button asChild variant="secondary"><Link to="/app/today">Go to Today</Link></Button>}>
-            It was deleted, or you’re no longer a member.
+          <EmptyState
+            art={<LostIllo />}
+            title={t("group.goneTitle")}
+            action={
+              <Button asChild variant="secondary">
+                <Link to="/app/today">{t("group.goToday")}</Link>
+              </Button>
+            }
+          >
+            {t("group.goneBody")}
           </EmptyState>
         ) : (
           <ErrorState message={errorMessage(g.error)} onRetry={() => void g.refetch()} />
@@ -91,7 +103,7 @@ export function GroupPage() {
         <span className="flex items-center gap-2">
           <AvatarStack users={group.members.map((m) => m.user)} size="sm" max={5} />
           <span>
-            {group.members.length} member{group.members.length === 1 ? "" : "s"} · {ROLE[group.role].label === "Member" ? "You’re a member" : `You’re ${group.role === "owner" ? "the owner" : "an admin"}`}
+            {t("group.members", { count: group.members.length })} · {t(YOU_ARE[group.role])}
           </span>
         </span>
       }
@@ -100,10 +112,10 @@ export function GroupPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-5">
           <TabsTrigger value="tasks" count={group.openTasks || undefined}>
-            Tasks
+            {t("group.tabTasks")}
           </TabsTrigger>
           <TabsTrigger value="members" count={group.members.length}>
-            Members
+            {t("group.tabMembers")}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="tasks" className="outline-none">
@@ -118,6 +130,7 @@ export function GroupPage() {
 }
 
 function GroupTasks({ group }: { group: Group }) {
+  const t = useT();
   const q = useTasks("group", group.id);
   return (
     <>
@@ -132,8 +145,8 @@ function GroupTasks({ group }: { group: Group }) {
           view="group"
           showGroup={false}
           empty={
-            <EmptyState art={<GroupIllo />} title={`Nothing in ${group.name} yet`}>
-              Add the first task above. Everyone in the group sees it and can pick it up.
+            <EmptyState art={<GroupIllo />} title={t("group.emptyTitle", { name: group.name })}>
+              {t("group.emptyBody")}
             </EmptyState>
           }
         />
@@ -143,6 +156,7 @@ function GroupTasks({ group }: { group: Group }) {
 }
 
 function GroupActions({ group, onMembers }: { group: Group; onMembers: () => void }) {
+  const t = useT();
   const me = useCurrentUser();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -153,9 +167,9 @@ function GroupActions({ group, onMembers }: { group: Group; onMembers: () => voi
   return (
     <>
       <Menu>
-        <Tooltip content="Group settings">
+        <Tooltip content={t("group.settings")}>
           <MenuTrigger asChild>
-            <IconButton label="Group settings" size="sm">
+            <IconButton label={t("group.settings")} size="sm">
               <Ellipsis className="size-4" />
             </IconButton>
           </MenuTrigger>
@@ -163,20 +177,20 @@ function GroupActions({ group, onMembers }: { group: Group; onMembers: () => voi
         <MenuContent align="end" className="w-[210px]">
           {manage ? (
             <MenuItem icon={<Pencil className="size-4" />} onSelect={() => setEditing(true)}>
-              Rename or recolor
+              {t("group.edit")}
             </MenuItem>
           ) : null}
           <MenuItem icon={<UsersRound className="size-4" />} onSelect={onMembers}>
-            Members
+            {t("group.tabMembers")}
           </MenuItem>
           <MenuSeparator />
           {group.role !== "owner" ? (
             <MenuItem danger icon={<DoorOpen className="size-4" />} onSelect={() => setConfirm("leave")}>
-              Leave group…
+              {t("group.leave")}
             </MenuItem>
           ) : (
             <MenuItem danger icon={<Trash2 className="size-4" />} onSelect={() => setConfirm("delete")}>
-              Delete group…
+              {t("group.delete")}
             </MenuItem>
           )}
         </MenuContent>
@@ -185,13 +199,13 @@ function GroupActions({ group, onMembers }: { group: Group; onMembers: () => voi
       <ConfirmDialog
         open={confirm === "delete"}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={`Delete ${group.name}?`}
-        description="The group and its tasks are deleted for every member. This can’t be undone."
-        confirm="Delete group"
+        title={t("group.deleteTitle", { name: group.name })}
+        description={t("group.deleteBody")}
+        confirm={t("group.deleteConfirm")}
         onConfirm={async () => {
           try {
             await ep.groups.remove(group.id);
-            toast(`${group.name} was deleted`);
+            toast(tr()("group.deleted", { name: group.name }));
             navigate("/app/today", { replace: true });
             qc.removeQueries({ queryKey: qk.group(group.id) });
             await Promise.all([qc.invalidateQueries({ queryKey: qk.groups }), qc.invalidateQueries({ queryKey: qk.tasksRoot }), qc.invalidateQueries({ queryKey: qk.counts })]);
@@ -203,13 +217,13 @@ function GroupActions({ group, onMembers }: { group: Group; onMembers: () => voi
       <ConfirmDialog
         open={confirm === "leave"}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={`Leave ${group.name}?`}
-        description="You’ll stop seeing its tasks. A member can invite you again later."
-        confirm="Leave group"
+        title={t("group.leaveTitle", { name: group.name })}
+        description={t("group.leaveBody")}
+        confirm={t("group.leaveConfirm")}
         onConfirm={async () => {
           try {
             await ep.groups.removeMember(group.id, me.id);
-            toast(`You left ${group.name}`);
+            toast(tr()("group.left", { name: group.name }));
             navigate("/app/today", { replace: true });
             qc.removeQueries({ queryKey: qk.group(group.id) });
             await Promise.all([qc.invalidateQueries({ queryKey: qk.groups }), qc.invalidateQueries({ queryKey: qk.tasksRoot }), qc.invalidateQueries({ queryKey: qk.counts })]);
@@ -223,6 +237,7 @@ function GroupActions({ group, onMembers }: { group: Group; onMembers: () => voi
 }
 
 function Members({ group }: { group: Group }) {
+  const t = useT();
   const me = useCurrentUser();
   const manage = group.role === "owner" || group.role === "admin";
   const order: Record<Role, number> = { owner: 0, admin: 1, member: 2 };
@@ -231,7 +246,7 @@ function Members({ group }: { group: Group }) {
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="text-sm text-fg-3">
-          {manage ? "Invite contacts to share this group’s tasks." : "Only owners and admins can invite people."}
+          {manage ? t("group.inviteHint") : t("group.onlyManagersInvite")}
         </p>
         {manage ? <InviteButton group={group} /> : null}
       </div>
@@ -245,6 +260,7 @@ function Members({ group }: { group: Group }) {
 }
 
 function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: boolean; first: boolean }) {
+  const t = useT();
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const canRemove = !isMe && m.role !== "owner" && (group.role === "owner" || (group.role === "admin" && m.role === "member"));
@@ -259,10 +275,10 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-fg">
           {m.user.name}
-          {isMe ? <span className="font-normal text-fg-3"> (you)</span> : null}
+          {isMe ? <span className="font-normal text-fg-3"> ({t("common.youInline")})</span> : null}
         </p>
         <p className="truncate text-xs text-fg-3">
-          {m.user.email} · joined {format(new Date(m.joinedAt), "MMM d, yyyy")}
+          {t("group.joined", { email: m.user.email, date: formatDate(new Date(m.joinedAt), "date.pattern.dayMonthYear", t.locale) })}
         </p>
       </div>
       {canRole ? (
@@ -270,7 +286,7 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
           <MenuTrigger asChild>
             <button type="button" className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-hover data-[state=open]:bg-hover">
               {ROLE[m.role].icon}
-              {ROLE[m.role].label}
+              {t(ROLE[m.role].label)}
             </button>
           </MenuTrigger>
           <MenuContent align="end" className="w-[240px]">
@@ -280,7 +296,7 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
                 try {
                   const g = await ep.groups.setRole(group.id, m.user.id, role as "admin" | "member");
                   await refresh(g);
-                  toast.success(`${m.user.name.split(" ")[0]} is now ${role === "admin" ? "an admin" : "a member"}`);
+                  toast.success(tr()(role === "admin" ? "role.nowAdmin" : "role.nowMember", { name: m.user.name.split(" ")[0] ?? m.user.name }));
                 } catch (err) {
                   toast.error(errorMessage(err));
                 }
@@ -288,14 +304,14 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
             >
               <MenuRadioItem value="admin" icon={<Shield className="size-4" />}>
                 <span className="flex flex-col py-1">
-                  <span>Admin</span>
-                  <span className="text-xs text-fg-3">Invites and removes members</span>
+                  <span>{t("role.admin")}</span>
+                  <span className="text-xs text-fg-3">{t("role.admin.hint")}</span>
                 </span>
               </MenuRadioItem>
               <MenuRadioItem value="member" icon={<UsersRound className="size-4" />}>
                 <span className="flex flex-col py-1">
-                  <span>Member</span>
-                  <span className="text-xs text-fg-3">Sees and edits the tasks</span>
+                  <span>{t("role.member")}</span>
+                  <span className="text-xs text-fg-3">{t("role.member.hint")}</span>
                 </span>
               </MenuRadioItem>
             </MenuRadioGroup>
@@ -304,12 +320,12 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
       ) : (
         <Chip tone={m.role === "owner" ? "accent" : "neutral"}>
           {ROLE[m.role].icon}
-          {ROLE[m.role].label}
+          {t(ROLE[m.role].label)}
         </Chip>
       )}
       {canRemove ? (
-        <Tooltip content="Remove from the group">
-          <IconButton label={`Remove ${m.user.name}`} size="sm" onClick={() => setConfirm(true)}>
+        <Tooltip content={t("group.removeFromGroup")}>
+          <IconButton label={t("group.removeName", { name: m.user.name })} size="sm" onClick={() => setConfirm(true)}>
             <UserMinus className="size-4" />
           </IconButton>
         </Tooltip>
@@ -319,14 +335,14 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={`Remove ${m.user.name}?`}
-        description={`They’ll stop seeing ${group.name}’s tasks. You can invite them again later.`}
-        confirm="Remove"
+        title={t("group.removeTitle", { name: m.user.name })}
+        description={t("group.removeBody", { group: group.name })}
+        confirm={t("common.remove")}
         onConfirm={async () => {
           try {
             await ep.groups.removeMember(group.id, m.user.id);
             await refresh();
-            toast(`${m.user.name} was removed`);
+            toast(tr()("group.removed", { name: m.user.name }));
           } catch (err) {
             toast.error(errorMessage(err));
           }
@@ -337,6 +353,7 @@ function MemberRow({ group, m, isMe, first }: { group: Group; m: Member; isMe: b
 }
 
 function InviteButton({ group }: { group: Group }) {
+  const t = useT();
   const { data } = useContacts();
   const [q, setQ] = useState("");
   const [sent, setSent] = useState<Set<string>>(new Set());
@@ -349,7 +366,7 @@ function InviteButton({ group }: { group: Group }) {
     try {
       await ep.groups.invite(group.id, userId);
       setSent((s) => new Set(s).add(userId));
-      toast.success(`Invitation sent to ${name}`);
+      toast.success(tr()("group.inviteSentTo", { name }));
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -359,18 +376,18 @@ function InviteButton({ group }: { group: Group }) {
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="secondary" size="sm" icon={<UserRoundPlus className="size-4" />}>
-          Invite
+          {t("common.invite")}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[300px] p-0">
         <div className="flex items-center gap-2 border-b border-line-soft px-3">
           <Search className="size-4 text-fg-4" aria-hidden="true" />
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Invite a contact…" aria-label="Search contacts" className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-4" />
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("group.invitePlaceholder")} aria-label={t("common.searchContacts")} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-4" />
         </div>
         <div className="max-h-[280px] overflow-y-auto p-1">
           {shown.length === 0 ? (
             <p className="px-2 py-3 text-sm text-fg-3">
-              {candidates.length ? "No one matches." : "Everyone in your contacts is already here. Add contacts to invite more people."}
+              {candidates.length ? t("common.noOneMatches") : t("group.everyoneHere")}
             </p>
           ) : (
             shown.map((u) => (
@@ -381,10 +398,10 @@ function InviteButton({ group }: { group: Group }) {
                   <span className="block truncate text-xs text-fg-3">{u.email}</span>
                 </span>
                 {sent.has(u.id) ? (
-                  <span className="text-xs font-medium text-success-ink">Invited</span>
+                  <span className="text-xs font-medium whitespace-nowrap text-success-ink">{t("group.inviteSent")}</span>
                 ) : (
                   <Button size="xs" variant="secondary" onClick={() => invite(u.id, u.name)}>
-                    Invite
+                    {t("common.invite")}
                   </Button>
                 )}
               </div>

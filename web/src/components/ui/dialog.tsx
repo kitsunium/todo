@@ -1,6 +1,7 @@
 import { AlertDialog as A, Dialog as D } from "radix-ui";
 import { X } from "lucide-react";
 import { useState, type ComponentProps, type ReactNode } from "react";
+import { useT } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { Button } from "./button";
 
@@ -18,6 +19,7 @@ export function DialogContent({
   hideClose,
   ...rest
 }: ComponentProps<typeof D.Content> & { size?: "sm" | "md" | "lg"; hideClose?: boolean }) {
+  const t = useT();
   const width = size === "sm" ? "max-w-[400px]" : size === "lg" ? "max-w-[640px]" : "max-w-[480px]";
   return (
     <D.Portal>
@@ -34,7 +36,7 @@ export function DialogContent({
         {children}
         {hideClose ? null : (
           <D.Close
-            aria-label="Close"
+            aria-label={t("common.close")}
             className="absolute top-3.5 right-3.5 flex size-7 items-center justify-center rounded-md text-fg-4 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-2 focus-visible:outline-ring"
           >
             <X className="size-4" />
@@ -86,6 +88,7 @@ export function ConfirmDialog({
   confirm: string;
   onConfirm: () => unknown;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   return (
     <A.Root open={open} onOpenChange={onOpenChange}>
@@ -103,7 +106,7 @@ export function ConfirmDialog({
           </div>
           <div className="flex justify-end gap-2 rounded-b-2xl border-t border-line-soft bg-sheet/60 px-5 py-3">
             <A.Cancel asChild>
-              <Button variant="ghost">Cancel</Button>
+              <Button variant="ghost">{t("common.cancel")}</Button>
             </A.Cancel>
             <Button
               variant="danger"

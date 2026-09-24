@@ -4,11 +4,13 @@ import { useLocation, useNavigate } from "react-router";
 import { onUnauthorized } from "../../api/client";
 import { FoxMark } from "../../components/brand/logo";
 import { toast } from "../../components/ui/toast";
+import { tr, useT } from "../../i18n";
 
 /** A calm splash while the session is checked. */
 export function Splash() {
+  const t = useT();
   return (
-    <div className="flex h-dvh items-center justify-center bg-canvas" role="status" aria-label="Loading">
+    <div className="flex h-dvh items-center justify-center bg-canvas" role="status" aria-label={t("common.loading")}>
       <FoxMark className="size-9 animate-pulse" />
     </div>
   );
@@ -27,7 +29,7 @@ export function useSessionGuard() {
         const l = here.current;
         if (!l.pathname.startsWith("/app")) return;
         qc.clear();
-        toast("Your session ended. Sign in to continue.", { id: "session" });
+        toast(tr()("app.sessionEnded"), { id: "session" });
         navigate(`/login?next=${encodeURIComponent(l.pathname + l.search)}`, { replace: true });
       }),
     [navigate, qc],

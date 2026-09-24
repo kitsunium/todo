@@ -1,6 +1,7 @@
 // Empty-state illustrations: paper cards, soft ink, one warm accent.
-// Colors come from CSS variables, so they follow the theme.
+// Colors come from CSS variables: the palette lives in one place.
 import type { ReactNode } from "react";
+import { useT, type Key } from "../../i18n";
 import { cn } from "../../lib/cn";
 
 const PAPER = "var(--illo-paper)";
@@ -10,9 +11,12 @@ const INK2 = "var(--illo-ink-2)";
 const ACCENT = "var(--accent)";
 const DONE = "var(--done)";
 
-function Frame({ children, className, label }: { children: ReactNode; className?: string; label: string }) {
+type IlloKey = Extract<Key, `illo.${string}`>;
+
+function Frame({ children, className, label }: { children: ReactNode; className?: string; label: IlloKey }) {
+  const t = useT();
   return (
-    <svg viewBox="0 0 160 120" className={cn("h-[120px] w-[160px]", className)} role="img" aria-label={label}>
+    <svg viewBox="0 0 160 120" className={cn("h-[120px] w-[160px]", className)} role="img" aria-label={t(label)}>
       <ellipse cx="80" cy="108" rx="54" ry="5" fill="var(--illo-shadow)" />
       {children}
     </svg>
@@ -71,7 +75,7 @@ function Spark({ x, y, s = 1, fill = ACCENT }: { x: number; y: number; s?: numbe
 
 export function InboxIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="An empty inbox tray">
+    <Frame className={className} label="illo.inbox">
       <Card x={46} y={20} w={68} h={46} rotate={-6} />
       <Bar x={56} y={34} w={30} fill={INK} />
       <Bar x={56} y={44} w={42} fill={LINE} />
@@ -85,7 +89,7 @@ export function InboxIllo({ className }: { className?: string }) {
 
 export function TodayIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A clear day: the sun over a finished list">
+    <Frame className={className} label="illo.today">
       <circle cx="80" cy="46" r="24" fill={ACCENT} opacity="0.14" />
       <circle cx="80" cy="46" r="15" fill={ACCENT} opacity="0.9" />
       {Array.from({ length: 8 }, (_, i) => {
@@ -115,7 +119,7 @@ export function TodayIllo({ className }: { className?: string }) {
 
 export function UpcomingIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A calendar with nothing planned">
+    <Frame className={className} label="illo.upcoming">
       <Card x={36} y={18} w={88} h={80} r={12} />
       <path d="M36 30a12 12 0 0 1 12-12h64a12 12 0 0 1 12 12v8H36Z" fill={ACCENT} opacity="0.9" />
       <rect x="54" y="12" width="4" height="12" rx="2" fill={INK2} />
@@ -129,7 +133,7 @@ export function UpcomingIllo({ className }: { className?: string }) {
 
 export function SharedIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="Two people passing a task between them">
+    <Frame className={className} label="illo.shared">
       <Card x={44} y={34} w={72} h={44} />
       <Ring cx={58} cy={50} color={ACCENT} />
       <Bar x={70} y={47.5} w={34} />
@@ -144,7 +148,7 @@ export function SharedIllo({ className }: { className?: string }) {
 
 export function AssignedIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A task card with a name tag">
+    <Frame className={className} label="illo.assigned">
       <Card x={34} y={26} w={92} h={62} rotate={3} />
       <Ring cx={50} cy={46} color={ACCENT} />
       <Bar x={62} y={43.5} w={46} />
@@ -159,7 +163,7 @@ export function AssignedIllo({ className }: { className?: string }) {
 
 export function CompletedIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A big check mark and confetti">
+    <Frame className={className} label="illo.completed">
       <circle cx="80" cy="56" r="30" fill={DONE} opacity="0.12" />
       <Tick cx={80} cy={56} r={20} />
       <Spark x={40} y={34} s={0.9} />
@@ -174,7 +178,7 @@ export function CompletedIllo({ className }: { className?: string }) {
 
 export function ContactsIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="Two people, not yet connected">
+    <Frame className={className} label="illo.contacts">
       <Card x={18} y={34} w={54} h={62} r={12} />
       <circle cx="45" cy="56" r="11" fill="oklch(0.88 0.06 250)" />
       <Bar x={32} y={74} w={26} fill={INK} />
@@ -191,7 +195,7 @@ export function ContactsIllo({ className }: { className?: string }) {
 
 export function ActivityIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A quiet bell">
+    <Frame className={className} label="illo.activity">
       <path d="M62 78V56a18 18 0 0 1 36 0v22l6 8H56Z" fill={PAPER} stroke={LINE} strokeWidth="1.2" strokeLinejoin="round" />
       <path d="M73 90a7 7 0 0 0 14 0" fill="none" stroke={INK2} strokeWidth="1.4" strokeLinecap="round" />
       <circle cx="80" cy="36" r="3" fill={INK2} />
@@ -204,7 +208,7 @@ export function ActivityIllo({ className }: { className?: string }) {
 
 export function GroupIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A stack of shared lists">
+    <Frame className={className} label="illo.group">
       <Card x={38} y={22} w={84} h={30} rotate={-4} />
       <Card x={34} y={40} w={92} h={30} rotate={2} />
       <Card x={30} y={60} w={100} h={36} />
@@ -218,8 +222,9 @@ export function GroupIllo({ className }: { className?: string }) {
 }
 
 export function MailIllo({ className }: { className?: string }) {
+  const t = useT();
   return (
-    <svg viewBox="0 0 160 120" className={cn("h-[120px] w-[160px]", className)} role="img" aria-label="An envelope with a letter">
+    <svg viewBox="0 0 160 120" className={cn("h-[120px] w-[160px]", className)} role="img" aria-label={t("illo.mail")}>
       <ellipse cx="80" cy="108" rx="54" ry="5" fill="var(--illo-shadow)" />
       <rect x="44" y="18" width="72" height="60" rx="8" fill={PAPER} stroke={LINE} strokeWidth="1.2" />
       <Bar x={54} y={30} w={36} fill={INK} />
@@ -236,7 +241,7 @@ export function MailIllo({ className }: { className?: string }) {
 
 export function LostIllo({ className }: { className?: string }) {
   return (
-    <Frame className={className} label="A fox looking for a missing page">
+    <Frame className={className} label="illo.lost">
       <Card x={52} y={30} w={56} h={68} rotate={-8} />
       <Bar x={62} y={46} w={30} />
       <Bar x={62} y={56} w={22} fill={LINE} />

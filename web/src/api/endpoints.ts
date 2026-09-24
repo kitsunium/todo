@@ -1,4 +1,5 @@
 // One function per route of the contract. Nothing here knows about React.
+import { getLocale, isLocale, type Locale } from "../i18n";
 import { api, seg } from "./client";
 import type {
   ActivityEntry,
@@ -24,20 +25,23 @@ type UserBody = { user: User };
 const arr = <T,>(v: readonly T[] | null | undefined): T[] => (Array.isArray(v) ? [...v] : []);
 const taskIn = (t: Task): Task => ({ ...t, notes: t.notes ?? "", sharedWith: arr(t.sharedWith) });
 const groupIn = (g: Group): Group => ({ ...g, members: arr(g.members) });
+// A server that predates the locale field answers none: the interface keeps its own.
+const userIn = (u: User): User => ({ ...u, locale: isLocale(u.locale) ? u.locale : getLocale() });
 
 export const auth = {
-  signup: (b: { email: string; name: string; password: string }) =>
+  signup: (b: { email: string; name: string; password: string; locale: Locale }) =>
     api.post<{ status: string; email: string }>("/api/auth/signup", b),
-  verify: (token: string) => api.post<UserBody>("/api/auth/verify", { token }).then((r) => r.user),
+  verify: (token: string) => api.post<UserBody>("/api/auth/verify", { token }).then((r) => userIn(r.user)),
   resend: (email: string) => api.post<{ status: string }>("/api/auth/verify/resend", { email }),
-  login: (b: { email: string; password: string }) => api.post<UserBody>("/api/auth/login", b).then((r) => r.user),
+  login: (b: { email: string; password: string }) => api.post<UserBody>("/api/auth/login", b).then((r) => userIn(r.user)),
   logout: () => api.post<void>("/api/auth/logout"),
-  me: (signal?: AbortSignal) => api.get<UserBody>("/api/auth/me", { signal }).then((r) => r.user),
-  rename: (name: string) => api.patch<UserBody>("/api/auth/me", { name }).then((r) => r.user),
+  me: (signal?: AbortSignal) => api.get<UserBody>("/api/auth/me", { signal }).then((r) => userIn(r.user)),
+  /** PATCH /api/auth/me: absent members are unchanged. */
+  updateMe: (b: { name?: string; locale?: Locale }) => api.patch<UserBody>("/api/auth/me", b).then((r) => userIn(r.user)),
   changePassword: (b: { current: string; password: string }) => api.post<void>("/api/auth/password", b),
   forgot: (email: string) => api.post<{ status: string }>("/api/auth/password/forgot", { email }),
   reset: (b: { token: string; password: string }) =>
-    api.post<UserBody>("/api/auth/password/reset", b).then((r) => r.user),
+    api.post<UserBody>("/api/auth/password/reset", b).then((r) => userIn(r.user)),
   sessions: () => api.get<{ sessions: Session[] }>("/api/auth/sessions").then((r) => arr(r.sessions)),
   revoke: (id: string) => api.del(`/api/auth/sessions/${seg(id)}`),
 };

@@ -1,42 +1,37 @@
 import { Dialog, DialogBody, DialogContent, DialogHeader } from "../../components/ui/dialog";
 import { Kbd, MOD } from "../../components/ui/kbd";
+import { useT, type Key } from "../../i18n";
+import { VIEWS } from "./nav";
 import { setUI, useUI } from "./store";
 
-const GROUPS: { title: string; rows: [string, string[]][] }[] = [
+const GROUPS: { title: Key; rows: [Key, string[]][] }[] = [
   {
-    title: "Anywhere",
+    title: "shortcuts.anywhere",
     rows: [
-      ["Search and commands", [MOD, "K"]],
-      ["Search tasks", ["/"]],
-      ["New task", ["C"]],
-      ["Keyboard shortcuts", ["?"]],
-      ["Switch theme", ["⇧", "T"]],
+      ["common.searchAndCommands", [MOD, "K"]],
+      ["shortcuts.searchTasks", ["/"]],
+      ["sidebar.newTask", ["C"]],
+      ["user.shortcuts", ["?"]],
     ],
   },
   {
-    title: "Go to",
-    rows: [
-      ["Inbox", ["G", "I"]],
-      ["Today", ["G", "T"]],
-      ["Upcoming", ["G", "U"]],
-      ["Shared with me", ["G", "S"]],
-      ["Assigned to me", ["G", "A"]],
-      ["Completed", ["G", "C"]],
-    ],
+    title: "shortcuts.goTo",
+    rows: VIEWS.map((v) => [v.label, v.keys]),
   },
   {
-    title: "In a list",
+    title: "shortcuts.inList",
     rows: [
-      ["Next / previous task", ["J", "K"]],
-      ["Complete", ["X"]],
-      ["Open", ["E"]],
-      ["Priority", ["1", "2", "3", "4", "0"]],
-      ["Let go", ["Esc"]],
+      ["shortcuts.nextPrevious", ["J", "K"]],
+      ["shortcuts.complete", ["X"]],
+      ["shortcuts.open", ["E"]],
+      ["shortcuts.priority", ["1", "2", "3", "4", "0"]],
+      ["shortcuts.letGo", ["Esc"]],
     ],
   },
 ];
 
 export function ShortcutsDialog() {
+  const t = useT();
   const open = useUI((s) => s.shortcuts);
   return (
     <Dialog open={open} onOpenChange={(o) => setUI({ shortcuts: o })}>
@@ -48,15 +43,15 @@ export function ShortcutsDialog() {
           (e.currentTarget as HTMLElement | null)?.focus({ preventScroll: true });
         }}
       >
-        <DialogHeader title="Keyboard shortcuts" description="Everything is a key away." />
+        <DialogHeader title={t("user.shortcuts")} description={t("shortcuts.description")} />
         <DialogBody className="grid gap-6 pb-6 sm:grid-cols-3">
           {GROUPS.map((g) => (
             <section key={g.title}>
-              <h3 className="mb-2 text-2xs font-semibold tracking-[0.06em] text-fg-4 uppercase">{g.title}</h3>
+              <h3 className="mb-2 text-2xs font-semibold tracking-[0.06em] text-fg-4 uppercase">{t(g.title)}</h3>
               <ul className="flex flex-col gap-2">
                 {g.rows.map(([label, keys]) => (
                   <li key={label} className="flex items-center justify-between gap-3 text-sm text-fg-2">
-                    <span>{label}</span>
+                    <span>{t(label)}</span>
                     <span className="flex shrink-0 gap-1">
                       {keys.map((k) => (
                         <Kbd key={k}>{k}</Kbd>

@@ -6,11 +6,13 @@ import { MailIllo } from "../../components/brand/illustrations";
 import { Button } from "../../components/ui/button";
 import { Callout } from "../../components/ui/callout";
 import { Field, Input } from "../../components/ui/input";
+import { useT } from "../../i18n";
 import { AuthHeading } from "./AuthLayout";
 import { DevMailbox } from "./DevMailbox";
 import { checkEmail } from "./forms";
 
 export function ForgotPage() {
+  const t = useT();
   const [params] = useSearchParams();
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [touched, setTouched] = useState(false);
@@ -40,15 +42,15 @@ export function ForgotPage() {
     return (
       <div className="flex flex-col items-center text-center">
         <MailIllo className="-mt-4 mb-2" />
-        <h1 className="text-2xl font-semibold tracking-[-0.025em] text-fg">Check your inbox</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.025em] text-fg">{t("inbox.title")}</h1>
         <p className="mt-2 max-w-[360px] text-[15px] leading-[22px] text-fg-3">
-          If an account exists for
-          <span className="my-1 block font-medium [overflow-wrap:anywhere] text-fg">{sent}</span>
-          a link to reset your password is on its way. It expires in one hour.
+          {t.rich("forgot.sentBody", {
+            email: <span className="my-1 block font-medium [overflow-wrap:anywhere] text-fg">{sent}</span>,
+          })}
         </p>
         <p className="mt-6 text-sm text-fg-3">
           <Link to={`/login?email=${encodeURIComponent(sent)}`} className="font-medium text-fg underline-offset-4 hover:underline">
-            Back to sign in
+            {t("forgot.back")}
           </Link>
         </p>
         <div className="w-full text-left">
@@ -60,9 +62,9 @@ export function ForgotPage() {
 
   return (
     <>
-      <AuthHeading title="Reset your password">Enter the email you signed up with. We’ll send you a link to choose a new password.</AuthHeading>
+      <AuthHeading title={t("forgot.title")}>{t("forgot.subtitle")}</AuthHeading>
       <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-        <Field label="Email" error={touched ? invalid : undefined}>
+        <Field label={t("common.email")} error={touched ? invalid : undefined}>
           {(p) => (
             <Input
               {...p}
@@ -70,7 +72,7 @@ export function ForgotPage() {
               type="email"
               autoComplete="email"
               autoFocus
-              placeholder="you@example.com"
+              placeholder={t("common.emailPlaceholder")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onBlur={() => email && setTouched(true)}
@@ -79,13 +81,13 @@ export function ForgotPage() {
         </Field>
         {failure && !fieldErrors(failure).email ? <Callout tone="danger">{errorMessage(failure)}</Callout> : null}
         <Button type="submit" variant="primary" size="lg" loading={busy} className="mt-1 w-full">
-          Send the reset link
+          {t("forgot.submit")}
         </Button>
       </form>
       <p className="mt-6 text-center text-sm text-fg-3">
-        Remembered it?{" "}
+        {t("forgot.remembered")}{" "}
         <Link to="/login" className="font-medium text-fg underline-offset-4 hover:underline">
-          Sign in
+          {t("auth.signIn")}
         </Link>
       </p>
     </>

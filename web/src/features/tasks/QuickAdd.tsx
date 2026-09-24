@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/pop
 import { PRIORITY_LABEL, PriorityIcon } from "../../components/ui/priority";
 import { toast } from "../../components/ui/toast";
 import { Tooltip } from "../../components/ui/tooltip";
+import { tr, useT, type T } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { formatDue } from "../../lib/dates";
 import { useNow } from "../../lib/now";
@@ -32,11 +33,11 @@ const TOKEN_TONE: Record<TokenKind, string> = {
 };
 
 /** Where a new task lands, said the way the sidebar says it. */
-function destination(task: NewTask, groups: Group[]): string {
-  if (task.groupId) return groups.find((g) => g.id === task.groupId)?.name ?? "its group";
-  if (task.due && Date.parse(task.due) > endOfDay(new Date()).getTime()) return "Upcoming";
-  if (task.due) return "Today";
-  return "Inbox";
+function destination(task: NewTask, groups: Group[], t: T): string {
+  if (task.groupId) return groups.find((g) => g.id === task.groupId)?.name ?? t("quickadd.itsGroup");
+  if (task.due && Date.parse(task.due) > endOfDay(new Date()).getTime()) return t("view.upcoming");
+  if (task.due) return t("view.today");
+  return t("view.inbox");
 }
 
 function belongs(view: TaskView | undefined, task: NewTask, meId: string, groupId?: string): boolean {
@@ -75,6 +76,7 @@ export function QuickAdd({
   onDone?: () => void;
 }) {
   const me = useCurrentUser();
+  const t = useT();
   const now = useNow();
   const navigate = useNavigate();
   const { data: groups = [] } = useGroups();
@@ -187,8 +189,9 @@ export function QuickAdd({
         await update.mutateAsync({ id: created.id, patch: { assigneeId: shareWith } });
       }
       if (!here) {
-        toast(`Added to ${destination(task, groups)}`, {
-          action: { label: "Open", onClick: () => navigate(`/app/tasks/${created.id}`) },
+        const say = tr();
+        toast(say("quickadd.addedTo", { place: destination(task, groups, say) }), {
+          action: { label: say("common.open"), onClick: () => navigate(`/app/tasks/${created.id}`) },
         });
       }
     } catch {
@@ -229,14 +232,14 @@ export function QuickAdd({
   // The highlighted copy of the text, behind the transparent-background input.
   const segments: ReactNode[] = [];
   let at = 0;
-  for (const t of parsed.tokens) {
-    if (t.start > at) segments.push(text.slice(at, t.start));
+  for (const tok of parsed.tokens) {
+    if (tok.start > at) segments.push(text.slice(at, tok.start));
     segments.push(
-      <mark key={t.start} className={cn("rounded-[4px] text-transparent", t.resolved ? TOKEN_TONE[t.kind] : "bg-warn-soft")} style={{ boxShadow: "0 0 0 2px transparent" }}>
-        {text.slice(t.start, t.end)}
+      <mark key={tok.start} className={cn("rounded-[4px] text-transparent", tok.resolved ? TOKEN_TONE[tok.kind] : "bg-warn-soft")} style={{ boxShadow: "0 0 0 2px transparent" }}>
+        {text.slice(tok.start, tok.end)}
       </mark>,
     );
-    at = t.end;
+    at = tok.end;
   }
   segments.push(text.slice(at));
 
@@ -254,46 +257,46 @@ export function QuickAdd({
 
   const chips: ReactNode[] = [];
   if (effective.due) {
-    const d = formatDue(effective.due, now);
+    const d = formatDue(effective.due, now, t.locale);
     chips.push(
-      <TokenChip key="due" onRemove={() => dismiss("due")} label="Remove the date" tone={d.overdue ? "danger" : "accent"}>
+      <TokenChip key="due" onRemove={() => dismiss("due")} label={t("quickadd.removeDate")} tone={d.overdue ? "danger" : "accent"}>
         <CalendarDays className="size-3" /> {d.label}
       </TokenChip>,
     );
   }
   if (effective.priority) {
     chips.push(
-      <TokenChip key="priority" onRemove={() => dismiss("priority")} label="Remove the priority">
-        <PriorityIcon priority={effective.priority} className="size-3" /> {PRIORITY_LABEL[effective.priority]}
+      <TokenChip key="priority" onRemove={() => dismiss("priority")} label={t("quickadd.removePriority")}>
+        <PriorityIcon priority={effective.priority} className="size-3" /> {t(PRIORITY_LABEL[effective.priority])}
       </TokenChip>,
     );
   }
   const g = groups.find((x) => x.id === effective.groupId);
   if (g && !(view === "group" && g.id === groupId)) {
     chips.push(
-      <TokenChip key="group" onRemove={() => dismiss("group")} label="Remove the group">
+      <TokenChip key="group" onRemove={() => dismiss("group")} label={t("quickadd.removeGroup")}>
         <GroupDot color={g.color} className="size-[7px]" /> {g.name}
       </TokenChip>,
     );
   } else if (parsed.groupQuery) {
     chips.push(
       <Chip key="group?" tone="warn">
-        <Hash className="size-3" /> No group “{parsed.groupQuery}”
+        <Hash className="size-3" /> {t("quickadd.noGroup", { name: parsed.groupQuery })}
       </Chip>,
     );
   }
   if (effective.contact) {
     const u = effective.contact;
     chips.push(
-      <TokenChip key="contact" onRemove={() => dismiss("contact")} label="Remove the assignee">
+      <TokenChip key="contact" onRemove={() => dismiss("contact")} label={t("quickadd.removeAssignee")}>
         <Avatar user={{ id: u.id, name: u.name, email: u.email ?? "" }} size="xs" className="-ml-0.5" />
-        {u.id === me.id ? "Assign to me" : `Assign to ${u.name.split(" ")[0]}`}
+        {u.id === me.id ? t("quickadd.assignMe") : t("quickadd.assignTo", { name: u.name.split(" ")[0] ?? u.name })}
       </TokenChip>,
     );
   } else if (parsed.contactQuery) {
     chips.push(
       <Chip key="contact?" tone="warn">
-        No contact “{parsed.contactQuery}”
+        {t("quickadd.noContact", { name: parsed.contactQuery })}
       </Chip>,
     );
   }
@@ -353,8 +356,8 @@ export function QuickAdd({
               onClick={syncScroll}
               onSelect={syncScroll}
               onScroll={syncScroll}
-              placeholder={expanded ? "Call Sam tomorrow at 5pm !high #group @person" : "Add a task"}
-              aria-label="New task"
+              placeholder={expanded ? t("quickadd.example") : t("quickadd.placeholder")}
+              aria-label={t("quickadd.label")}
               aria-autocomplete="list"
               aria-expanded={showSuggestions}
               enterKeyHint="done"
@@ -393,11 +396,11 @@ export function QuickAdd({
                     setFocused(false);
                   }}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               ) : null}
               <Button size="sm" variant="primary" disabled={!parsed.title.trim()} onMouseDown={(e) => e.preventDefault()} onClick={() => void submit()}>
-                Add task
+                {t("quickadd.add")}
                 <CornerDownLeft className="size-3.5 opacity-60" />
               </Button>
             </div>
@@ -408,7 +411,7 @@ export function QuickAdd({
       {showSuggestions ? (
         <div
           role="listbox"
-          aria-label={mention.kind === "group" ? "Groups" : "People"}
+          aria-label={mention.kind === "group" ? t("quickadd.groups") : t("quickadd.people")}
           className="absolute top-[calc(100%+6px)] left-[34px] z-30 w-[260px] overflow-hidden rounded-lg bg-raised p-1 shadow-pop animate-pop-in"
         >
           {suggestions.map((c, i) => (
@@ -427,7 +430,7 @@ export function QuickAdd({
               ) : (
                 <Avatar user={{ id: c.id, name: c.name, email: c.email ?? "" }} size="xs" />
               )}
-              <span className="min-w-0 flex-1 truncate">{c.id === me.id ? `${c.name} (you)` : c.name}</span>
+              <span className="min-w-0 flex-1 truncate">{c.id === me.id ? t("common.nameYou", { name: c.name }) : c.name}</span>
               {i === pick ? <Kbd>↵</Kbd> : null}
             </button>
           ))}
@@ -471,6 +474,7 @@ function Toolbar({
   inGroup: boolean;
   clearIgnore: (k: TokenKind) => void;
 }) {
+  const t = useT();
   const [dueOpen, setDueOpen] = useState(false);
   const btn =
     "inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-fg-3 shadow-[inset_0_0_0_1px_var(--line)] transition-colors hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg";
@@ -478,10 +482,10 @@ function Toolbar({
     <>
       {!hasDue ? (
         <Popover open={dueOpen} onOpenChange={setDueOpen}>
-          <Tooltip content="Due date — or type “tomorrow 5pm”">
+          <Tooltip content={t("quickadd.dateTip")}>
             <PopoverTrigger asChild>
               <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()}>
-                <CalendarDays className="size-3.5" /> Date
+                <CalendarDays className="size-3.5" /> {t("quickadd.date")}
               </button>
             </PopoverTrigger>
           </Tooltip>
@@ -504,10 +508,10 @@ function Toolbar({
       ) : null}
       {!hasPriority ? (
         <Menu>
-          <Tooltip content="Priority — or type “!high”">
+          <Tooltip content={t("quickadd.priorityTip")}>
             <MenuTrigger asChild>
               <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()}>
-                <Signal className="size-3.5" /> Priority
+                <Signal className="size-3.5" /> {t("quickadd.priority")}
               </button>
             </MenuTrigger>
           </Tooltip>
@@ -518,10 +522,10 @@ function Toolbar({
       ) : null}
       {!hasGroup && !inGroup ? (
         <Menu>
-          <Tooltip content="Group — or type “#name”">
+          <Tooltip content={t("quickadd.groupTip")}>
             <MenuTrigger asChild>
               <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()}>
-                <Hash className="size-3.5" /> Group
+                <Hash className="size-3.5" /> {t("quickadd.group")}
               </button>
             </MenuTrigger>
           </Tooltip>
