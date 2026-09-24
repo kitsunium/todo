@@ -1,4 +1,6 @@
-// Package activity keeps a feed of everything that happened to the todo list.
+// Package activity is what happened to me: one feed per user, written from
+// the events of tasks, contacts and groups, read and marked read by its
+// owner.
 package activity
 
 import (
@@ -8,87 +10,147 @@ import (
 	"time"
 
 	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/todo/todos"
+	"github.com/kitsunium/todo/groups"
+	"github.com/kitsunium/todo/identity"
 )
 
-// Service owns the activity feed.
-var Service = kit.NewService("activity", "A feed of everything that happened to the todo list.")
+// Service owns the feeds.
+var Service = kit.NewService("activity", "What happened to me: a feed per user, written from the events of tasks, contacts and groups.")
 
-// Entry is one line of the feed.
+// TaskRef is the task an entry is about.
+type TaskRef struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// Entry is one line of one user's feed.
 type Entry struct {
-	ID     string    `json:"id"`
-	TodoID string    `json:"todoId"`
-	Title  string    `json:"title"`
-	Event  string    `json:"event"`
-	From   string    `json:"from,omitempty"`
-	To     string    `json:"to"`
-	At     time.Time `json:"at"`
+	// ID is the event's ID and the recipient's: a redelivered event finds
+	// its entries already written.
+	ID     string `json:"id"`
+	UserID string `json:"userId"`
+	// Kind is the event, with its source: task.shared, contact.accepted…
+	Kind  string            `json:"kind"`
+	Actor *identity.UserRef `json:"actor,omitempty"`
+	Task  *TaskRef          `json:"task,omitempty"`
+	Group *groups.GroupRef  `json:"group,omitempty"`
+	// Text is the entry as one sentence, written for its recipient.
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
+	Read bool      `json:"read"`
 }
 
-// Feed keeps the entries, keyed by ID.
-var Feed = Service.Store("feed", func(e Entry) string { return e.ID })
+// Entries keeps every feed, listed per user.
+var Entries = Service.Store("entries", func(e Entry) string { return e.ID },
+	kit.Index("user", func(e Entry) []string { return []string{e.UserID} }))
 
-// The feed listens to every lifecycle change of the todo list.
-var _ = Service.Subscribe("record", todos.Changes, Record)
+// Keep is how many entries a feed keeps: the oldest go first.
+const Keep = 200
 
-// keep is how many entries the feed keeps: every write persists the whole
-// feed, so it must not grow without bound.
-const keep = 200
+// The feed API, and the unread count the task list shows in its sidebar.
+var (
+	_ = Service.Endpoint("GET /api/activity", Feed, kit.Auth())
+	_ = Service.Endpoint("POST /api/activity/read", MarkRead, kit.Auth(), kit.RateLimit(10, 20))
 
-// Record turns a lifecycle change into a feed entry. Delivery is at least
-// once, so the entry is keyed by the change's own ID: a redelivered change
-// overwrites its entry instead of adding a second one.
-func Record(ctx context.Context, c todos.Change) error {
-	if err := Feed.Put(ctx, Entry{
-		ID:     c.ID,
-		TodoID: c.TodoID,
-		Title:  c.Title,
-		Event:  c.Event,
-		From:   string(c.From),
-		To:     string(c.To),
-		At:     c.At,
-	}); err != nil {
-		return err
-	}
-	return prune(ctx)
+	// UnreadAPI counts a user's unread entries, for the task counts.
+	UnreadAPI = Service.Endpoint("GET /internal/activity/unread", Unread, kit.Private())
+)
+
+// FeedEntry is an entry as its owner reads it.
+type FeedEntry struct {
+	ID    string            `json:"id"`
+	Kind  string            `json:"kind"`
+	Actor *identity.UserRef `json:"actor,omitempty"`
+	Task  *TaskRef          `json:"task,omitempty"`
+	Group *groups.GroupRef  `json:"group,omitempty"`
+	Text  string            `json:"text"`
+	At    time.Time         `json:"at"`
+	Read  bool              `json:"read"`
 }
 
-// prune drops the oldest entries beyond keep.
-func prune(ctx context.Context) error {
-	n, err := Feed.Count(ctx)
-	if err != nil || n <= keep {
-		return err
+// FeedOutput is the caller's feed, newest first.
+type FeedOutput struct {
+	Entries []FeedEntry `json:"entries"`
+}
+
+// me is the signed-in user.
+func me(ctx context.Context) (string, error) {
+	uid, ok := kit.UserID(ctx)
+	if !ok {
+		return "", kit.Unauthenticated("sign in first")
 	}
-	all, err := Feed.List(ctx)
+	return string(uid), nil
+}
+
+// feedOf returns a user's entries, newest first.
+func feedOf(ctx context.Context, uid string) ([]Entry, error) {
+	entries, err := Entries.Find(ctx, "user", uid)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	slices.SortFunc(all, func(a, b Entry) int { return cmp.Compare(a.At.UnixNano(), b.At.UnixNano()) })
-	for _, e := range all[:len(all)-keep] {
-		if err := Feed.Delete(ctx, e.ID); err != nil {
-			return err
+	slices.SortFunc(entries, func(a, b Entry) int { return cmp.Or(b.At.Compare(a.At), cmp.Compare(b.ID, a.ID)) })
+	return entries, nil
+}
+
+// Feed returns the caller's feed, newest first.
+func Feed(ctx context.Context, _ kit.Empty) (FeedOutput, error) {
+	uid, err := me(ctx)
+	if err != nil {
+		return FeedOutput{}, err
+	}
+	entries, err := feedOf(ctx, uid)
+	if err != nil {
+		return FeedOutput{}, err
+	}
+	out := FeedOutput{Entries: make([]FeedEntry, 0, len(entries))}
+	for _, e := range entries {
+		out.Entries = append(out.Entries, FeedEntry{ID: e.ID, Kind: e.Kind, Actor: e.Actor, Task: e.Task, Group: e.Group, Text: e.Text, At: e.At, Read: e.Read})
+	}
+	return out, nil
+}
+
+// MarkRead marks the caller's whole feed read.
+func MarkRead(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
+	uid, err := me(ctx)
+	if err != nil {
+		return kit.Empty{}, err
+	}
+	entries, err := Entries.Find(ctx, "user", uid)
+	if err != nil {
+		return kit.Empty{}, err
+	}
+	for _, e := range entries {
+		if e.Read {
+			continue
+		}
+		if _, err := Entries.Update(ctx, e.ID, func(e *Entry) error { e.Read = true; return nil }); err != nil {
+			return kit.Empty{}, err
 		}
 	}
-	return nil
+	return kit.Empty{}, nil
 }
 
-// The feed's API.
-var _ = Service.Endpoint("GET /activity", Recent)
-
-// RecentOutput is the latest entries, newest first.
-type RecentOutput struct {
-	Entries []Entry `json:"entries"`
+// UnreadQuery names a user.
+type UnreadQuery struct {
+	User string `query:"user"`
 }
 
-// recentSize is how many entries Recent returns.
-const recentSize = 30
+// UnreadOutput counts a user's unread entries.
+type UnreadOutput struct {
+	Unread int `json:"unread"`
+}
 
-// Recent returns the latest entries, newest first.
-func Recent(ctx context.Context, _ kit.Empty) (RecentOutput, error) {
-	all, err := Feed.List(ctx)
+// Unread counts a user's unread entries.
+func Unread(ctx context.Context, in UnreadQuery) (UnreadOutput, error) {
+	entries, err := Entries.Find(ctx, "user", in.User)
 	if err != nil {
-		return RecentOutput{}, err
+		return UnreadOutput{}, err
 	}
-	slices.SortFunc(all, func(a, b Entry) int { return cmp.Compare(b.At.UnixNano(), a.At.UnixNano()) })
-	return RecentOutput{Entries: all[:min(len(all), recentSize)]}, nil
+	n := 0
+	for _, e := range entries {
+		if !e.Read {
+			n++
+		}
+	}
+	return UnreadOutput{Unread: n}, nil
 }

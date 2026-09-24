@@ -6,6 +6,17 @@
 #
 # go.mod replaces github.com/kitsunium/platform with ../platform until the
 # platform is published; the named build context provides that directory.
+# The web app needs no Node stage: web/dist is committed and embedded.
+#
+# Configuration, with `docker run -e NAME=value`:
+#   TODO_BASE_URL       where users reach the app, for the links in its mails
+#                       (default http://localhost:4000)
+#   KIT_SMTP_URL        smtp://user:password@host:587?tls=starttls|implicit|none;
+#                       unset, mails are only captured and a warning says so —
+#                       set it in production
+#   TODO_ARCHIVE_AFTER  how long a done task stays listed (default 24h)
+#   KIT_TRUST_PROXY=on  behind a reverse proxy: the client address is the first
+#                       X-Forwarded-For hop (sessions list it)
 
 FROM golang:1.27 AS build
 WORKDIR /src/todo

@@ -7,3 +7,6 @@ go.work.sum
 
 /todo
 .DS_Store
+
+# The web app's dependencies: web/dist is committed, node_modules never.
+node_modules/

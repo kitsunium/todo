@@ -1,0 +1,18 @@
+{{.Headline}}
+{{rule .Headline}}
+{{with .Greeting}}
+{{.}}
+{{end}}{{range .Body}}
+{{wrap .}}
+{{end}}{{with .Card}}
+  {{.Label}}: {{.Title}}{{with .Detail}}
+  {{.}}{{end}}
+{{end}}
+{{.Action.Label}}:
+{{.Action.URL}}
+{{range .Notes}}
+{{wrap .}}
+{{end}}
+--
+{{wrap .Reason}}
+Todo · tasks, together · {{.Home}}
