@@ -16,11 +16,11 @@ import (
 // are part of: anyone else's link does not exist for them.
 var (
 	_ = Service.Endpoint("GET /api/contacts", List, kit.Auth())
-	_ = Service.Endpoint("POST /api/contacts", Add, kit.Auth(), kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/contacts/{id}/accept", Accept, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("POST /api/contacts/{id}/decline", Decline, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("POST /api/contacts", Add, kit.Auth(), kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/contacts/{id}/accept", Accept, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/contacts/{id}/decline", Decline, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, kit.Auth(), kit.RateLimitPerClient(10, 20))
 
 	// CheckAPI tells another service whether two users are contacts: tasks
 	// shares only with contacts, groups invites only contacts.

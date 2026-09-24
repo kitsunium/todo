@@ -19,16 +19,16 @@ import (
 // 404, never 403. A member who may not do something is told so: 403.
 var (
 	_ = Service.Endpoint("GET /api/groups", List, kit.Auth())
-	_ = Service.Endpoint("POST /api/groups", Create, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("POST /api/groups", Create, kit.Auth(), kit.RateLimitPerClient(10, 20))
 	_ = Service.Endpoint("GET /api/groups/{id}", Get, kit.Auth())
-	_ = Service.Endpoint("PATCH /api/groups/{id}", Update, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("DELETE /api/groups/{id}", Delete, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("POST /api/groups/{id}/invitations", Invite, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("PATCH /api/groups/{id}", Update, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("DELETE /api/groups/{id}", Delete, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/groups/{id}/invitations", Invite, kit.Auth(), kit.RateLimitPerClient(10, 20))
 	_ = Service.Endpoint("GET /api/invitations", ListInvitations, kit.Auth())
-	_ = Service.Endpoint("POST /api/invitations/{id}/accept", AcceptInvitation, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("POST /api/invitations/{id}/decline", DeclineInvitation, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("DELETE /api/groups/{id}/members/{userId}", RemoveMember, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("PATCH /api/groups/{id}/members/{userId}", SetRole, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("POST /api/invitations/{id}/accept", AcceptInvitation, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/invitations/{id}/decline", DeclineInvitation, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("DELETE /api/groups/{id}/members/{userId}", RemoveMember, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("PATCH /api/groups/{id}/members/{userId}", SetRole, kit.Auth(), kit.RateLimitPerClient(10, 20))
 )
 
 // MemberView is a member, as the group's page shows them.

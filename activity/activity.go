@@ -50,7 +50,7 @@ const Keep = 200
 // The feed API, and the unread count the task list shows in its sidebar.
 var (
 	_ = Service.Endpoint("GET /api/activity", Feed, kit.Auth())
-	_ = Service.Endpoint("POST /api/activity/read", MarkRead, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("POST /api/activity/read", MarkRead, kit.Auth(), kit.RateLimitPerClient(10, 20))
 
 	// UnreadAPI counts a user's unread entries, for the task counts.
 	UnreadAPI = Service.Endpoint("GET /internal/activity/unread", Unread, kit.Private())

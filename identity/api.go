@@ -20,18 +20,18 @@ import (
 // or not, and is rate limited hard: every one of them mails someone or
 // checks a password.
 var (
-	_ = Service.Endpoint("POST /api/auth/signup", Signup, kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/auth/verify", Verify, kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/auth/verify/resend", ResendVerification, kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/auth/login", Login, kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/auth/logout", Logout, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("POST /api/auth/signup", Signup, kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/verify", Verify, kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/verify/resend", ResendVerification, kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/login", Login, kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/logout", Logout, kit.Auth(), kit.RateLimitPerClient(10, 20))
 	_ = Service.Endpoint("GET /api/auth/me", Me, kit.Auth())
-	_ = Service.Endpoint("PATCH /api/auth/me", Rename, kit.Auth(), kit.RateLimit(10, 20))
-	_ = Service.Endpoint("POST /api/auth/password", ChangePassword, kit.Auth(), kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/auth/password/forgot", ForgotPassword, kit.RateLimit(2, 5))
-	_ = Service.Endpoint("POST /api/auth/password/reset", ResetPassword, kit.RateLimit(2, 5))
+	_ = Service.Endpoint("PATCH /api/auth/me", Rename, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/auth/password", ChangePassword, kit.Auth(), kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/password/forgot", ForgotPassword, kit.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/password/reset", ResetPassword, kit.RateLimitPerClient(2, 5))
 	_ = Service.Endpoint("GET /api/auth/sessions", ListSessions, kit.Auth())
-	_ = Service.Endpoint("DELETE /api/auth/sessions/{id}", RevokeSession, kit.Auth(), kit.RateLimit(10, 20))
+	_ = Service.Endpoint("DELETE /api/auth/sessions/{id}", RevokeSession, kit.Auth(), kit.RateLimitPerClient(10, 20))
 )
 
 // The errors of sign-in. Their codes are the contract the web app branches
