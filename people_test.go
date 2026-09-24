@@ -27,7 +27,7 @@ type contactList struct {
 type entry struct {
 	ID, Kind, Text string
 	Read           bool
-	Actor          *user
+	Actor, Target  *user
 	Task           *struct{ ID, Title string }
 	Group          *struct{ ID, Name, Color string }
 }
@@ -35,14 +35,20 @@ type entry struct {
 // feed is GET /api/activity.
 type feed struct{ Entries []entry }
 
-// hasEntry waits for an entry of kind whose text is text in c's feed.
-func (c *client) hasEntry(kind, text string) {
+// hasEntry waits for an entry of kind whose text is text in c's feed, and
+// returns it.
+func (c *client) hasEntry(kind, text string) entry {
 	c.h.t.Helper()
+	var found entry
 	c.h.settle(c.name+"'s feed to say "+text, 50*time.Millisecond, func() bool {
-		return slices.ContainsFunc(call[feed](c, http.StatusOK, "GET", "/api/activity", nil).Entries, func(e entry) bool {
-			return e.Kind == kind && e.Text == text
-		})
+		entries := call[feed](c, http.StatusOK, "GET", "/api/activity", nil).Entries
+		i := slices.IndexFunc(entries, func(e entry) bool { return e.Kind == kind && e.Text == text })
+		if i >= 0 {
+			found = entries[i]
+		}
+		return i >= 0
 	})
+	return found
 }
 
 // Two users become contacts when one asks and the other accepts; someone
@@ -248,4 +254,60 @@ func TestGroups(t *testing.T) {
 	if got := call[struct{ Group *struct{ ID string } }](alice, http.StatusOK, "GET", "/api/tasks/"+task.ID, nil); got.Group != nil {
 		t.Errorf("the task is still on %+v", got.Group)
 	}
+}
+
+// A feed entry names whom it is about besides its actor — the sharee, the
+// assignee, whom a sharing stopped for, the invitee, the removed member, the
+// other end of a contact request — so that a client writes the sentence in
+// its reader's language rather than parse the English one; and no one when
+// the actor acted on themselves.
+func TestFeedEntriesNameWhomTheyAreAbout(t *testing.T) {
+	h := start(t, false)
+	alice := h.signup("Alice", "alice@example.com")
+	bob := h.signup("Bob", "bob@example.com")
+	carol := h.signup("Carol", "carol@example.com")
+	befriend(alice, bob, "bob@example.com")
+	befriend(alice, carol, "carol@example.com")
+	aliceID, bobID, carolID := alice.id(), bob.id(), carol.id()
+	about := func(e entry, id string) {
+		t.Helper()
+		switch {
+		case id == "" && e.Target != nil:
+			t.Errorf("%s %q is about %+v, want no one", e.Kind, e.Text, e.Target)
+		case id != "" && (e.Target == nil || e.Target.ID != id || e.Target.Name == ""):
+			t.Errorf("%s %q is about %+v, want %s", e.Kind, e.Text, e.Target, id)
+		}
+	}
+
+	about(bob.hasEntry("contact.requested", "Alice wants to add you as a contact."), bobID)
+	about(alice.hasEntry("contact.accepted", "Bob accepted your contact request."), aliceID)
+
+	plan := call[struct{ ID string }](alice, http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Plan"})
+	alice.expect(http.StatusOK, "POST", "/api/tasks/"+plan.ID+"/share", map[string]any{"userId": carolID})
+	alice.expect(http.StatusOK, "POST", "/api/tasks/"+plan.ID+"/share", map[string]any{"userId": bobID})
+	about(bob.hasEntry("task.shared", "Alice shared “Plan” with you."), bobID)
+	about(carol.hasEntry("task.shared", "Alice shared “Plan” with Bob."), bobID)
+	alice.expect(http.StatusOK, "PATCH", "/api/tasks/"+plan.ID, map[string]any{"assigneeId": bobID})
+	about(carol.hasEntry("task.assigned", "Alice assigned “Plan” to Bob."), bobID)
+	about(bob.hasEntry("task.assigned", "Alice assigned “Plan” to you."), bobID)
+	alice.expect(http.StatusOK, "PATCH", "/api/tasks/"+plan.ID, map[string]any{"title": "Plan B"})
+	about(bob.hasEntry("task.updated", "Alice updated “Plan B”."), "")
+	alice.expect(http.StatusOK, "DELETE", "/api/tasks/"+plan.ID+"/share/"+carolID, nil)
+	about(bob.hasEntry("task.unshared", "Alice stopped sharing “Plan B” with Carol."), carolID)
+	bob.expect(http.StatusOK, "DELETE", "/api/tasks/"+plan.ID+"/share/"+bobID, nil)
+	about(alice.hasEntry("task.unshared", "Bob left “Plan B”."), "")
+
+	team := call[group](alice, http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Launch"})
+	for _, c := range []struct {
+		who *client
+		id  string
+	}{{bob, bobID}, {carol, carolID}} {
+		inv := call[struct{ ID string }](alice, http.StatusOK, "POST", "/api/groups/"+team.ID+"/invitations", map[string]any{"userId": c.id})
+		about(c.who.hasEntry("group.invited", "Alice invited you to join Launch."), c.id)
+		c.who.expect(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/accept", nil)
+	}
+	about(alice.hasEntry("group.joined", "Bob joined Launch."), "")
+	alice.expect(http.StatusNoContent, "DELETE", "/api/groups/"+team.ID+"/members/"+carolID, nil)
+	about(bob.hasEntry("group.removed", "Alice removed Carol from Launch."), carolID)
+	about(carol.hasEntry("group.removed", "Alice removed you from Launch."), carolID)
 }

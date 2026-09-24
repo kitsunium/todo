@@ -85,7 +85,7 @@ func RecordTaskEvent(ctx context.Context, e tasks.Event) error {
 		}
 		task := &TaskRef{ID: e.TaskID, Title: e.Title}
 		if err := write(ctx, Entry{ID: e.ID + "." + r, UserID: r, Kind: "task." + string(e.Kind),
-			Actor: ref(names, e.ActorID), Task: task, Group: group, Text: text, At: e.At}); err != nil {
+			Actor: ref(names, e.ActorID), Target: about(names, e.ActorID, e.UserID), Task: task, Group: group, Text: text, At: e.At}); err != nil {
 			return err
 		}
 	}
@@ -105,12 +105,12 @@ func RecordContactEvent(ctx context.Context, e contacts.Event) error {
 	default:
 		return nil
 	}
-	names, err := identity.Directory(ctx, e.ActorID)
+	names, err := identity.Directory(ctx, e.ActorID, e.UserID)
 	if err != nil {
 		return err
 	}
 	return write(ctx, Entry{ID: e.ID + "." + e.UserID, UserID: e.UserID, Kind: "contact." + e.Kind,
-		Actor: ref(names, e.ActorID), Text: names[e.ActorID].Name + text, At: e.At})
+		Actor: ref(names, e.ActorID), Target: about(names, e.ActorID, e.UserID), Text: names[e.ActorID].Name + text, At: e.At})
 }
 
 // RecordGroupEvent writes a group's comings and goings into its members'
@@ -139,7 +139,7 @@ func RecordGroupEvent(ctx context.Context, e groups.Event) error {
 			continue
 		}
 		if err := write(ctx, Entry{ID: e.ID + "." + r, UserID: r, Kind: "group." + e.Kind,
-			Actor: ref(names, e.ActorID), Group: group, Text: text, At: e.At}); err != nil {
+			Actor: ref(names, e.ActorID), Target: about(names, e.ActorID, e.UserID), Group: group, Text: text, At: e.At}); err != nil {
 			return err
 		}
 	}
@@ -152,6 +152,16 @@ func you(reader, user, name string) string {
 		return "you"
 	}
 	return name
+}
+
+// about is the other user an event is about — whom a task was shared with,
+// whom a group removed, whom a contact request went to — or nil when the
+// actor acted on themselves, or on no one.
+func about(names map[string]identity.UserRef, actorID, userID string) *identity.UserRef {
+	if userID == "" || userID == actorID {
+		return nil
+	}
+	return ref(names, userID)
 }
 
 // ref is a user of the directory, or nil for none.

@@ -1,4 +1,4 @@
-<!-- updated: 2026-09-24T09:17:28Z -->
+<!-- updated: 2026-09-24T09:54:21Z -->
 # kitsunium/todo
 
 The reference product of kit (`github.com/kitsunium/platform`), and its
@@ -17,7 +17,7 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 | `tasks/api/` | tasks | the `lifecycle` workflow, the whole `/api/tasks` API, views and counts, `group-changes` |
 | `notify/` | notify | the `mail` mailer, `SendAPI` for identity's transactional mails, the mails, their one light design (`templates/`) and their words (`locales/fr.json`, `locales/en.json`) |
 | `notify/dispatch/` | notify | who is mailed when: `task-mail` `contact-mail` `group-mail` `track-due`, the `reminders` store and declared loop |
-| `activity/` | activity | the feeds: `entries`, three subscriptions, `UnreadAPI` |
+| `activity/` | activity | the feeds: `entries` (`kind`, `actor`, `target`, `task`, `group` for a client to write in its reader's language; `text` in English), three subscriptions, `UnreadAPI` |
 | `stats/` | stats | the `sample` job and `GET /api/stats` |
 | `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code), `Locale` (`fr` first, `en`; `NegotiateLocale`, `CheckLocale`, `Resolve`) |
 | `web/` | web | the SPA (`web/src` → committed `web/dist`), owned by the web agent |

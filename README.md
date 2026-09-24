@@ -476,6 +476,12 @@ per language rendered by the SDK's `i18n` (placeholders like `{actor}`, CLDR
 plural forms for counts). The process refuses to start when a key is missing
 from one language or a count lacks a plural form its language needs.
 
+The activity feed is written by the web app in its reader's language, from
+each entry's `kind`, `actor`, `target` (the other person it is about: the
+sharee, the assignee, the invitee, the removed member — absent when the
+actor acted on themselves), `task` and `group`. Its `text` is an English
+sentence kept for the API's sake.
+
 ## API
 
 Every route but sign-up, sign-in, recovery and `/api/stats` needs a session:

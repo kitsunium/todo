@@ -32,9 +32,17 @@ type Entry struct {
 	// Kind is the event, with its source: task.shared, contact.accepted…
 	Kind  string            `json:"kind"`
 	Actor *identity.UserRef `json:"actor,omitempty"`
-	Task  *TaskRef          `json:"task,omitempty"`
-	Group *groups.GroupRef  `json:"group,omitempty"`
-	// Text is the entry as one sentence, written for its recipient.
+	// Target is the other user the entry is about — whom a task was shared
+	// with, unshared from or assigned to, whom a group invited or removed,
+	// whom a contact request went to or came from — for the reader to name,
+	// "you" when it is them. It is absent when the actor acted on
+	// themselves: a task.unshared without a target is someone leaving.
+	Target *identity.UserRef `json:"target,omitempty"`
+	Task   *TaskRef          `json:"task,omitempty"`
+	Group  *groups.GroupRef  `json:"group,omitempty"`
+	// Text is the entry as one English sentence, written for its recipient.
+	// It stays for the API's sake; a client in another language writes its
+	// own sentence from Kind, Actor, Target, Task and Group.
 	Text string    `json:"text"`
 	At   time.Time `json:"at"`
 	Read bool      `json:"read"`
@@ -58,14 +66,15 @@ var (
 
 // FeedEntry is an entry as its owner reads it.
 type FeedEntry struct {
-	ID    string            `json:"id"`
-	Kind  string            `json:"kind"`
-	Actor *identity.UserRef `json:"actor,omitempty"`
-	Task  *TaskRef          `json:"task,omitempty"`
-	Group *groups.GroupRef  `json:"group,omitempty"`
-	Text  string            `json:"text"`
-	At    time.Time         `json:"at"`
-	Read  bool              `json:"read"`
+	ID     string            `json:"id"`
+	Kind   string            `json:"kind"`
+	Actor  *identity.UserRef `json:"actor,omitempty"`
+	Target *identity.UserRef `json:"target,omitempty"`
+	Task   *TaskRef          `json:"task,omitempty"`
+	Group  *groups.GroupRef  `json:"group,omitempty"`
+	Text   string            `json:"text"`
+	At     time.Time         `json:"at"`
+	Read   bool              `json:"read"`
 }
 
 // FeedOutput is the caller's feed, newest first.
@@ -104,7 +113,7 @@ func Feed(ctx context.Context, _ kit.Empty) (FeedOutput, error) {
 	}
 	out := FeedOutput{Entries: make([]FeedEntry, 0, len(entries))}
 	for _, e := range entries {
-		out.Entries = append(out.Entries, FeedEntry{ID: e.ID, Kind: e.Kind, Actor: e.Actor, Task: e.Task, Group: e.Group, Text: e.Text, At: e.At, Read: e.Read})
+		out.Entries = append(out.Entries, FeedEntry{ID: e.ID, Kind: e.Kind, Actor: e.Actor, Target: e.Target, Task: e.Task, Group: e.Group, Text: e.Text, At: e.At, Read: e.Read})
 	}
 	return out, nil
 }
