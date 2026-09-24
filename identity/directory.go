@@ -9,13 +9,25 @@ import (
 
 // The directory: how the other services learn who a user is. They never read
 // the accounts store; they call these, in-process.
+//
+// fr: L’annuaire : comment les autres services apprennent qui est un
+// utilisateur. Ils ne lisent jamais le store des comptes ; ils appellent ces
+// endpoints, dans le processus.
 var (
 	// UserByEmailAPI finds the user who owns an address — contacts asks it
 	// whether to send a contact request or an invitation.
+	//
+	// fr: UserByEmailAPI trouve l’utilisateur à qui appartient une adresse —
+	// contacts lui demande s’il faut envoyer une demande de contact ou une
+	// invitation.
 	UserByEmailAPI = Service.Endpoint("GET /internal/users/by-email", UserByEmail, kit.Private())
 
 	// UsersAPI turns user IDs into the names and addresses other users see,
 	// and the language each reads — notify writes to them in it.
+	//
+	// fr: UsersAPI traduit des ID d’utilisateurs en noms et adresses tels que
+	// les voient les autres utilisateurs, avec la langue que lit chacun — celle
+	// dans laquelle notify leur écrit.
 	UsersAPI = Service.Endpoint("POST /internal/users/batch", Users, kit.Private())
 )
 
@@ -32,6 +44,11 @@ type UserByEmailOutput struct {
 // UserByEmail returns the user who owns an address. Only a verified address
 // counts: an account nobody confirmed is nobody yet, so an invitation to it
 // waits for the verification — and then becomes a request.
+//
+// fr: UserByEmail renvoie l’utilisateur à qui appartient une adresse. Seule une
+// adresse vérifiée compte : un compte que personne n’a confirmé n’est encore
+// personne, alors une invitation qui lui est adressée attend la vérification —
+// puis devient une demande.
 func UserByEmail(ctx context.Context, in EmailQuery) (UserByEmailOutput, error) {
 	a, found, err := accountByEmail(ctx, NormalizeEmail(in.Email))
 	if err != nil || !found || a.Status == Unverified {
@@ -62,6 +79,8 @@ type UsersOutput struct {
 }
 
 // Users returns the users with the given IDs.
+//
+// fr: Users renvoie les utilisateurs dont on donne les ID.
 func Users(ctx context.Context, in IDs) (UsersOutput, error) {
 	out := UsersOutput{Users: []Person{}}
 	seen := map[string]bool{}

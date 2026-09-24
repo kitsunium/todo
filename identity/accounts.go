@@ -58,6 +58,9 @@ func (a Account) locale() wire.Locale { return a.Locale.Resolve() }
 
 // Accounts keeps every account, keyed by user ID. No two accounts share an
 // address: the unique index refuses the second.
+//
+// fr: Accounts garde chaque compte, sous l’ID de son utilisateur. Deux comptes
+// ne partagent jamais une adresse : l’index unique refuse le second.
 var Accounts = Service.Store("accounts", func(a Account) string { return a.ID },
 	kit.Unique("email", func(a Account) string { return a.Email }))
 
@@ -71,6 +74,11 @@ const LockFor = 15 * time.Minute
 // its first mail, locked by its own guard after too many wrong passwords,
 // unlocked by its own timer — or by a password reset, which also verifies an
 // address that never was.
+//
+// fr: AccountLifecycle est la vie d’un compte : il est vérifié par le lien de
+// son premier mail, verrouillé par sa propre garde après trop de mots de passe
+// faux, déverrouillé par son propre timer — ou par une réinitialisation du mot
+// de passe, qui vérifie aussi une adresse qui ne l’avait jamais été.
 var AccountLifecycle = Service.Workflow("accounts", Accounts, func(a *Account) *AccountStatus { return &a.Status }).
 	Initial(Unverified).
 	On("verify", Unverified, Active).
@@ -84,10 +92,16 @@ var AccountLifecycle = Service.Workflow("accounts", Accounts, func(a *Account) *
 
 // tooManyFailures holds once an account refused MaxFailedLogins passwords
 // in a row.
+//
+// fr: tooManyFailures est vraie dès qu’un compte a refusé MaxFailedLogins mots
+// de passe d’affilée.
 func tooManyFailures(a Account, _ time.Time) bool { return a.FailedLogins >= MaxFailedLogins }
 
 // activate gives an account a clean slate: no failures, no lock, and the
 // date its address was proved.
+//
+// fr: activate remet un compte à zéro : plus d’échecs, plus de verrou, et la
+// date à laquelle son adresse a été prouvée.
 func activate(ctx context.Context, a *Account) error {
 	now := wire.Now(ctx)
 	a.FailedLogins, a.LockedAt, a.UpdatedAt = 0, nil, now
@@ -98,6 +112,8 @@ func activate(ctx context.Context, a *Account) error {
 }
 
 // stampLock records when the account locked.
+//
+// fr: stampLock note quand le compte s’est verrouillé.
 func stampLock(ctx context.Context, a *Account) error {
 	now := wire.Now(ctx)
 	a.LockedAt, a.UpdatedAt = &now, now
@@ -126,10 +142,19 @@ const (
 // AccountEvents announces sign-ups, verified addresses, changed passwords and
 // locked accounts to the services that care: contacts turns the invitations
 // waiting for a newly verified address into requests.
+//
+// fr: AccountEvents annonce les inscriptions, les adresses vérifiées, les mots
+// de passe changés et les comptes verrouillés aux services que cela intéresse :
+// contacts change en demandes les invitations qui attendaient une adresse tout
+// juste vérifiée.
 var AccountEvents = Service.Topic[AccountEvent]("accounts")
 
 // announceAccount publishes the transitions other services care about,
 // whoever fired them: an endpoint, the lock guard.
+//
+// fr: announceAccount publie les transitions qui intéressent les autres
+// services, quel que soit leur déclencheur : un endpoint, la garde de
+// verrouillage.
 func announceAccount(ctx context.Context, c kit.Change[Account, AccountStatus]) error {
 	kind := ""
 	switch {

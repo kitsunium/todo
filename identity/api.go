@@ -19,6 +19,11 @@ import (
 // recover a password — answers the same whether an address has an account
 // or not, and is rate limited hard: every one of them mails someone or
 // checks a password.
+//
+// fr: L’API des comptes. Ce qu’un inconnu peut appeler — s’inscrire, vérifier,
+// se connecter, récupérer un mot de passe — répond pareil, qu’une adresse ait
+// un compte ou non, et son débit est sévèrement limité : chacun de ces appels
+// envoie un mail ou vérifie un mot de passe.
 var (
 	_ = Service.Endpoint("POST /api/auth/signup", Signup, kit.RateLimitPerClient(2, 5))
 	_ = Service.Endpoint("POST /api/auth/verify", Verify, kit.RateLimitPerClient(2, 5))
@@ -86,6 +91,13 @@ type SignupOutput struct {
 // An address that already has an account gets an "account exists" mail
 // instead — in its owner's language — and the caller the very same answer:
 // sign-up never tells a stranger who uses the product.
+//
+// fr: Signup ouvre un compte non vérifié et envoie le lien qui le vérifie, dans
+// la langue du compte : celle que demandait le formulaire, ou celle du
+// navigateur. Une adresse qui a déjà un compte reçoit à la place un mail
+// « compte existant » — dans la langue de son titulaire — et l’appelant
+// exactement la même réponse : l’inscription ne dit jamais à un inconnu qui
+// utilise le produit.
 func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	email := NormalizeEmail(in.Email)
 	if !ValidEmail(email) {
@@ -161,6 +173,10 @@ type TokenInput struct {
 // Verify proves an account's address with the link of its verification
 // mail, and signs it in. A link is good once, for an account still waiting
 // for it.
+//
+// fr: Verify prouve l’adresse d’un compte avec le lien de son mail de
+// vérification, et le connecte. Un lien ne sert qu’une fois, pour un compte qui
+// l’attend encore.
 func Verify(ctx context.Context, in TokenInput) (UserOutput, error) {
 	t, err := redeem(ctx, in.Token, PurposeVerify)
 	if err != nil {
@@ -194,6 +210,9 @@ type SentOutput struct {
 
 // ResendVerification mails a new verification link to an account that has
 // not verified its address yet.
+//
+// fr: ResendVerification envoie un nouveau lien de vérification à un compte qui
+// n’a pas encore vérifié son adresse.
 func ResendVerification(ctx context.Context, in EmailInput) (SentOutput, error) {
 	email := NormalizeEmail(in.Email)
 	if !ValidEmail(email) {
@@ -216,6 +235,11 @@ type LoginInput struct {
 // lock the account for fifteen minutes; an unverified account is told to
 // verify only once its password proved right, so the answer never tells a
 // stranger whether an address has an account.
+//
+// fr: Login connecte un utilisateur avec son mot de passe. Cinq mots de passe
+// faux d’affilée verrouillent le compte pendant quinze minutes ; un compte non
+// vérifié n’est prié de se vérifier qu’une fois son mot de passe reconnu, pour
+// que la réponse ne dise jamais à un inconnu si une adresse a un compte.
 func Login(ctx context.Context, in LoginInput) (UserOutput, error) {
 	a, found, err := accountByEmail(ctx, NormalizeEmail(in.Email))
 	if err != nil {
@@ -271,6 +295,8 @@ func Login(ctx context.Context, in LoginInput) (UserOutput, error) {
 }
 
 // Logout ends the caller's session and forgets its cookie.
+//
+// fr: Logout ferme la session de l’appelant et oublie son cookie.
 func Logout(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
 	_, p, err := caller(ctx)
 	if err != nil {
@@ -284,6 +310,8 @@ func Logout(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
 }
 
 // Me returns the caller's account.
+//
+// fr: Me renvoie le compte de l’appelant.
 func Me(ctx context.Context, _ kit.Empty) (UserOutput, error) {
 	uid, _, err := caller(ctx)
 	if err != nil {
@@ -306,6 +334,8 @@ type ProfileInput struct {
 }
 
 // UpdateProfile changes the caller's display name and language.
+//
+// fr: UpdateProfile change le nom affiché et la langue de l’appelant.
 func UpdateProfile(ctx context.Context, in ProfileInput) (UserOutput, error) {
 	uid, _, err := caller(ctx)
 	if err != nil {
@@ -355,6 +385,9 @@ type ChangePasswordInput struct {
 
 // ChangePassword replaces the caller's password, once the current one is
 // proved, and signs out every other session.
+//
+// fr: ChangePassword remplace le mot de passe de l’appelant, une fois l’actuel
+// prouvé, et déconnecte toutes ses autres sessions.
 func ChangePassword(ctx context.Context, in ChangePasswordInput) (kit.Empty, error) {
 	uid, p, err := caller(ctx)
 	if err != nil {
@@ -390,6 +423,10 @@ func ChangePassword(ctx context.Context, in ChangePasswordInput) (kit.Empty, err
 
 // ForgotPassword mails a password reset link to the account of an address,
 // if it has one. The answer is the same when it has none.
+//
+// fr: ForgotPassword envoie un lien de réinitialisation du mot de passe au
+// compte d’une adresse, si elle en a un. La réponse est la même quand elle n’en
+// a pas.
 func ForgotPassword(ctx context.Context, in EmailInput) (SentOutput, error) {
 	email := NormalizeEmail(in.Email)
 	if !ValidEmail(email) {
@@ -419,6 +456,11 @@ type ResetInput struct {
 // ResetPassword chooses a new password with the link of a reset mail. It
 // unlocks a locked account and verifies an unverified one — the link proved
 // the address — signs out every session, and signs this one in.
+//
+// fr: ResetPassword choisit un nouveau mot de passe avec le lien d’un mail de
+// réinitialisation. Il déverrouille un compte verrouillé et vérifie un compte
+// non vérifié — le lien a prouvé l’adresse —, déconnecte toutes les sessions,
+// et connecte celle-ci.
 func ResetPassword(ctx context.Context, in ResetInput) (UserOutput, error) {
 	hash, err := hashPassword(in.Password) // before the link is used up
 	if err != nil {
@@ -469,6 +511,9 @@ type SessionsOutput struct {
 }
 
 // ListSessions lists the caller's live sessions: where they are signed in.
+//
+// fr: ListSessions liste les sessions actives de l’appelant : là où il est
+// connecté.
 func ListSessions(ctx context.Context, _ kit.Empty) (SessionsOutput, error) {
 	uid, p, err := caller(ctx)
 	if err != nil {
@@ -501,6 +546,9 @@ type SessionID struct {
 
 // RevokeSession signs one of the caller's sessions out. Revoking the current
 // one also forgets its cookie.
+//
+// fr: RevokeSession déconnecte l’une des sessions de l’appelant. Révoquer la
+// session courante oublie aussi son cookie.
 func RevokeSession(ctx context.Context, in SessionID) (kit.Empty, error) {
 	uid, p, err := caller(ctx)
 	if err != nil {

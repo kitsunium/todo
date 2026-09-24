@@ -10,12 +10,20 @@ import (
 
 // The invitations by email wait for identity to say their address now has a
 // verified account.
+//
+// fr: Les invitations par mail attendent que le service identity annonce que
+// leur adresse a désormais un compte vérifié.
 var _ = Service.Subscribe("claim-invites", identity.AccountEvents, ClaimInvites)
 
 // ClaimInvites turns the invitations waiting for a newly verified address
 // into contact requests from whoever sent them. Delivery is at least once:
 // an invitation already claimed is skipped, and a request that already
 // exists is left as it is.
+//
+// fr: ClaimInvites change les invitations qui attendaient une adresse tout
+// juste vérifiée en demandes de contact de la part de leurs expéditeurs. Chaque
+// événement est livré au moins une fois : une invitation déjà réclamée est
+// ignorée, et une demande qui existe déjà est laissée telle quelle.
 func ClaimInvites(ctx context.Context, e identity.AccountEvent) error {
 	if e.Kind != identity.Verified {
 		return nil

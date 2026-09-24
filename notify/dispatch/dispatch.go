@@ -23,6 +23,8 @@ import (
 )
 
 // The mails people get when someone works with them.
+//
+// fr: Les mails que reçoivent les gens quand quelqu’un travaille avec eux.
 var (
 	_ = notify.Service.Subscribe("task-mail", tasks.Events, MailTaskEvent)
 	_ = notify.Service.Subscribe("contact-mail", contacts.Events, MailContactEvent)
@@ -31,6 +33,9 @@ var (
 
 // MailTaskEvent mails a user a task was shared with, or assigned to — by
 // someone else.
+//
+// fr: MailTaskEvent écrit à un utilisateur avec qui une tâche a été partagée,
+// ou à qui elle a été assignée — par quelqu’un d’autre.
 func MailTaskEvent(ctx context.Context, e tasks.Event) error {
 	if (e.Kind != tasks.KindShared && e.Kind != tasks.KindAssigned) || e.UserID == "" || e.UserID == e.ActorID {
 		return nil
@@ -54,6 +59,10 @@ func MailTaskEvent(ctx context.Context, e tasks.Event) error {
 
 // MailContactEvent mails the addressee of a contact request, the requester
 // of an accepted one, and the address an invitation to join is for.
+//
+// fr: MailContactEvent écrit au destinataire d’une demande de contact, au
+// demandeur d’une demande acceptée, et à l’adresse que vise une invitation à
+// rejoindre le produit.
 func MailContactEvent(ctx context.Context, e contacts.Event) error {
 	people, err := identity.People(ctx, e.ActorID, e.UserID)
 	if err != nil {
@@ -81,6 +90,8 @@ func MailContactEvent(ctx context.Context, e contacts.Event) error {
 }
 
 // MailGroupEvent mails a user invited into a group.
+//
+// fr: MailGroupEvent écrit à un utilisateur invité dans un groupe.
 func MailGroupEvent(ctx context.Context, e groups.Event) error {
 	if e.Kind != groups.KindInvited || e.UserID == "" {
 		return nil

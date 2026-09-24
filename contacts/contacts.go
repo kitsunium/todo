@@ -13,7 +13,7 @@ import (
 )
 
 // Service owns contacts, contact requests and invitations.
-var Service = kit.NewService("contacts", "Who you work with: contact requests between users, and invitations for people who have no account yet.")
+var Service = kit.NewService("contacts", "Who you work with: contact requests between users, and invitations for people who have no account yet.\n\nfr: Ceux avec qui vous travaillez : les demandes de contact entre utilisateurs, et les invitations adressées aux personnes qui n’ont pas encore de compte.")
 
 // LinkStatus is where a contact request stands.
 type LinkStatus string
@@ -58,6 +58,9 @@ func pairOf(a, b string) string {
 }
 
 // Links keeps one link per pair of users, found by ID and listed per user.
+//
+// fr: Links garde un lien par paire d’utilisateurs, retrouvé par ID et listé
+// par utilisateur.
 var Links = Service.Store("links", func(l Link) string { return l.Pair },
 	kit.Unique("id", func(l Link) string { return l.ID }),
 	kit.Index("user", func(l Link) []string { return []string{l.RequesterID, l.AddresseeID} }))
@@ -67,6 +70,9 @@ const RequestsExpireAfter = 14 * 24 * time.Hour
 
 // Requests is the life of a contact request: the addressee accepts or
 // declines it, the requester cancels it, or it expires unanswered.
+//
+// fr: Requests est la vie d’une demande de contact : le destinataire l’accepte
+// ou la refuse, le demandeur l’annule, ou elle expire sans réponse.
 var Requests = Service.Workflow("requests", Links, func(l *Link) *LinkStatus { return &l.Status }).
 	Initial(Pending).
 	On("accept", Pending, Accepted).
@@ -77,6 +83,8 @@ var Requests = Service.Workflow("requests", Links, func(l *Link) *LinkStatus { r
 	OnTransition(announceLink)
 
 // stampAccepted records since when two users are contacts.
+//
+// fr: stampAccepted note depuis quand deux utilisateurs sont en contact.
 func stampAccepted(ctx context.Context, l *Link) error {
 	now := wire.Now(ctx)
 	l.AcceptedAt = &now
@@ -106,6 +114,9 @@ type Invite struct {
 
 // Invites keeps the invitations by email, found by the address they wait for
 // and by who sent them.
+//
+// fr: Invites garde les invitations par mail, retrouvées par l’adresse qu’elles
+// attendent et par leur expéditeur.
 var Invites = Service.Store("invites", func(i Invite) string { return i.ID },
 	kit.Index("email", func(i Invite) []string { return []string{i.Email} }),
 	kit.Index("inviter", func(i Invite) []string { return []string{i.InviterID} }))
@@ -135,10 +146,17 @@ type Event struct {
 
 // Events announces requests, acceptances and invitations: notify mails them,
 // activity writes them in the feeds.
+//
+// fr: Events annonce les demandes, les acceptations et les invitations : notify
+// les envoie par mail, activity les écrit dans les fils d’activité.
 var Events = Service.Topic[Event]("events")
 
 // announceLink publishes a new request and an accepted one, whoever made
 // them: a user, or an invitation claimed by a new account.
+//
+// fr: announceLink publie une nouvelle demande et une demande acceptée, quel
+// qu’en soit l’auteur : un utilisateur, ou une invitation réclamée par un
+// nouveau compte.
 func announceLink(ctx context.Context, c kit.Change[Link, LinkStatus]) error {
 	e := Event{ID: kit.NewID("event"), LinkID: c.Entity.ID, At: wire.Now(ctx)}
 	switch c.To {

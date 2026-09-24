@@ -13,6 +13,11 @@ import (
 // a select, the way a Go program waits. kit starts it with the app, cancels
 // it on shutdown, restarts it after a failure, and reads its select to draw
 // what it waits on.
+//
+// fr: SessionReaper est la boucle d’événements du service identity, écrite à la
+// main : un ticker et un select, comme attend un programme Go. kit la démarre
+// avec l’app, l’annule à l’arrêt, la relance après une panne, et lit son select
+// pour dessiner ce qu’elle attend.
 var SessionReaper = Service.Go("session-reaper", ReapSessions)
 
 // reapEvery is the reaper's period.
@@ -24,6 +29,10 @@ const spentFor = 24 * time.Hour
 // ReapSessions deletes, every minute, the sessions that expired and the
 // one-time links spent more than a day ago. An expired session already
 // signs no one in; the reaper keeps the store from growing forever.
+//
+// fr: ReapSessions supprime, chaque minute, les sessions expirées et les liens
+// à usage unique consommés depuis plus d’un jour. Une session expirée ne
+// connecte déjà plus personne ; le reaper empêche le store de grossir sans fin.
 func ReapSessions(ctx context.Context) error {
 	t := time.NewTicker(reapEvery)
 	defer t.Stop()

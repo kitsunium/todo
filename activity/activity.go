@@ -15,7 +15,7 @@ import (
 )
 
 // Service owns the feeds.
-var Service = kit.NewService("activity", "What happened to me: a feed per user, written from the events of tasks, contacts and groups.")
+var Service = kit.NewService("activity", "What happened to me: a feed per user, written from the events of tasks, contacts and groups.\n\nfr: Ce qui m’est arrivé : un fil par utilisateur, écrit à partir des événements des tâches, des contacts et des groupes.")
 
 // TaskRef is the task an entry is about.
 type TaskRef struct {
@@ -49,6 +49,8 @@ type Entry struct {
 }
 
 // Entries keeps every feed, listed per user.
+//
+// fr: Entries garde tous les fils, listés par utilisateur.
 var Entries = Service.Store("entries", func(e Entry) string { return e.ID },
 	kit.Index("user", func(e Entry) []string { return []string{e.UserID} }))
 
@@ -56,11 +58,17 @@ var Entries = Service.Store("entries", func(e Entry) string { return e.ID },
 const Keep = 200
 
 // The feed API, and the unread count the task list shows in its sidebar.
+//
+// fr: L’API du fil, et le nombre de non-lus que la liste de tâches affiche dans
+// sa barre latérale.
 var (
 	_ = Service.Endpoint("GET /api/activity", Feed, kit.Auth())
 	_ = Service.Endpoint("POST /api/activity/read", MarkRead, kit.Auth(), kit.RateLimitPerClient(10, 20))
 
 	// UnreadAPI counts a user's unread entries, for the task counts.
+	//
+	// fr: UnreadAPI compte les entrées non lues d’un utilisateur, pour les
+	// compteurs des tâches.
 	UnreadAPI = Service.Endpoint("GET /internal/activity/unread", Unread, kit.Private())
 )
 
@@ -102,6 +110,8 @@ func feedOf(ctx context.Context, uid string) ([]Entry, error) {
 }
 
 // Feed returns the caller's feed, newest first.
+//
+// fr: Feed renvoie le fil de l’appelant, du plus récent au plus ancien.
 func Feed(ctx context.Context, _ kit.Empty) (FeedOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -119,6 +129,8 @@ func Feed(ctx context.Context, _ kit.Empty) (FeedOutput, error) {
 }
 
 // MarkRead marks the caller's whole feed read.
+//
+// fr: MarkRead marque comme lu tout le fil de l’appelant.
 func MarkRead(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -150,6 +162,8 @@ type UnreadOutput struct {
 }
 
 // Unread counts a user's unread entries.
+//
+// fr: Unread compte les entrées non lues d’un utilisateur.
 func Unread(ctx context.Context, in UnreadQuery) (UnreadOutput, error) {
 	entries, err := Entries.Find(ctx, "user", in.User)
 	if err != nil {

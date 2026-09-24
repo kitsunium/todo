@@ -14,6 +14,10 @@ import (
 
 // The contacts API. Every route acts for the signed-in user, on links they
 // are part of: anyone else's link does not exist for them.
+//
+// fr: L’API des contacts. Chaque route agit pour l’utilisateur connecté, sur
+// les liens dont il fait partie : le lien de quelqu’un d’autre n’existe pas
+// pour lui.
 var (
 	_ = Service.Endpoint("GET /api/contacts", List, kit.Auth())
 	_ = Service.Endpoint("POST /api/contacts", Add, kit.Auth(), kit.RateLimitPerClient(2, 5))
@@ -24,6 +28,10 @@ var (
 
 	// CheckAPI tells another service whether two users are contacts: tasks
 	// shares only with contacts, groups invites only contacts.
+	//
+	// fr: CheckAPI dit à un autre service si deux utilisateurs sont en
+	// contact : tasks ne partage qu’avec des contacts, groups n’invite que des
+	// contacts.
 	CheckAPI = Service.Endpoint("GET /internal/contacts/check", Check, kit.Private())
 )
 
@@ -70,6 +78,10 @@ func me(ctx context.Context) (string, error) {
 // List returns the user's contacts, by name; the requests waiting for them
 // and those they sent, newest first; and their invitations still waiting for
 // an account.
+//
+// fr: List renvoie les contacts de l’utilisateur, par nom ; les demandes qui
+// l’attendent et celles qu’il a envoyées, les plus récentes d’abord ; et ses
+// invitations qui attendent encore un compte.
 func List(ctx context.Context, _ kit.Empty) (ListOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -150,6 +162,10 @@ type AddOutput struct {
 // Add asks someone to become a contact. With an account, they get a request
 // to accept; without one, an invitation by email to join, which becomes a
 // request once they sign up.
+//
+// fr: Add propose à quelqu’un de devenir un contact. S’il a un compte, il
+// reçoit une demande à accepter ; sinon, une invitation par mail à rejoindre le
+// produit, qui devient une demande dès son inscription.
 func Add(ctx context.Context, in AddInput) (AddOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -222,6 +238,8 @@ func linkOf(ctx context.Context, id, uid string) (Link, error) {
 }
 
 // Accept makes the requester a contact. Only the addressee accepts.
+//
+// fr: Accept fait du demandeur un contact. Seul le destinataire accepte.
 func Accept(ctx context.Context, in ByID) (ContactOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -253,6 +271,9 @@ func Accept(ctx context.Context, in ByID) (ContactOutput, error) {
 
 // Decline turns a request down. Only the addressee declines; the requester
 // is not told.
+//
+// fr: Decline refuse une demande. Seul le destinataire refuse ; le demandeur
+// n’en est pas averti.
 func Decline(ctx context.Context, in ByID) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -277,6 +298,9 @@ func Decline(ctx context.Context, in ByID) (kit.Empty, error) {
 }
 
 // Cancel withdraws a request, or an invitation by email, the user sent.
+//
+// fr: Cancel retire une demande, ou une invitation par mail, que l’utilisateur
+// a envoyée.
 func Cancel(ctx context.Context, in ByID) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -305,6 +329,9 @@ func Cancel(ctx context.Context, in ByID) (kit.Empty, error) {
 
 // Remove ends a contact — either side may — or deletes a request or an
 // invitation the user is part of.
+//
+// fr: Remove met fin à un contact — l’un comme l’autre le peut — ou supprime
+// une demande ou une invitation dont l’utilisateur fait partie.
 func Remove(ctx context.Context, in ByID) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -350,6 +377,8 @@ type CheckOutput struct {
 }
 
 // Check reports whether two users are contacts.
+//
+// fr: Check indique si deux utilisateurs sont en contact.
 func Check(ctx context.Context, in CheckInput) (CheckOutput, error) {
 	if in.A == "" || in.B == "" || in.A == in.B {
 		return CheckOutput{}, nil

@@ -19,15 +19,24 @@ import (
 )
 
 // Service owns every mail the product sends.
-var Service = kit.NewService("notify", "Every mail the product sends: the outbox, one design, the transactional mails and the notifications.")
+var Service = kit.NewService("notify", "Every mail the product sends: the outbox, one design, the transactional mails and the notifications.\n\nfr: Tous les mails qu’envoie le produit : l’outbox, un seul design, les mails transactionnels et les notifications.")
 
 // Mail is the product's outbound mail. Every message waits in its durable
 // outbox until the transport accepts it: SMTP when KIT_SMTP_URL is set, and
 // otherwise the capture transport, whose messages the Studio's mailbox shows.
+//
+// fr: Mail est le courrier sortant du produit. Chaque message attend dans son
+// outbox durable jusqu’à ce que le transport l’accepte : SMTP quand
+// KIT_SMTP_URL est défini, sinon le transport de capture, dont la boîte mail du
+// Studio montre les messages.
 var Mail = Service.Mailer("mail", kit.From("Todo", "hello@todo.localhost"))
 
 // SendAPI sends one of identity's transactional mails — the verification,
 // the password reset, the "you already have an account" — on its behalf.
+//
+// fr: SendAPI envoie l’un des mails transactionnels du service identity, en son
+// nom — la vérification, la réinitialisation du mot de passe, le « vous avez
+// déjà un compte ».
 var SendAPI = Service.Endpoint("POST /internal/notify/send", Send, kit.Private())
 
 // The transactional templates SendAPI renders.
@@ -61,6 +70,11 @@ type SendOutput struct {
 // Send renders a transactional mail in the product's design and the
 // recipient's language, and puts it in the outbox. It returns once the mail is safely queued; the mailer's own
 // loop delivers it, retrying a failure.
+//
+// fr: Send met en forme un mail transactionnel dans le design du produit et la
+// langue du destinataire, puis le dépose dans l’outbox. Il rend la main dès que
+// le mail est à l’abri dans la file ; la boucle propre au mailer le livre, et
+// réessaie en cas d’échec.
 func Send(ctx context.Context, in SendInput) (SendOutput, error) {
 	var m Message
 	switch in.Template {

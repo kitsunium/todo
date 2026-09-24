@@ -17,6 +17,10 @@ import (
 
 // The groups API. A group a user is not a member of does not exist for them:
 // 404, never 403. A member who may not do something is told so: 403.
+//
+// fr: L’API des groupes. Un groupe dont l’utilisateur n’est pas membre n’existe
+// pas pour lui : 404, jamais 403. Un membre qui n’a pas le droit de faire
+// quelque chose en est averti : 403.
 var (
 	_ = Service.Endpoint("GET /api/groups", List, kit.Auth())
 	_ = Service.Endpoint("POST /api/groups", Create, kit.Auth(), kit.RateLimitPerClient(10, 20))
@@ -127,6 +131,8 @@ func presentOne(ctx context.Context, uid string, g Group) (View, error) {
 }
 
 // List returns the caller's groups, by name.
+//
+// fr: List renvoie les groupes de l’appelant, par nom.
 func List(ctx context.Context, _ kit.Empty) (ListOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -167,6 +173,8 @@ func color(c, name string) (string, error) {
 }
 
 // Create starts a group; its creator is its owner.
+//
+// fr: Create crée un groupe ; son créateur en est le propriétaire.
 func Create(ctx context.Context, in CreateInput) (View, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -195,6 +203,8 @@ type GroupID struct {
 }
 
 // Get returns one of the caller's groups.
+//
+// fr: Get renvoie l’un des groupes de l’appelant.
 func Get(ctx context.Context, in GroupID) (View, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -215,6 +225,9 @@ type UpdateInput struct {
 }
 
 // Update renames or recolors a group. Its owner and admins may.
+//
+// fr: Update renomme un groupe ou change sa couleur. Son propriétaire et ses
+// admins en ont le droit.
 func Update(ctx context.Context, in UpdateInput) (View, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -254,6 +267,10 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 
 // Delete deletes a group: its pending invitations are revoked, and its tasks
 // go back to their owners' lists. Only its owner may.
+//
+// fr: Delete supprime un groupe : ses invitations en attente sont révoquées, et
+// ses tâches retournent sur les listes de leurs propriétaires. Seul son
+// propriétaire en a le droit.
 func Delete(ctx context.Context, in GroupID) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -303,6 +320,9 @@ type InvitationView struct {
 
 // Invite asks one of the caller's contacts to join a group. Its owner and
 // admins may invite.
+//
+// fr: Invite propose à l’un des contacts de l’appelant de rejoindre un groupe.
+// Son propriétaire et ses admins peuvent inviter.
 func Invite(ctx context.Context, in InviteInput) (InvitationView, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -355,6 +375,9 @@ type InvitationsOutput struct {
 
 // ListInvitations returns the invitations waiting for the caller's answer,
 // newest first.
+//
+// fr: ListInvitations renvoie les invitations qui attendent la réponse de
+// l’appelant, les plus récentes d’abord.
 func ListInvitations(ctx context.Context, _ kit.Empty) (InvitationsOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -417,6 +440,8 @@ func received(ctx context.Context, id, uid string) (Invitation, error) {
 }
 
 // AcceptInvitation joins the group the caller is invited to.
+//
+// fr: AcceptInvitation fait entrer l’appelant dans le groupe où il est invité.
 func AcceptInvitation(ctx context.Context, in InvitationID) (View, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -437,6 +462,8 @@ func AcceptInvitation(ctx context.Context, in InvitationID) (View, error) {
 }
 
 // DeclineInvitation turns an invitation down.
+//
+// fr: DeclineInvitation refuse une invitation.
 func DeclineInvitation(ctx context.Context, in InvitationID) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -459,6 +486,10 @@ type MemberInput struct {
 // RemoveMember takes a member out of a group. Anyone may leave, but the
 // owner, who deletes the group instead; the owner removes anyone, an admin
 // removes members.
+//
+// fr: RemoveMember retire un membre d’un groupe. Chacun peut partir, sauf le
+// propriétaire, qui supprime le groupe à la place ; le propriétaire retire qui
+// il veut, un admin retire des membres.
 func RemoveMember(ctx context.Context, in MemberInput) (kit.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -500,6 +531,9 @@ type RoleInput struct {
 }
 
 // SetRole makes a member an admin, or an admin a member. Only the owner may.
+//
+// fr: SetRole fait d’un membre un admin, ou d’un admin un membre. Seul le
+// propriétaire en a le droit.
 func SetRole(ctx context.Context, in RoleInput) (View, error) {
 	uid, err := me(ctx)
 	if err != nil {

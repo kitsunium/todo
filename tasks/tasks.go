@@ -16,7 +16,7 @@ import (
 )
 
 // Service owns the task list.
-var Service = kit.NewService("tasks", "The task list: every task, its lifecycle, who sees it and what happens to it.")
+var Service = kit.NewService("tasks", "The task list: every task, its lifecycle, who sees it and what happens to it.\n\nfr: La liste de tâches : chaque tâche, son cycle de vie, qui la voit et ce qui lui arrive.")
 
 // Status is where a task stands in its lifecycle.
 type Status string
@@ -82,6 +82,10 @@ func (t Task) Audience() []string {
 
 // Tasks keeps every task, indexed by the users and the group it concerns:
 // what a user sees is found through the indexes, never by reading them all.
+//
+// fr: Tasks garde chaque tâche, indexée par les utilisateurs et le groupe
+// qu’elle concerne : ce que voit un utilisateur se trouve par les index, jamais
+// en les lisant toutes.
 var Tasks = Service.Store("tasks", func(t Task) string { return t.ID },
 	kit.Index("owner", func(t Task) []string { return []string{t.OwnerID} }),
 	kit.Index("shared", func(t Task) []string { return t.SharedWith }),
@@ -135,4 +139,7 @@ type Event struct {
 
 // Events announces everything that happens to a task: activity writes the
 // feeds, notify mails the people concerned and tracks due dates.
+//
+// fr: Events annonce tout ce qui arrive à une tâche : activity écrit les fils
+// d’activité, notify écrit aux personnes concernées et suit les échéances.
 var Events = Service.Topic[Event]("events")

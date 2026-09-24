@@ -24,6 +24,12 @@ var ArchiveAfter = kit.EnvDuration("TODO_ARCHIVE_AFTER", 24*time.Hour)
 // restore tasks, and move an overdue one to a later date; the workflow's own
 // loop marks a task overdue the moment its due date passes, and archives a
 // done task once it has been done for ArchiveAfter.
+//
+// fr: Lifecycle est la vie de chaque tâche. Les gens terminent, rouvrent,
+// archivent et restaurent des tâches, et repoussent une tâche en retard à une
+// date ultérieure ; la boucle propre au workflow marque une tâche en retard dès
+// que son échéance passe, et archive une tâche une fois qu’elle est terminée
+// depuis ArchiveAfter.
 var Lifecycle = tasks.Service.Workflow("lifecycle", tasks.Tasks, func(t *tasks.Task) *tasks.Status { return &t.Status }).
 	Initial(tasks.Open).
 	On("complete", tasks.Open, tasks.Done).
@@ -39,10 +45,15 @@ var Lifecycle = tasks.Service.Workflow("lifecycle", tasks.Tasks, func(t *tasks.T
 	OnTransition(announceTransition)
 
 // pastDue holds once a task's due date has passed.
+//
+// fr: pastDue est vraie dès que l’échéance d’une tâche est passée.
 func pastDue(t tasks.Task, now time.Time) bool { return t.Due != nil && now.After(*t.Due) }
 
 // stampCompletion records when a task was done, and by whom: the user whose
 // request completed it.
+//
+// fr: stampCompletion note quand une tâche a été terminée, et par qui :
+// l’utilisateur dont la requête l’a terminée.
 func stampCompletion(ctx context.Context, t *tasks.Task) error {
 	now := wire.Now(ctx)
 	t.CompletedAt, t.UpdatedAt = &now, now
@@ -53,6 +64,8 @@ func stampCompletion(ctx context.Context, t *tasks.Task) error {
 }
 
 // clearCompletion forgets the completion of a task that is to do again.
+//
+// fr: clearCompletion efface l’achèvement d’une tâche redevenue à faire.
 func clearCompletion(_ context.Context, t *tasks.Task) error {
 	t.CompletedAt, t.CompletedBy = nil, ""
 	return nil
@@ -72,6 +85,10 @@ var transitionKinds = map[string]tasks.Kind{
 
 // announceTransition publishes every transition, whoever fired it — a user,
 // the overdue guard, the auto-archive timer — to everyone who sees the task.
+//
+// fr: announceTransition publie chaque transition, quel que soit son
+// déclencheur — un utilisateur, la garde du retard, le timer d’archivage
+// automatique — à tous ceux qui voient la tâche.
 func announceTransition(ctx context.Context, c kit.Change[tasks.Task, tasks.Status]) error {
 	kind, ok := transitionKinds[c.Event]
 	if !ok {

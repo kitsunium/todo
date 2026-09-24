@@ -14,7 +14,7 @@ import (
 )
 
 // Service owns the samples.
-var Service = kit.NewService("stats", "Vital signs of the task list, sampled by a job of the daemon.")
+var Service = kit.NewService("stats", "Vital signs of the task list, sampled by a job of the daemon.\n\nfr: Les signes vitaux de la liste de tâches, échantillonnés par un job du daemon.")
 
 // Snapshot is the task list at one instant.
 type Snapshot struct {
@@ -34,9 +34,14 @@ type Snapshot struct {
 }
 
 // Snapshots keeps the latest samples, keyed by a time-ordered ID.
+//
+// fr: Snapshots garde les derniers échantillons, sous un ID ordonné dans le
+// temps.
 var Snapshots = Service.Store("snapshots", func(s Snapshot) string { return s.ID })
 
 // The sampling job: a piece of the daemon's internal loop.
+//
+// fr: Le job d’échantillonnage : un morceau de la boucle interne du daemon.
 var _ = Service.Every("sample", 30*time.Second, Sample)
 
 // keep is how many samples are kept: an hour, at one every 30 seconds.
@@ -45,6 +50,10 @@ const keep = 120
 // Sample asks the tasks service for its census and records it. It goes
 // through the census endpoint rather than the store: a service's data is
 // its own.
+//
+// fr: Sample demande son recensement au service tasks et l’enregistre. Il passe
+// par l’endpoint du recensement plutôt que par le store : les données d’un
+// service lui appartiennent.
 func Sample(ctx context.Context) error {
 	census, err := tasks.CensusAPI.Call(ctx, kit.Empty{})
 	if err != nil {
@@ -82,6 +91,8 @@ func prune(ctx context.Context) error {
 }
 
 // The stats API: public, like a status page.
+//
+// fr: L’API des stats : publique, comme une page de statut.
 var _ = Service.Endpoint("GET /api/stats", Current)
 
 // CurrentOutput is the latest sample and the recent history, oldest first.
@@ -91,6 +102,8 @@ type CurrentOutput struct {
 }
 
 // Current returns the latest sample and the recent history.
+//
+// fr: Current renvoie le dernier échantillon et l’historique récent.
 func Current(ctx context.Context, _ kit.Empty) (CurrentOutput, error) {
 	all, err := Snapshots.List(ctx)
 	if err != nil {

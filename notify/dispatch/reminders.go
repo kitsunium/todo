@@ -31,16 +31,28 @@ type Reminder struct {
 }
 
 // Reminders keeps one reminder per task with a due date, found by task.
+//
+// fr: Reminders garde un rappel par tâche qui a une échéance, retrouvé par
+// tâche.
 var Reminders = notify.Service.Store("reminders", func(r Reminder) string { return r.ID },
 	kit.Unique("task", func(r Reminder) string { return r.TaskID }))
 
 // The due dates reach the reminders through the task events.
+//
+// fr: Les échéances parviennent aux rappels par les événements des tâches.
 var _ = notify.Service.Subscribe("track-due", tasks.Events, TrackDue)
 
 // ReminderLoop mails a task's owner, assignee and the users it is shared
 // with fifteen minutes before it is due, each in their language. kit runs it: it sleeps until the
 // next reminder is due, wakes early when a task changes, and every minute
 // regardless — a task event may land after the wake it caused.
+//
+// fr: ReminderLoop écrit, quinze minutes avant l’échéance d’une tâche, à son
+// propriétaire, à la personne assignée et aux utilisateurs avec qui elle est
+// partagée, à chacun dans sa langue. kit la fait tourner : elle dort jusqu’au
+// prochain rappel dû, se réveille plus tôt quand une tâche change, et chaque
+// minute quoi qu’il arrive — un événement de tâche peut arriver après le réveil
+// qu’il a causé.
 var ReminderLoop = notify.Service.Loop("reminders", SendReminders,
 	kit.WakeAt(NextReminder), kit.WakeOn(tasks.Events), kit.WakeEvery(time.Minute))
 
@@ -48,6 +60,11 @@ var ReminderLoop = notify.Service.Loop("reminders", SendReminders,
 // still to do, and moves it when the due date moves. It never deletes one: a
 // reminder checks its task before it goes out, and drops itself if the task
 // is done, gone or undated.
+//
+// fr: TrackDue programme le rappel d’une tâche dont l’échéance est à venir et
+// qui reste à faire, et le déplace quand l’échéance bouge. Il n’en supprime
+// jamais : un rappel vérifie sa tâche avant de partir, et s’annule si la tâche
+// est terminée, supprimée ou sans date.
 func TrackDue(ctx context.Context, e tasks.Event) error {
 	if e.Due == nil || e.Kind == tasks.KindDeleted || (e.Status != tasks.Open && e.Status != tasks.Overdue) {
 		return nil
@@ -85,6 +102,9 @@ func TrackDue(ctx context.Context, e tasks.Event) error {
 
 // NextReminder is when the loop must wake next: the earliest reminder not
 // sent yet.
+//
+// fr: NextReminder est le moment où la boucle doit se réveiller : le plus
+// proche rappel pas encore envoyé.
 func NextReminder(ctx context.Context) (time.Time, bool) {
 	pending, err := Reminders.Filter(ctx, func(r Reminder) bool { return !r.Sent })
 	if err != nil || len(pending) == 0 {
@@ -101,6 +121,9 @@ func NextReminder(ctx context.Context) (time.Time, bool) {
 
 // SendReminders sends every reminder that is due, and forgets the ones sent
 // a day ago.
+//
+// fr: SendReminders envoie chaque rappel dû, et oublie ceux envoyés il y a un
+// jour.
 func SendReminders(ctx context.Context, _ kit.Wake) error {
 	now := wire.Now(ctx)
 	due, err := Reminders.Filter(ctx, func(r Reminder) bool { return !r.Sent && !r.At.After(now) })

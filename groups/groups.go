@@ -14,7 +14,7 @@ import (
 )
 
 // Service owns groups, their members and the invitations into them.
-var Service = kit.NewService("groups", "Teams: groups sharing a task list, their members' roles, and the invitations that bring members in.")
+var Service = kit.NewService("groups", "Teams: groups sharing a task list, their members' roles, and the invitations that bring members in.\n\nfr: Les équipes : des groupes qui partagent une liste de tâches, les rôles de leurs membres, et les invitations qui y font entrer de nouveaux membres.")
 
 // Role is what a member may do in a group.
 type Role string
@@ -84,6 +84,8 @@ func (g Group) memberIDs() []string {
 }
 
 // Groups keeps every group, listed per member.
+//
+// fr: Groups garde chaque groupe, listé par membre.
 var Groups = Service.Store("groups", func(g Group) string { return g.ID },
 	kit.Index("member", func(g Group) []string { return g.memberIDs() }))
 
@@ -117,6 +119,9 @@ type Event struct {
 
 // Events announces invitations and comings and goings: notify mails the
 // invitee, activity writes the feeds, tasks follows its groups.
+//
+// fr: Events annonce les invitations, les arrivées et les départs : notify
+// écrit à l’invité, activity écrit les fils d’activité, tasks suit ses groupes.
 var Events = Service.Topic[Event]("events")
 
 // announce publishes what happened in g, telling everyone in tell but the

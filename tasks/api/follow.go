@@ -12,11 +12,19 @@ import (
 
 // The task list follows its groups: a deleted group's tasks go back to their
 // owners' lists, and a member who leaves stops doing the group's tasks.
+//
+// fr: La liste de tâches suit ses groupes : les tâches d’un groupe supprimé
+// retournent sur les listes de leurs propriétaires, et un membre qui part cesse
+// de faire les tâches du groupe.
 var _ = tasks.Service.Subscribe("group-changes", groups.Events, FollowGroups)
 
 // FollowGroups keeps tasks consistent with the groups they are on. It is
 // idempotent, as a subscription must be: applying it twice changes nothing
 // the first time did not.
+//
+// fr: FollowGroups garde les tâches cohérentes avec les groupes où elles
+// figurent. Comme tout abonnement, il est idempotent : l’appliquer deux fois ne
+// change rien que la première fois n’ait déjà changé.
 func FollowGroups(ctx context.Context, e groups.Event) error {
 	switch e.Kind {
 	case groups.KindDeleted, groups.KindLeft, groups.KindRemoved:

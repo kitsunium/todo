@@ -32,6 +32,8 @@ type Invitation struct {
 }
 
 // Invitations keeps the invitations, listed per invitee and per group.
+//
+// fr: Invitations garde les invitations, listées par invité et par groupe.
 var Invitations = Service.Store("invitations", func(i Invitation) string { return i.ID },
 	kit.Index("invitee", func(i Invitation) []string { return []string{i.InviteeID} }),
 	kit.Index("group", func(i Invitation) []string { return []string{i.GroupID} }))
@@ -42,6 +44,10 @@ const InvitationsExpireAfter = 7 * 24 * time.Hour
 // InvitationLifecycle is the life of an invitation: the invitee accepts —
 // and joins the group — or declines; deleting the group revokes it; a week
 // unanswered expires it.
+//
+// fr: InvitationLifecycle est la vie d’une invitation : l’invité l’accepte — et
+// rejoint le groupe — ou la refuse ; supprimer le groupe la révoque ; une
+// semaine sans réponse la fait expirer.
 var InvitationLifecycle = Service.Workflow("invitations", Invitations, func(i *Invitation) *InvitationStatus { return &i.Status }).
 	Initial(Pending).
 	On("accept", Pending, Accepted).
@@ -54,6 +60,9 @@ var InvitationLifecycle = Service.Workflow("invitations", Invitations, func(i *I
 
 // join adds the invitee to the group, as a member, as the invitation is
 // accepted. A group deleted meanwhile fails the acceptance.
+//
+// fr: join ajoute l’invité au groupe, comme membre, au moment où l’invitation
+// est acceptée. Un groupe supprimé entre-temps fait échouer l’acceptation.
 func join(ctx context.Context, inv *Invitation) error {
 	now := wire.Now(ctx)
 	inv.RespondedAt = &now
@@ -71,6 +80,8 @@ func join(ctx context.Context, inv *Invitation) error {
 }
 
 // stampAnswer records when an invitation was answered.
+//
+// fr: stampAnswer note quand une invitation a reçu sa réponse.
 func stampAnswer(ctx context.Context, inv *Invitation) error {
 	now := wire.Now(ctx)
 	inv.RespondedAt = &now
@@ -79,6 +90,9 @@ func stampAnswer(ctx context.Context, inv *Invitation) error {
 
 // announceInvitation tells the invitee they are invited, and the members
 // that someone joined.
+//
+// fr: announceInvitation annonce à l’invité qu’il est invité, et aux membres
+// que quelqu’un les a rejoints.
 func announceInvitation(ctx context.Context, c kit.Change[Invitation, InvitationStatus]) error {
 	inv := c.Entity
 	if c.To != Pending && c.To != Accepted {

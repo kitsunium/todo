@@ -15,6 +15,9 @@ import (
 
 // The feeds are written from the events of the three services whose work
 // involves other people.
+//
+// fr: Les fils sont écrits à partir des événements des trois services dont le
+// travail implique d’autres personnes.
 var (
 	_ = Service.Subscribe("tasks", tasks.Events, RecordTaskEvent)
 	_ = Service.Subscribe("contacts", contacts.Events, RecordContactEvent)
@@ -27,6 +30,11 @@ func quoted(title string) string { return "“" + title + "”" }
 // RecordTaskEvent writes a task's event into the feed of everyone who sees
 // the task, but whoever did it. The auto-archiving of a done task is left
 // out: nobody did it, nobody needs to read it.
+//
+// fr: RecordTaskEvent écrit l’événement d’une tâche dans le fil de tous ceux
+// qui la voient, sauf celui de son auteur. L’archivage automatique d’une tâche
+// terminée est laissé de côté : personne ne l’a fait, personne n’a besoin de le
+// lire.
 func RecordTaskEvent(ctx context.Context, e tasks.Event) error {
 	if e.Kind == tasks.KindArchived && e.ActorID == "" {
 		return nil
@@ -95,6 +103,10 @@ func RecordTaskEvent(ctx context.Context, e tasks.Event) error {
 // RecordContactEvent tells the addressee of a request about it, and the
 // requester of an accepted one. An invitation by email has no feed to go
 // to: its invitee has no account yet.
+//
+// fr: RecordContactEvent informe le destinataire d’une demande, et le demandeur
+// d’une demande acceptée. Une invitation par mail n’a pas de fil où aller : son
+// invité n’a pas encore de compte.
 func RecordContactEvent(ctx context.Context, e contacts.Event) error {
 	var text string
 	switch e.Kind {
@@ -115,6 +127,9 @@ func RecordContactEvent(ctx context.Context, e contacts.Event) error {
 
 // RecordGroupEvent writes a group's comings and goings into its members'
 // feeds, and an invitation into the invitee's.
+//
+// fr: RecordGroupEvent écrit les arrivées et les départs d’un groupe dans les
+// fils de ses membres, et une invitation dans celui de l’invité.
 func RecordGroupEvent(ctx context.Context, e groups.Event) error {
 	names, err := identity.Directory(ctx, e.ActorID, e.UserID)
 	if err != nil {

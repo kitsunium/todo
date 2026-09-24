@@ -9,17 +9,30 @@ import (
 
 // What other services may ask about groups, in-process: tasks decides who
 // sees a task and who may delete it, activity names the groups in the feeds.
+//
+// fr: Ce que les autres services peuvent demander sur les groupes, dans le
+// processus : tasks décide qui voit une tâche et qui peut la supprimer,
+// activity nomme les groupes dans les fils d’activité.
 var (
 	// RoleAPI tells a user's role in a group.
+	//
+	// fr: RoleAPI donne le rôle d’un utilisateur dans un groupe.
 	RoleAPI = Service.Endpoint("GET /internal/groups/role", RoleIn, kit.Private())
 
 	// BatchAPI turns group IDs into how groups are shown.
+	//
+	// fr: BatchAPI traduit des ID de groupes en groupes tels qu’on les affiche.
 	BatchAPI = Service.Endpoint("POST /internal/groups/batch", Batch, kit.Private())
 
 	// MembershipsAPI lists the groups a user belongs to, with their role.
+	//
+	// fr: MembershipsAPI liste les groupes dont un utilisateur est membre, avec
+	// son rôle.
 	MembershipsAPI = Service.Endpoint("GET /internal/groups/memberships", MembershipsOf, kit.Private())
 
 	// MembersAPI lists the members of a group.
+	//
+	// fr: MembersAPI liste les membres d’un groupe.
 	MembersAPI = Service.Endpoint("GET /internal/groups/members", MembersOf, kit.Private())
 )
 
@@ -36,6 +49,9 @@ type RoleOutput struct {
 
 // RoleIn returns a user's role in a group; a group that does not exist has
 // no members.
+//
+// fr: RoleIn renvoie le rôle d’un utilisateur dans un groupe ; un groupe qui
+// n’existe pas n’a pas de membres.
 func RoleIn(ctx context.Context, in RoleQuery) (RoleOutput, error) {
 	if in.Group == "" {
 		return RoleOutput{}, nil
@@ -62,6 +78,8 @@ type BatchOutput struct {
 }
 
 // Batch returns how the groups with the given IDs are shown.
+//
+// fr: Batch renvoie les groupes dont on donne les ID, tels qu’on les affiche.
 func Batch(ctx context.Context, in IDs) (BatchOutput, error) {
 	out := BatchOutput{Groups: []GroupRef{}}
 	seen := map[string]bool{}
@@ -99,6 +117,8 @@ type MembershipsOutput struct {
 }
 
 // MembershipsOf lists the groups a user belongs to.
+//
+// fr: MembershipsOf liste les groupes dont un utilisateur est membre.
 func MembershipsOf(ctx context.Context, in UserQuery) (MembershipsOutput, error) {
 	out := MembershipsOutput{Memberships: []Belonging{}}
 	if in.User == "" {
@@ -125,6 +145,8 @@ type MembersOutput struct {
 }
 
 // MembersOf lists the members of a group.
+//
+// fr: MembersOf liste les membres d’un groupe.
 func MembersOf(ctx context.Context, in GroupQuery) (MembersOutput, error) {
 	out := MembersOutput{Members: []Membership{}}
 	if in.Group == "" {

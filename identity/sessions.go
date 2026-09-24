@@ -36,6 +36,9 @@ type Session struct {
 
 // Sessions keeps every session, found by the hash of its secret and listed
 // per user.
+//
+// fr: Sessions garde chaque session, retrouvée par le hash de son secret et
+// listée par utilisateur.
 var Sessions = Service.Store("sessions", func(s Session) string { return s.ID },
 	kit.Unique("token", func(s Session) string { return s.TokenHash }),
 	kit.Index("user", func(s Session) []string { return []string{s.UserID} }))
@@ -57,11 +60,19 @@ type Principal struct {
 
 // SessionAuth is the app's authentication: every endpoint declared with
 // kit.Auth() runs it first.
+//
+// fr: SessionAuth est l’authentification de l’app : tout endpoint déclaré avec
+// kit.Auth() l’exécute d’abord.
 var SessionAuth = Service.AuthHandler("session", Authenticate)
 
 // Authenticate turns a session secret into its user. An unknown or expired
 // session is refused, and its cookie cleared; a live one slides its expiry
 // forward, at most every five minutes, so an active user stays signed in.
+//
+// fr: Authenticate retrouve l’utilisateur d’un secret de session. Une session
+// inconnue ou expirée est refusée, et son cookie effacé ; une session vivante
+// repousse son expiration, au plus toutes les cinq minutes, pour qu’un
+// utilisateur actif reste connecté.
 func Authenticate(ctx context.Context, c Credentials) (kit.UID, Principal, error) {
 	secret, fromCookie := c.Cookie, c.Cookie != ""
 	if !fromCookie {

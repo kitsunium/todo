@@ -57,11 +57,17 @@ type Token struct {
 
 // Tokens keeps the one-time links, keyed by ID and found by the hash of
 // their secret.
+//
+// fr: Tokens garde les liens à usage unique, sous leur ID, retrouvés par le
+// hash de leur secret.
 var Tokens = Service.Store("tokens", func(t Token) string { return t.ID },
 	kit.Unique("hash", func(t Token) string { return t.Hash }))
 
 // TokenLifecycle is the life of a one-time link: used once, or expired by
 // its own guard when its deadline passes.
+//
+// fr: TokenLifecycle est la vie d’un lien à usage unique : utilisé une fois, ou
+// expiré par sa propre garde quand son échéance passe.
 var TokenLifecycle = Service.Workflow("tokens", Tokens, func(t *Token) *TokenStatus { return &t.Status }).
 	Initial(Issued).
 	On("use", Issued, Used).
@@ -69,9 +75,13 @@ var TokenLifecycle = Service.Workflow("tokens", Tokens, func(t *Token) *TokenSta
 	OnEnter(Used, stampUse)
 
 // pastDeadline holds once a link's deadline passed.
+//
+// fr: pastDeadline est vraie dès que l’échéance d’un lien est passée.
 func pastDeadline(t Token, now time.Time) bool { return !now.Before(t.ExpiresAt) }
 
 // stampUse records when a link was used.
+//
+// fr: stampUse note quand un lien a été utilisé.
 func stampUse(ctx context.Context, t *Token) error {
 	now := wire.Now(ctx)
 	t.UsedAt = &now

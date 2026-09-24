@@ -15,6 +15,9 @@ import (
 
 // The task list's API. Every route acts for the signed-in user, on the tasks
 // they see.
+//
+// fr: L’API de la liste de tâches. Chaque route agit pour l’utilisateur
+// connecté, sur les tâches qu’il voit.
 var (
 	_ = tasks.Service.Endpoint("GET /api/tasks", List, kit.Auth())
 	_ = tasks.Service.Endpoint("GET /api/tasks/counts", Counts, kit.Auth())
@@ -51,6 +54,8 @@ type ListOutput struct {
 }
 
 // List returns a view of the tasks the caller sees.
+//
+// fr: List renvoie une vue des tâches que voit l’appelant.
 func List(ctx context.Context, in ListInput) (ListOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -119,6 +124,9 @@ type CountsOutput struct {
 }
 
 // Counts counts the caller's views, groups and unread activity.
+//
+// fr: Counts compte les vues de l’appelant, ses groupes et son activité non
+// lue.
 func Counts(ctx context.Context, in CountsInput) (CountsOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -181,6 +189,9 @@ type CreateInput struct {
 }
 
 // Create adds a task to the caller's list, or to one of their groups'.
+//
+// fr: Create ajoute une tâche à la liste de l’appelant, ou à celle de l’un de
+// ses groupes.
 func Create(ctx context.Context, in CreateInput) (View, error) {
 	uid, err := me(ctx)
 	if err != nil {
@@ -237,6 +248,8 @@ type TaskID struct {
 }
 
 // Get returns one task.
+//
+// fr: Get renvoie une tâche.
 func Get(ctx context.Context, in TaskID) (View, error) {
 	t, acc, _, err := load(ctx, in.ID)
 	if err != nil {
@@ -333,6 +346,10 @@ func (in UpdateInput) check(ctx context.Context, t tasks.Task, uid string) (edit
 // Update changes a task. Anyone who sees it may; only its owner moves it to
 // another group. Moving an overdue task to a later date puts it back on the
 // list of things to do.
+//
+// fr: Update modifie une tâche. Quiconque la voit le peut ; seul son
+// propriétaire la déplace vers un autre groupe. Repousser une tâche en retard à
+// une date ultérieure la remet parmi les choses à faire.
 func Update(ctx context.Context, in UpdateInput) (View, error) {
 	t, _, uid, err := load(ctx, in.ID)
 	if err != nil {
@@ -409,6 +426,8 @@ func conflict(err error, what string) error {
 }
 
 // Complete marks a task done.
+//
+// fr: Complete marque une tâche comme terminée.
 func Complete(ctx context.Context, in TaskID) (View, error) {
 	t, acc, _, err := load(ctx, in.ID)
 	if err != nil {
@@ -421,6 +440,8 @@ func Complete(ctx context.Context, in TaskID) (View, error) {
 }
 
 // Reopen puts a done task back on the list.
+//
+// fr: Reopen remet une tâche terminée sur la liste.
 func Reopen(ctx context.Context, in TaskID) (View, error) {
 	t, acc, _, err := load(ctx, in.ID)
 	if err != nil {
@@ -433,6 +454,9 @@ func Reopen(ctx context.Context, in TaskID) (View, error) {
 }
 
 // Archive takes a done task off the lists, before its timer does.
+//
+// fr: Archive retire une tâche terminée des listes, avant que son timer ne le
+// fasse.
 func Archive(ctx context.Context, in TaskID) (View, error) {
 	t, acc, _, err := load(ctx, in.ID)
 	if err != nil {
@@ -445,6 +469,8 @@ func Archive(ctx context.Context, in TaskID) (View, error) {
 }
 
 // Restore puts an archived task back on the list, to do.
+//
+// fr: Restore remet une tâche archivée sur la liste, à faire.
 func Restore(ctx context.Context, in TaskID) (View, error) {
 	t, acc, _, err := load(ctx, in.ID)
 	if err != nil {
@@ -458,6 +484,9 @@ func Restore(ctx context.Context, in TaskID) (View, error) {
 
 // Delete deletes a task for everyone. Its owner may, and so may an owner or
 // an admin of its group.
+//
+// fr: Delete supprime une tâche pour tout le monde. Son propriétaire le peut,
+// tout comme un propriétaire ou un admin de son groupe.
 func Delete(ctx context.Context, in TaskID) (kit.Empty, error) {
 	t, acc, uid, err := load(ctx, in.ID)
 	if err != nil {
@@ -484,6 +513,9 @@ type ShareInput struct {
 
 // Share lets one of the owner's contacts see and work on a task. Sharing
 // twice with the same user changes nothing.
+//
+// fr: Share permet à l’un des contacts du propriétaire de voir une tâche et d’y
+// travailler. Partager deux fois avec le même utilisateur ne change rien.
 func Share(ctx context.Context, in ShareInput) (View, error) {
 	t, acc, uid, err := load(ctx, in.ID)
 	if err != nil {
@@ -532,6 +564,10 @@ type UnshareInput struct {
 // Unshare stops sharing a task with a user: the owner may, and so may the
 // user, to leave it. A user who no longer sees the task stops being its
 // assignee.
+//
+// fr: Unshare arrête de partager une tâche avec un utilisateur : le
+// propriétaire le peut, et l’utilisateur aussi, pour la quitter. Un utilisateur
+// qui ne voit plus la tâche n’y est plus assigné.
 func Unshare(ctx context.Context, in UnshareInput) (View, error) {
 	t, acc, uid, err := load(ctx, in.ID)
 	if err != nil {
