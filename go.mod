@@ -1,6 +1,6 @@
 module github.com/kitsunium/todo
 
-go 1.27
+go 1.27.1
 
 require (
 	github.com/kitsunium/platform v0.0.0

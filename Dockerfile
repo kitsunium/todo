@@ -19,7 +19,7 @@
 #                       X-Forwarded-For hop, the one the proxy appended (sessions
 #                       list it)
 
-FROM golang:1.27 AS build
+FROM golang:1.27.1 AS build
 WORKDIR /src/todo
 COPY --from=platform go.mod go.sum /src/platform/
 COPY --from=platform kit /src/platform/kit
