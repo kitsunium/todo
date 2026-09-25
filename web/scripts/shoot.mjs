@@ -26,6 +26,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 // The interface's own words, to find buttons and tabs by what they say.
 import { en } from "../src/i18n/en.ts";
+import { DEMO_PASSWORD, UNVERIFIED_PASSWORD } from "../src/mock/fixtures/accounts.ts";
 import { fr } from "../src/i18n/fr.ts";
 
 const WORDS = { fr, en };
@@ -452,10 +453,10 @@ const desktop = [
     "auth-login-unverified",
     async () => {
       let email = "unverified@example.com";
-      let password = "correct-horse-42";
+      let password = DEMO_PASSWORD;
       if (REAL) {
         email = `una.${stamp}.${LOC}@example.com`;
-        password = "Unverified-pass-1";
+        password = UNVERIFIED_PASSWORD;
         await fetch(`${BASE}/api/auth/signup`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, name: "Una Verified", password }) });
       }
       await fresh("/login", false);

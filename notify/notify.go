@@ -42,7 +42,7 @@ var SendAPI = Service.Endpoint("POST /internal/notify/send", Send, kit.Private()
 // The transactional templates SendAPI renders.
 const (
 	TemplateVerifyEmail   = "verify-email"
-	TemplateResetPassword = "reset-password"
+	TemplatePasswordReset = "reset-password"
 	TemplateAccountExists = "account-exists"
 )
 
@@ -80,7 +80,7 @@ func Send(ctx context.Context, in SendInput) (SendOutput, error) {
 	switch in.Template {
 	case TemplateVerifyEmail:
 		m = VerifyEmail(in.Locale, in.Name, in.Data["token"])
-	case TemplateResetPassword:
+	case TemplatePasswordReset:
 		m = ResetPassword(in.Locale, in.Name, in.Data["token"])
 	case TemplateAccountExists:
 		m = AccountExists(in.Locale, in.Name)

@@ -442,7 +442,7 @@ func ForgotPassword(ctx context.Context, in EmailInput) (SentOutput, error) {
 		return SentOutput{}, err
 	}
 	_, err = notify.SendAPI.Call(ctx, notify.SendInput{
-		Template: notify.TemplateResetPassword, To: a.Email, Name: a.Name, Locale: a.locale(), Data: map[string]string{"token": secret},
+		Template: notify.TemplatePasswordReset, To: a.Email, Name: a.Name, Locale: a.locale(), Data: map[string]string{"token": secret},
 	})
 	return out, err
 }

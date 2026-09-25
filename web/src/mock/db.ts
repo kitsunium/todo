@@ -1,6 +1,7 @@
 // The mock backend's state: the whole product in one JSON object, persisted
 // in localStorage so a reload (or a screenshot run) keeps it. Only loaded in
 // `vite --mode mock`.
+import { DEMO_EMAIL, DEMO_PASSWORD } from "./fixtures/accounts";
 import { addDays, format, startOfDay, subDays, subHours, subMinutes } from "date-fns";
 import type { Priority } from "../api/types";
 import type { Locale } from "../i18n/types";
@@ -91,8 +92,7 @@ export function token(): string {
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export const DEMO_EMAIL = "camille@example.com";
-export const DEMO_PASSWORD = "correct-horse-42";
+export { DEMO_EMAIL, DEMO_PASSWORD } from "./fixtures/accounts";
 
 /** A date-only due: that day at 23:59 local time. */
 function day(d: Date): string {

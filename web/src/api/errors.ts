@@ -39,23 +39,29 @@ const CONFLICTS: [RegExp, Key][] = [
   [/task cannot/i, "error.conflict.task"],
 ];
 
-const FIELDS: Record<string, Key> = {
-  title: "field.title",
-  notes: "field.notes",
-  name: "field.name",
-  email: "field.email",
-  password: "field.password",
-  current: "field.current",
-  due: "field.due",
-  priority: "field.priority",
-  color: "field.color",
-  groupId: "field.groupId",
-  assigneeId: "field.assigneeId",
-  userId: "field.userId",
-  locale: "field.locale",
-  token: "field.token",
-  role: "field.role",
-};
+/** The members of a request a violation may name; each is labelled by its
+ *  "field.<name>" message, which TypeScript checks exists. */
+const FIELD_NAMES = [
+  "title",
+  "notes",
+  "name",
+  "email",
+  "password",
+  "current",
+  "due",
+  "priority",
+  "color",
+  "groupId",
+  "assigneeId",
+  "userId",
+  "locale",
+  "token",
+  "role",
+] as const;
+
+const FIELDS: Record<string, Key> = Object.fromEntries(
+  FIELD_NAMES.map((f) => [f, `field.${f}` satisfies Key] as const),
+);
 
 /** The member of the request a violation concerns: "items[2].zip" → "items". */
 function fieldOf(v: Violation): string {
