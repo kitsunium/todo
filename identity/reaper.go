@@ -34,13 +34,14 @@ const spentFor = 24 * time.Hour
 // à usage unique consommés depuis plus d’un jour. Une session expirée ne
 // connecte déjà plus personne ; le reaper empêche le store de grossir sans fin.
 func ReapSessions(ctx context.Context) error {
-	t := time.NewTicker(reapEvery)
+	// The app's clock, not the wall's: a test's manual clock drives it.
+	t := kit.NewTicker(ctx, reapEvery)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-t.C:
+		case <-t.C():
 			if err := Reap(ctx); err != nil {
 				return err // kit restarts the loop after a backoff
 			}
