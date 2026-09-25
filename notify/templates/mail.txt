@@ -1,0 +1,18 @@
+{{.Headline}}
+{{rule .Headline}}
+{{with .Greeting}}
+{{.}}
+{{end}}{{range .Body}}
+{{wrap .}}
+{{end}}{{with .Card}}
+  {{.Label}}{{$.Colon}} {{.Title}}{{with .Detail}}
+  {{.}}{{end}}
+{{end}}
+{{.Action.Label}}{{.Colon}}
+{{.Action.URL}}
+{{range .Notes}}
+{{wrap .}}
+{{end}}
+--
+{{wrap .Reason}}
+{{.Tagline}} · {{.Home}}

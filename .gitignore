@@ -1,0 +1,12 @@
+# kit's local state: the dev binary and the dev data.
+.kit/
+
+# Go workspaces are local to a machine.
+go.work
+go.work.sum
+
+/todo
+.DS_Store
+
+# The web app's dependencies: web/dist is committed, node_modules never.
+node_modules/
