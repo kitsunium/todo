@@ -70,6 +70,8 @@ type Person struct {
 	UserRef
 	// Locale is "fr" or "en"; an account that never chose reads French.
 	Locale wire.Locale `json:"locale"`
+	// TimeZone is the zone their mails are written in; empty reads UTC.
+	TimeZone string `json:"timeZone,omitempty"`
 }
 
 // UsersOutput are the users found, in the order asked; an unknown ID is
@@ -96,7 +98,7 @@ func Users(ctx context.Context, in IDs) (UsersOutput, error) {
 		if err != nil {
 			return UsersOutput{}, err
 		}
-		out.Users = append(out.Users, Person{UserRef: a.ref(), Locale: a.locale()})
+		out.Users = append(out.Users, Person{UserRef: a.ref(), Locale: a.locale(), TimeZone: a.TimeZone})
 	}
 	return out, nil
 }

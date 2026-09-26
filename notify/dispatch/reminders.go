@@ -184,7 +184,7 @@ func remind(ctx context.Context, r Reminder, now time.Time) error {
 		if to.Email == "" {
 			continue
 		}
-		if _, err := notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, notify.DueSoon(to.Locale, to.Name, task, t.Due.Sub(now))); err != nil {
+		if _, err := notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, notify.DueSoon(to.Locale, wire.Zone(to.TimeZone), to.Name, task, t.Due.Sub(now))); err != nil {
 			return err
 		}
 	}
