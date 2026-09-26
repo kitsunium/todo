@@ -1,8 +1,10 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"html"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -10,9 +12,21 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/kitsunium/platform/kit"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
 	"github.com/kitsunium/todo/internal/wire"
 )
+
+// withBaseURL runs the notify service in an app whose base-url is u, for
+// the length of the test.
+func withBaseURL(t *testing.T, u string) {
+	t.Helper()
+	app := kit.NewApp("todo", Service).With(kit.InMemory(), kit.Listen("127.0.0.1:0"), kit.Logs(io.Discard), kit.Set("base-url", u))
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Stop(context.Background()) })
+}
 
 // every returns one of each mail the product sends, written in l.
 func every(l wire.Locale, actor, to, title, group string) map[string]Message {
@@ -33,10 +47,10 @@ func every(l wire.Locale, actor, to, title, group string) map[string]Message {
 }
 
 // Every mail renders in the one light design, in each language, as HTML and
-// as plain text, with its one button pointing into the web app at
-// TODO_BASE_URL — and whatever a user typed stays text.
+// as plain text, with its one button pointing into the web app at the
+// product's base-url — and whatever a user typed stays text.
 func TestEveryMailRendersInTheDesign(t *testing.T) {
-	t.Setenv("TODO_BASE_URL", "https://todo.example.com/")
+	withBaseURL(t, "https://todo.example.com/")
 	evil := `<script>alert("x")</script> & co`
 	for _, l := range wire.Locales {
 		mails := every(l, evil, "Alice Martin", evil, evil)
