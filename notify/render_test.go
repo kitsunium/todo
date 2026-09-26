@@ -284,3 +284,19 @@ func TestWrapKeepsNoBreakSpaces(t *testing.T) {
 		t.Errorf("the no-break space is gone: %q", wrap(s))
 	}
 }
+
+// A base URL of nothing but spaces and slashes is the default: a mail's
+// links are never relative.
+func TestAnEmptyBaseURLIsTheDefault(t *testing.T) {
+	for _, u := range []string{"/", " / ", "//"} {
+		t.Run(u, func(t *testing.T) {
+			withBaseURL(t, u)
+			if got := BaseURL(); got != defaultBaseURL {
+				t.Errorf("BaseURL() = %q", got)
+			}
+			if a := VerifyEmail(wire.English, "Bob", "SECRET").Action.URL; !strings.HasPrefix(a, defaultBaseURL+"/") {
+				t.Errorf("the verification link is %q", a)
+			}
+		})
+	}
+}

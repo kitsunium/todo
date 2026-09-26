@@ -121,11 +121,19 @@ func Deliver(ctx context.Context, to Recipient, m Message) (string, error) {
 // liens de ses mails : http://localhost:4000, sauf si l’environnement en
 // décide autrement — TODO_BASE_URL, ou base-url dans son fichier de
 // configuration.
-var baseURL = Service.Setting("base-url", "http://localhost:4000")
+var baseURL = Service.Setting("base-url", defaultBaseURL)
 
-// BaseURL is where users reach the product, without a trailing slash.
+// defaultBaseURL is where kit dev serves the product.
+const defaultBaseURL = "http://localhost:4000"
+
+// BaseURL is where users reach the product, without a trailing slash — the
+// default when the setting says nothing but spaces and slashes, so that a
+// mail's links are never relative.
 func BaseURL() string {
-	return strings.TrimRight(strings.TrimSpace(baseURL.Get()), "/")
+	if u := strings.TrimRight(strings.TrimSpace(baseURL.Get()), "/"); u != "" {
+		return u
+	}
+	return defaultBaseURL
 }
 
 // link returns the absolute URL of a page of the web app, with its query
