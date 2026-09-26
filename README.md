@@ -446,7 +446,7 @@ stateDiagram-v2
   archived --> open: restore
   overdue --> open: reschedule (a later due date)
   open --> overdue: overdue (timer: at the due date)
-  done --> archived: auto-archive (timer: TODO_ARCHIVE_AFTER, 24h)
+  done --> archived: auto-archive (timer: the setting archive-after, 24h)
 ```
 
 ## An account's life
@@ -518,12 +518,19 @@ TODO_BASE_URL=https://todo.example.com \
 KIT_SMTP_URL='smtp://user:password@smtp.example.com:587?tls=starttls' \
 ./todo                                    # production: no Studio, data on disk
 ./todo healthcheck                        # exit 0 when ready: for any supervisor
+./todo config                             # every setting, and where it came from
 ./todo graph                              # the product graph, as JSON
 ```
 
-`TODO_BASE_URL` is where users reach the app, for the links in its mails
-(default `http://localhost:4000`); `KIT_SMTP_URL` is the relay — without it,
-mails are only captured and a warning says so. With Docker, the platform
+The todo declares two settings: `base-url` (service notify), where users
+reach the app, for the links in its mails (default `http://localhost:4000`),
+and `archive-after` (service tasks), how long a done task stays on the lists
+(default `24h`). Each is set by its variable — `TODO_BASE_URL`,
+`TODO_ARCHIVE_AFTER` — or, for every deployment of an environment, in the
+product's configuration file `config/<env>.yaml`, embedded in the binary;
+`./todo config` prints every setting and where its value came from.
+`KIT_SMTP_URL` is the relay — without it, mails are only captured and a
+warning says so. With Docker, the platform
 checkout next to this one is a named build context:
 
 ```sh

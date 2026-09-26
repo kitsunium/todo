@@ -139,15 +139,25 @@ func onlyIn(have, want []i18n.Key) []i18n.Key {
 // Deliver, which does not send a mail with a key in place of a sentence.
 type words struct {
 	locale wire.Locale
-	p      *i18n.Printer
-	err    error
+	// zone is the reader's, which times are written in.
+	zone *time.Location
+	p    *i18n.Printer
+	err  error
 }
 
 // wordsIn starts writing a mail in l — in French when l is not a language
-// the product speaks.
+// the product speaks — with its times in UTC.
 func wordsIn(l wire.Locale) *words {
 	l = l.Resolve()
-	return &words{locale: l, p: printers[l]}
+	return &words{locale: l, zone: time.UTC, p: printers[l]}
+}
+
+// at writes the mail's times in zone, UTC when it is nil.
+func (w *words) at(zone *time.Location) *words {
+	if zone != nil {
+		w.zone = zone
+	}
+	return w
 }
 
 // say renders the message key, its arguments given as name, value pairs.
@@ -205,11 +215,11 @@ func (w *words) someone(name string) string {
 	return name
 }
 
-// date writes a moment the way the language does — "jeudi 24 septembre à
-// 17:00 UTC", "Thursday, September 24 at 17:00 UTC" — in UTC: the product
-// does not know its users' time zones.
+// date writes a moment the way the language does, in the reader's zone —
+// "jeudi 24 septembre à 19:00 CEST", "Thursday, September 24 at 1:00 PM EDT"
+// is the English order with a 24-hour clock: "at 13:00 EDT".
 func (w *words) date(t time.Time) string {
-	t = t.UTC()
+	t = t.In(w.zone)
 	day := strconv.Itoa(t.Day())
 	if t.Day() == 1 {
 		day = w.say("date.first_of_month")
@@ -218,5 +228,6 @@ func (w *words) date(t time.Time) string {
 		"weekday", w.say("date.weekday."+strconv.Itoa(int(t.Weekday()))),
 		"day", day,
 		"month", w.say("date.month."+strconv.Itoa(int(t.Month()))),
-		"time", t.Format("15:04"))
+		"time", t.Format("15:04"),
+		"zone", t.Format("MST"))
 }

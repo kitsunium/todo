@@ -16,7 +16,7 @@
   "priority.3": "Medium priority",
   "priority.4": "Low priority",
 
-  "date.long": "{weekday}, {month} {day} at {time} UTC",
+  "date.long": "{weekday}, {month} {day} at {time} {zone}",
   "date.first_of_month": "1",
   "date.weekday.0": "Sunday",
   "date.weekday.1": "Monday",

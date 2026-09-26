@@ -200,9 +200,10 @@ func GroupInvitation(l wire.Locale, to, actor, groupID, group, color string) Mes
 	})
 }
 
-// TaskShared tells a user a task was shared with them.
-func TaskShared(l wire.Locale, to, actor string, t Task) Message {
-	w := wordsIn(l)
+// TaskShared tells a user a task was shared with them; its due date is
+// written in zone, theirs.
+func TaskShared(l wire.Locale, zone *time.Location, to, actor string, t Task) Message {
+	w := wordsIn(l).at(zone)
 	actor = w.someone(actor)
 	return w.done(Message{
 		Subject:   w.say("task_shared.subject", "actor", clip(actor, nameInSubject), "title", clip(t.Title, titleInSubject)),
@@ -216,9 +217,10 @@ func TaskShared(l wire.Locale, to, actor string, t Task) Message {
 	})
 }
 
-// TaskAssigned tells a user a task was assigned to them.
-func TaskAssigned(l wire.Locale, to, actor string, t Task) Message {
-	w := wordsIn(l)
+// TaskAssigned tells a user a task was assigned to them; its due date is
+// written in zone, theirs.
+func TaskAssigned(l wire.Locale, zone *time.Location, to, actor string, t Task) Message {
+	w := wordsIn(l).at(zone)
 	actor = w.someone(actor)
 	return w.done(Message{
 		Subject:   w.say("task_assigned.subject", "actor", clip(actor, nameInSubject), "title", clip(t.Title, titleInSubject)),
@@ -232,9 +234,10 @@ func TaskAssigned(l wire.Locale, to, actor string, t Task) Message {
 	})
 }
 
-// DueSoon reminds everyone a task concerns that it is due in a moment.
-func DueSoon(l wire.Locale, to string, t Task, left time.Duration) Message {
-	w := wordsIn(l)
+// DueSoon reminds everyone a task concerns that it is due in a moment; its
+// due date is written in zone, the reader's.
+func DueSoon(l wire.Locale, zone *time.Location, to string, t Task, left time.Duration) Message {
+	w := wordsIn(l).at(zone)
 	when := w.dueIn(left)
 	return w.done(Message{
 		Subject:   w.say("due_soon.subject", "when", when, "title", clip(t.Title, titleInSubject)),

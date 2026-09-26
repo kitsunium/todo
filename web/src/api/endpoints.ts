@@ -28,12 +28,23 @@ const groupIn = (g: Group): Group => ({ ...g, members: arr(g.members) });
 // A server that predates the locale field answers none: the interface keeps its own.
 const userIn = (u: User): User => ({ ...u, locale: isLocale(u.locale) ? u.locale : getLocale() });
 
+/** The browser's zone of the IANA database, "Europe/Paris": the times in
+ *  the account's mails are written in it. Absent when the browser says none. */
+export function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const auth = {
   signup: (b: { email: string; name: string; password: string; locale: Locale }) =>
-    api.post<{ status: string; email: string }>("/api/auth/signup", b),
+    api.post<{ status: string; email: string }>("/api/auth/signup", { ...b, timeZone: browserTimeZone() }),
   verify: (token: string) => api.post<UserBody>("/api/auth/verify", { token }).then((r) => userIn(r.user)),
   resend: (email: string) => api.post<{ status: string }>("/api/auth/verify/resend", { email }),
-  login: (b: { email: string; password: string }) => api.post<UserBody>("/api/auth/login", b).then((r) => userIn(r.user)),
+  login: (b: { email: string; password: string }) =>
+    api.post<UserBody>("/api/auth/login", { ...b, timeZone: browserTimeZone() }).then((r) => userIn(r.user)),
   logout: () => api.post<void>("/api/auth/logout"),
   me: (signal?: AbortSignal) => api.get<UserBody>("/api/auth/me", { signal }).then((r) => userIn(r.user)),
   /** PATCH /api/auth/me: absent members are unchanged. */

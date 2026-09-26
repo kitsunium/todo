@@ -17,8 +17,14 @@ import (
 )
 
 // ArchiveAfter is how long a done task stays on the lists before its own
-// timer archives it: TODO_ARCHIVE_AFTER, a day by default.
-var ArchiveAfter = kit.EnvDuration("TODO_ARCHIVE_AFTER", 24*time.Hour)
+// timer archives it: a day, unless the environment says otherwise —
+// TODO_ARCHIVE_AFTER, or archive-after in its configuration file.
+//
+// fr: ArchiveAfter est le temps qu’une tâche terminée reste sur les listes
+// avant que son propre minuteur ne l’archive : un jour, sauf si
+// l’environnement en décide autrement — TODO_ARCHIVE_AFTER, ou archive-after
+// dans son fichier de configuration.
+var ArchiveAfter = tasks.Service.Setting("archive-after", 24*time.Hour)
 
 // Lifecycle is the life of every task. People complete, reopen, archive and
 // restore tasks, and move an overdue one to a later date; the workflow's own

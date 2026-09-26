@@ -18,6 +18,7 @@ import (
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/identity"
+	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/notify"
 	"github.com/kitsunium/todo/tasks"
 )
@@ -49,9 +50,9 @@ func MailTaskEvent(ctx context.Context, e tasks.Event) error {
 		return nil // the account is gone
 	}
 	task := notify.Task{ID: e.TaskID, Title: e.Title, Priority: int(e.Priority), Due: e.Due}
-	m := notify.TaskShared(to.Locale, to.Name, people[e.ActorID].Name, task)
+	m := notify.TaskShared(to.Locale, wire.Zone(to.TimeZone), to.Name, people[e.ActorID].Name, task)
 	if e.Kind == tasks.KindAssigned {
-		m = notify.TaskAssigned(to.Locale, to.Name, people[e.ActorID].Name, task)
+		m = notify.TaskAssigned(to.Locale, wire.Zone(to.TimeZone), to.Name, people[e.ActorID].Name, task)
 	}
 	_, err = notify.Deliver(ctx, notify.Recipient{Name: to.Name, Email: to.Email}, m)
 	return err

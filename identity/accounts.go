@@ -33,6 +33,10 @@ type Account struct {
 	// An account opened before the product spoke two languages has none,
 	// and reads French: see locale.
 	Locale wire.Locale `json:"locale,omitempty"`
+	// TimeZone is the zone of the IANA database the user's browser said it
+	// was in, at sign-up and at each sign-in: the times in their mails are
+	// written in it. Empty reads UTC.
+	TimeZone string `json:"timeZone,omitempty"`
 	// PasswordHash is the PHC string of the SDK's password hashing: salted,
 	// slow, self-describing. The password itself is never stored.
 	PasswordHash string        `json:"passwordHash" kit:"secret"`

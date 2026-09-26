@@ -141,7 +141,7 @@ func TestTheTaskList(t *testing.T) {
 	}
 
 	// The auto-archive timer: a day after being done.
-	h.clk.Advance(api.ArchiveAfter - time.Minute)
+	h.clk.Advance(api.ArchiveAfter.Get() - time.Minute)
 	h.drain()
 	if got := call[task](alice, http.StatusOK, "GET", "/api/tasks/"+readme.ID, nil); got.Status != "done" {
 		t.Fatalf("archived too early: %s", got.Status)

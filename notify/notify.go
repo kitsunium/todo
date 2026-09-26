@@ -10,7 +10,6 @@ package notify
 import (
 	"context"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/kitsunium/platform/kit"
@@ -114,13 +113,27 @@ func Deliver(ctx context.Context, to Recipient, m Message) (string, error) {
 	})
 }
 
-// BaseURL is where users reach the product, for the links of its mails:
-// TODO_BASE_URL, or http://localhost:4000.
+// baseURL is where users reach the product, for the links of its mails:
+// http://localhost:4000, unless the environment says otherwise —
+// TODO_BASE_URL, or base-url in its configuration file.
+//
+// fr: baseURL est l’adresse où les utilisateurs trouvent le produit, pour les
+// liens de ses mails : http://localhost:4000, sauf si l’environnement en
+// décide autrement — TODO_BASE_URL, ou base-url dans son fichier de
+// configuration.
+var baseURL = Service.Setting("base-url", defaultBaseURL)
+
+// defaultBaseURL is where kit dev serves the product.
+const defaultBaseURL = "http://localhost:4000"
+
+// BaseURL is where users reach the product, without a trailing slash — the
+// default when the setting says nothing but spaces and slashes, so that a
+// mail's links are never relative.
 func BaseURL() string {
-	if u := strings.TrimRight(strings.TrimSpace(os.Getenv("TODO_BASE_URL")), "/"); u != "" {
+	if u := strings.TrimRight(strings.TrimSpace(baseURL.Get()), "/"); u != "" {
 		return u
 	}
-	return "http://localhost:4000"
+	return defaultBaseURL
 }
 
 // link returns the absolute URL of a page of the web app, with its query

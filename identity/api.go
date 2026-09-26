@@ -77,6 +77,9 @@ type SignupInput struct {
 	// AcceptLanguage is the browser's preference, negotiated over the
 	// product's languages: French when it names neither.
 	AcceptLanguage string `header:"Accept-Language"`
+	// TimeZone is the browser's zone of the IANA database, "Europe/Paris":
+	// the times in the account's mails are written in it.
+	TimeZone string `json:"timeZone,omitempty" validate:"maxlen=64"`
 }
 
 // SignupOutput says a verification mail is on its way — whether or not the
@@ -113,6 +116,10 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 			return SignupOutput{}, err
 		}
 	}
+	zone, err := wire.CheckTimeZone("timeZone", in.TimeZone)
+	if err != nil {
+		return SignupOutput{}, err
+	}
 	out := SignupOutput{Status: "verification_sent", Email: email}
 	// Hash before looking the address up, so both answers take as long.
 	hash, err := hashPassword(in.Password)
@@ -128,7 +135,7 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	}
 	now := wire.Now(ctx)
 	acct, err := AccountLifecycle.Start(ctx, Account{
-		ID: kit.NewID("user"), Email: email, Name: name, Locale: locale, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
+		ID: kit.NewID("user"), Email: email, Name: name, Locale: locale, TimeZone: zone, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
 	})
 	if wire.Is(err, kit.CodeConflict) {
 		// A concurrent sign-up took the address first: it is now an
@@ -229,6 +236,9 @@ func ResendVerification(ctx context.Context, in EmailInput) (SentOutput, error) 
 type LoginInput struct {
 	Email    string `json:"email" validate:"required,maxlen=254"`
 	Password string `json:"password" validate:"required,maxlen=128"`
+	// TimeZone is the browser's zone of the IANA database: a user who
+	// travelled gets their mails in the zone they signed in from.
+	TimeZone string `json:"timeZone,omitempty" validate:"maxlen=64"`
 }
 
 // Login signs a user in with their password. Five wrong passwords in a row
@@ -241,6 +251,10 @@ type LoginInput struct {
 // vérifié n’est prié de se vérifier qu’une fois son mot de passe reconnu, pour
 // que la réponse ne dise jamais à un inconnu si une adresse a un compte.
 func Login(ctx context.Context, in LoginInput) (UserOutput, error) {
+	zone, err := wire.CheckTimeZone("timeZone", in.TimeZone)
+	if err != nil {
+		return UserOutput{}, err
+	}
 	a, found, err := accountByEmail(ctx, NormalizeEmail(in.Email))
 	if err != nil {
 		return UserOutput{}, err
@@ -277,11 +291,15 @@ func Login(ctx context.Context, in LoginInput) (UserOutput, error) {
 			return UserOutput{}, err
 		}
 	}
-	if a.FailedLogins > 0 || rehash != "" {
+	moved := zone != "" && zone != a.TimeZone
+	if a.FailedLogins > 0 || rehash != "" || moved {
 		if a, err = Accounts.Update(ctx, a.ID, func(a *Account) error {
 			a.FailedLogins = 0
 			if rehash != "" {
 				a.PasswordHash = rehash
+			}
+			if moved {
+				a.TimeZone = zone
 			}
 			return nil
 		}); err != nil {

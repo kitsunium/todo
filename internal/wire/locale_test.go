@@ -1,6 +1,10 @@
 package wire
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 // A browser's languages pick one of the product's, French first: French when
 // the header names neither, is empty, or is garbage.
@@ -37,5 +41,26 @@ func TestLocalesAreChecked(t *testing.T) {
 	}
 	if English.Resolve() != English || Locale("").Resolve() != French || Locale("de").Resolve() != French {
 		t.Error("Resolve does not fall back to French")
+	}
+}
+
+// A zone of the IANA database passes, spelled as the database spells it;
+// anything else is refused, and an unknown one reads UTC.
+func TestTimeZonesAreChecked(t *testing.T) {
+	for _, s := range []string{"Europe/Paris", "UTC", "America/Argentina/Buenos_Aires", "  Asia/Tokyo "} {
+		if z, err := CheckTimeZone("timeZone", s); err != nil || z != strings.TrimSpace(s) {
+			t.Errorf("%q: %q, %v", s, z, err)
+		}
+	}
+	if z, err := CheckTimeZone("timeZone", ""); err != nil || z != "" {
+		t.Errorf("no zone: %q, %v", z, err)
+	}
+	for _, s := range []string{"Local", "Mars/Olympus_Mons", "../../etc/passwd", "europe/paris", strings.Repeat("A", 65)} {
+		if _, err := CheckTimeZone("timeZone", s); !Is(err, "invalid_argument") {
+			t.Errorf("%q was accepted: %v", s, err)
+		}
+	}
+	if Zone("") != time.UTC || Zone("Not/A_Zone") != time.UTC || Zone("Europe/Paris").String() != "Europe/Paris" {
+		t.Error("Zone does not fall back to UTC")
 	}
 }

@@ -1,8 +1,10 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"html"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -10,9 +12,21 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/kitsunium/platform/kit"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
 	"github.com/kitsunium/todo/internal/wire"
 )
+
+// withBaseURL runs the notify service in an app whose base-url is u, for
+// the length of the test.
+func withBaseURL(t *testing.T, u string) {
+	t.Helper()
+	app := kit.NewApp("todo", Service).With(kit.InMemory(), kit.Listen("127.0.0.1:0"), kit.Logs(io.Discard), kit.Set("base-url", u))
+	if err := app.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Stop(context.Background()) })
+}
 
 // every returns one of each mail the product sends, written in l.
 func every(l wire.Locale, actor, to, title, group string) map[string]Message {
@@ -26,17 +40,20 @@ func every(l wire.Locale, actor, to, title, group string) map[string]Message {
 		"contact accepted": ContactAccepted(l, to, actor),
 		"invite":           InviteToJoin(l, actor, "dan@example.com"),
 		"group":            GroupInvitation(l, to, actor, "group_1", group, "violet"),
-		"shared":           TaskShared(l, to, actor, task),
-		"assigned":         TaskAssigned(l, to, actor, task),
-		"due":              DueSoon(l, to, task, 15*time.Minute),
+		"shared":           TaskShared(l, time.UTC, to, actor, task),
+		"assigned":         TaskAssigned(l, time.UTC, to, actor, task),
+		"due":              DueSoon(l, time.UTC, to, task, 15*time.Minute),
 	}
 }
 
 // Every mail renders in the one light design, in each language, as HTML and
-// as plain text, with its one button pointing into the web app at
-// TODO_BASE_URL — and whatever a user typed stays text.
+// as plain text, with its one button pointing into the web app at the
+// product's base-url — and whatever a user typed stays text.
+// tokyoDue is a due date that falls on the next day in Tokyo.
+var tokyoDue = time.Date(2026, 9, 25, 17, 0, 0, 0, time.UTC)
+
 func TestEveryMailRendersInTheDesign(t *testing.T) {
-	t.Setenv("TODO_BASE_URL", "https://todo.example.com/")
+	withBaseURL(t, "https://todo.example.com/")
 	evil := `<script>alert("x")</script> & co`
 	for _, l := range wire.Locales {
 		mails := every(l, evil, "Alice Martin", evil, evil)
@@ -104,12 +121,19 @@ func TestEveryMailRendersInTheDesign(t *testing.T) {
 		{fr["verify"].Greeting, "Bonjour Bob,"},
 		{fr["invite"].Greeting, "Bonjour,"},
 		{en["invite"].Greeting, "Hi,"},
-		{DueSoon(wire.French, "Bob", Task{Title: "T"}, time.Minute).Headline, "Échéance dans 1\u00a0minute"},
-		{DueSoon(wire.English, "Bob", Task{Title: "T"}, time.Minute).Headline, "Due in 1 minute"},
-		{DueSoon(wire.French, "Bob", Task{Title: "T"}, 10*time.Second).Headline, "Échéance imminente"},
+		{DueSoon(wire.French, nil, "Bob", Task{Title: "T"}, time.Minute).Headline, "Échéance dans 1\u00a0minute"},
+		{DueSoon(wire.English, nil, "Bob", Task{Title: "T"}, time.Minute).Headline, "Due in 1 minute"},
+		{DueSoon(wire.French, nil, "Bob", Task{Title: "T"}, 10*time.Second).Headline, "Échéance imminente"},
 		{wordsIn(wire.French).date(time.Date(2026, 9, 24, 17, 0, 0, 0, time.UTC)), "jeudi 24\u00a0septembre à 17:00\u00a0UTC"},
 		{wordsIn(wire.French).date(time.Date(2026, 10, 1, 8, 30, 0, 0, time.UTC)), "jeudi 1er\u00a0octobre à 08:30\u00a0UTC"},
 		{wordsIn(wire.English).date(time.Date(2026, 10, 1, 8, 30, 0, 0, time.UTC)), "Thursday, October 1 at 08:30 UTC"},
+		// In the reader's zone: Paris is two hours ahead in September, one
+		// in November; New York behind, across midnight.
+		{wordsIn(wire.French).at(wire.Zone("Europe/Paris")).date(time.Date(2026, 9, 24, 17, 0, 0, 0, time.UTC)), "jeudi 24\u00a0septembre à 19:00\u00a0CEST"},
+		{wordsIn(wire.French).at(wire.Zone("Europe/Paris")).date(time.Date(2026, 11, 5, 17, 0, 0, 0, time.UTC)), "jeudi 5\u00a0novembre à 18:00\u00a0CET"},
+		{wordsIn(wire.English).at(wire.Zone("America/New_York")).date(time.Date(2026, 10, 1, 2, 30, 0, 0, time.UTC)), "Wednesday, September 30 at 22:30 EDT"},
+		{DueSoon(wire.English, wire.Zone("Asia/Tokyo"), "Bob", Task{Title: "T", Due: &tokyoDue}, time.Minute).Card.Detail, "Due Saturday, September 26 at 02:00 JST"},
+		{wordsIn(wire.English).at(wire.Zone("Not/AZone")).date(time.Date(2026, 10, 1, 8, 30, 0, 0, time.UTC)), "Thursday, October 1 at 08:30 UTC"},
 		{ContactRequest(wire.French, "Bob", "").Subject, "Quelqu’un souhaite vous ajouter à ses contacts"},
 		{VerifyEmail("de", "Bob", "x").Subject, "Confirmez votre adresse e-mail"}, // French first
 	} {
@@ -258,5 +282,21 @@ func TestWrapKeepsNoBreakSpaces(t *testing.T) {
 	}
 	if !strings.Contains(wrap(s), "e-mail\u00a0:") {
 		t.Errorf("the no-break space is gone: %q", wrap(s))
+	}
+}
+
+// A base URL of nothing but spaces and slashes is the default: a mail's
+// links are never relative.
+func TestAnEmptyBaseURLIsTheDefault(t *testing.T) {
+	for _, u := range []string{"/", " / ", "//"} {
+		t.Run(u, func(t *testing.T) {
+			withBaseURL(t, u)
+			if got := BaseURL(); got != defaultBaseURL {
+				t.Errorf("BaseURL() = %q", got)
+			}
+			if a := VerifyEmail(wire.English, "Bob", "SECRET").Action.URL; !strings.HasPrefix(a, defaultBaseURL+"/") {
+				t.Errorf("the verification link is %q", a)
+			}
+		})
 	}
 }
