@@ -8,32 +8,33 @@ import (
 )
 
 // The directory: how the other services learn who a user is. They never read
-// the accounts store; they call these, in-process.
+// the accounts store; they ask these queries, in process, which nobody
+// exposes.
 //
 // fr: L’annuaire : comment les autres services apprennent qui est un
-// utilisateur. Ils ne lisent jamais le store des comptes ; ils appellent ces
-// endpoints, dans le processus.
+// utilisateur. Ils ne lisent jamais le store des comptes ; ils posent ces
+// questions, dans le processus, et personne ne les expose.
 var (
-	// UserByEmailAPI finds the user who owns an address — contacts asks it
+	// EmailOwner finds the user who owns an address — contacts asks it
 	// whether to send a contact request or an invitation.
 	//
-	// fr: UserByEmailAPI trouve l’utilisateur à qui appartient une adresse —
+	// fr: EmailOwner trouve l’utilisateur à qui appartient une adresse —
 	// contacts lui demande s’il faut envoyer une demande de contact ou une
 	// invitation.
-	UserByEmailAPI = Service.Endpoint("GET /internal/users/by-email", UserByEmail, kit.Private())
+	EmailOwner = Service.Query("email-owner", UserByEmail)
 
-	// UsersAPI turns user IDs into the names and addresses other users see,
+	// UsersByID turns user IDs into the names and addresses other users see,
 	// and the language each reads — notify writes to them in it.
 	//
-	// fr: UsersAPI traduit des ID d’utilisateurs en noms et adresses tels que
+	// fr: UsersByID traduit des ID d’utilisateurs en noms et adresses tels que
 	// les voient les autres utilisateurs, avec la langue que lit chacun — celle
 	// dans laquelle notify leur écrit.
-	UsersAPI = Service.Endpoint("POST /internal/users/batch", Users, kit.Private())
+	UsersByID = Service.Query("users", Users)
 )
 
 // EmailQuery is an address to look up.
 type EmailQuery struct {
-	Email string `query:"email"`
+	Email string `json:"email"`
 }
 
 // UserByEmailOutput is the user who owns the address, if one does.
@@ -64,8 +65,8 @@ type IDs struct {
 }
 
 // Person is a user as the product's services see them: what other users
-// see, and the language they read. It stays behind the private endpoints —
-// no user learns another's language.
+// see, and the language they read. It stays behind the directory's queries,
+// which nobody exposes — no user learns another's language.
 type Person struct {
 	UserRef
 	// Locale is "fr" or "en"; an account that never chose reads French.
@@ -103,14 +104,14 @@ func Users(ctx context.Context, in IDs) (UsersOutput, error) {
 	return out, nil
 }
 
-// People resolves user IDs through UsersAPI into a map, for the services
+// People resolves user IDs through UsersByID into a map, for the services
 // that write to users: an unknown ID is left out — nobody to write to.
 func People(ctx context.Context, ids ...string) (map[string]Person, error) {
 	out := map[string]Person{}
 	if len(ids) == 0 {
 		return out, nil
 	}
-	found, err := UsersAPI.Call(ctx, IDs{IDs: ids})
+	found, err := UsersByID.Ask(ctx, IDs{IDs: ids})
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +121,7 @@ func People(ctx context.Context, ids ...string) (map[string]Person, error) {
 	return out, nil
 }
 
-// Directory resolves user IDs through UsersAPI into a map, for the services
+// Directory resolves user IDs through UsersByID into a map, for the services
 // that show users: an unknown ID maps to a placeholder rather than failing a
 // whole list.
 func Directory(ctx context.Context, ids ...string) (map[string]UserRef, error) {

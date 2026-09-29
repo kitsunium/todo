@@ -1,4 +1,4 @@
-<!-- updated: 2026-09-26T03:10:00Z -->
+<!-- updated: 2026-09-29T20:07:00Z -->
 # kitsunium/todo
 
 The reference product of kit (`github.com/kitsunium/platform`), and its
@@ -10,14 +10,14 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 | Path | Service | Role |
 |---|---|---|
 | `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck / config / secrets |
-| `identity/` | identity | accounts (workflow `accounts`) and their language, one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (`UsersAPI` → `Directory`, `People` with each user's locale and time zone; `UserByEmailAPI`), the hand-written `session-reaper` loop |
-| `contacts/` | contacts | links between users (workflow `requests`), invitations by email, `claim-invites` on `identity.AccountEvents`, `CheckAPI` |
-| `groups/` | groups | groups and roles, invitations (workflow `invitations`), `RoleAPI` `BatchAPI` `MembershipsAPI` `MembersAPI` |
-| `tasks/` | tasks | the model other services import: `Task`, the `Tasks` store, the `Events` topic, `CensusAPI` `OpenByGroupAPI` `AudienceAPI` |
+| `identity/` | identity | accounts (workflow `accounts`) and their language, one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (the queries `UsersByID` → `Directory`, `People` with each user's locale and time zone; `EmailOwner`), the hand-written `session-reaper` loop |
+| `contacts/` | contacts | links between users (workflow `requests`), invitations by email, `claim-invites` on `identity.AccountEvents`, the query `AreContacts` |
+| `groups/` | groups | groups and roles, invitations (workflow `invitations`), the queries `RoleOf` `GroupRefs` `UserGroups` `GroupMembers` |
+| `tasks/` | tasks | the model other services import: `Task`, the `Tasks` store, the `Events` topic, the queries `TaskCensus` `OpenTasks` `TaskAudience` |
 | `tasks/api/` | tasks | the `lifecycle` workflow, the whole `/api/tasks` API, views and counts, `group-changes` |
-| `notify/` | notify | the `mail` mailer, `SendAPI` for identity's transactional mails, the mails, their one light design (`templates/`) and their words (`locales/fr.json`, `locales/en.json`); the setting `base-url` (the links of the mails) |
+| `notify/` | notify | the `mail` mailer, the command `SendMail` for identity's transactional mails, the mails, their one light design (`templates/`) and their words (`locales/fr.json`, `locales/en.json`); the setting `base-url` (the links of the mails) |
 | `notify/dispatch/` | notify | who is mailed when: `task-mail` `contact-mail` `group-mail` `track-due`, the `reminders` store and declared loop |
-| `activity/` | activity | the feeds: `entries` (`kind`, `actor`, `target`, `task`, `group` for a client to write in its reader's language; `text` in English), three subscriptions, `UnreadAPI` |
+| `activity/` | activity | the feeds: `entries` (`kind`, `actor`, `target`, `task`, `group` for a client to write in its reader's language; `text` in English), three subscriptions, the query `UnreadCount` |
 | `stats/` | stats | the `sample` job and `GET /api/stats` |
 | `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code), `Locale` (`fr` first, `en`; `NegotiateLocale`, `CheckLocale`, `Resolve`), time zones (`CheckTimeZone`, `Zone`; the zone database is embedded, `time/tzdata`) |
 | `web/` | web | the SPA (`web/src` → committed `web/dist`), owned by the web agent |
@@ -27,15 +27,16 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 
 - Declare building blocks as package-level variables: the static analysis
   only reads those. Call a building block through its variable
-  (`tasks.Tasks.Get`, `groups.RoleAPI.Call`), never through a value.
-- A service's data is its own: another service goes through an endpoint —
-  a private one, `kit.Private()` — or a topic, never through the store.
+  (`tasks.Tasks.Get`, `groups.RoleOf.Ask`), never through a value.
+- A service's data is its own: another service asks its queries or
+  dispatches its commands — internal, as long as nobody exposes them — or
+  listens to its topics, never through the store.
 - Go imports must stay a tree while services call each other both ways.
   When a service is called by a service it must itself call or listen to,
-  it declares its shared part (Service, model, store, topic, private
-  endpoints) in `svc/` and the rest in a sub-package on the same
-  `svc.Service` (`tasks/api`, `notify/dispatch`); `main.go` imports that
-  sub-package blank.
+  it declares its shared part (Service, model, store, topic, the queries
+  and commands others run) in `svc/` and the rest in a sub-package on the
+  same `svc.Service` (`tasks/api`, `notify/dispatch`); `main.go` imports
+  that sub-package blank.
 - Fire a workflow event with a constant name at the call site
   (`Lifecycle.Fire(ctx, id, "complete")`): the analysis labels the edge
   with it. Never call another endpoint's handler function directly.

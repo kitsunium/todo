@@ -48,7 +48,7 @@ func RecordTaskEvent(ctx context.Context, e tasks.Event) error {
 	}
 	var group *groups.GroupRef
 	if e.GroupID != "" {
-		found, err := groups.BatchAPI.Call(ctx, groups.IDs{IDs: []string{e.GroupID}})
+		found, err := groups.GroupRefs.Ask(ctx, groups.IDs{IDs: []string{e.GroupID}})
 		if err != nil {
 			return err
 		}

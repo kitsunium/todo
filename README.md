@@ -30,10 +30,11 @@ a reminder fifteen minutes before a task is due.
 | **stats** | the list's vital signs | a job samples the census every 30 seconds |
 | **web** | the single page application (`web/dist`, embedded) | — |
 
-Services talk through private endpoints and topics, never through each
-other's stores — the diagram shows every call. Identity's mails go through
-notify's private `send` endpoint, synchronously, so a one-time link never
-travels on a topic.
+Services talk through commands, queries and topics, never through each
+other's stores — the diagram shows every call. A service asks another's
+queries and dispatches its commands in process; nobody exposes them, so no
+route leads to them. Identity's mails go through notify's `send` command,
+synchronously, so a one-time link never travels on a topic.
 
 ## The product, as its diagram
 
@@ -69,7 +70,7 @@ flowchart LR
   subgraph n1["activity"]
     n2["GET /api/activity · auth"]
     n3["POST /api/activity/read · auth"]
-    n4["GET /internal/activity/unread"]
+    n4{"unread"}
     n5[("entries")]
     n6[/"contacts"/]
     n7[/"groups"/]
@@ -79,10 +80,10 @@ flowchart LR
     n10["POST /api/contacts/{id}/accept · auth"]
     n11["POST /api/contacts · auth"]
     n12["POST /api/contacts/{id}/cancel · auth"]
-    n13["GET /internal/contacts/check"]
-    n14["POST /api/contacts/{id}/decline · auth"]
-    n15["GET /api/contacts · auth"]
-    n16["DELETE /api/contacts/{id} · auth"]
+    n13["POST /api/contacts/{id}/decline · auth"]
+    n14["GET /api/contacts · auth"]
+    n15["DELETE /api/contacts/{id} · auth"]
+    n16{"are-contacts"}
     n17[("invites")]
     n18[("links")]
     n19[/"claim-invites"/]
@@ -91,20 +92,20 @@ flowchart LR
   end
   subgraph n22["groups"]
     n23["POST /api/invitations/{id}/accept · auth"]
-    n24["POST /internal/groups/batch"]
-    n25["POST /api/groups · auth"]
-    n26["POST /api/invitations/{id}/decline · auth"]
-    n27["DELETE /api/groups/{id} · auth"]
-    n28["GET /api/groups/{id} · auth"]
-    n29["POST /api/groups/{id}/invitations · auth"]
-    n30["GET /api/groups · auth"]
-    n31["GET /api/invitations · auth"]
-    n32["GET /internal/groups/members"]
-    n33["GET /internal/groups/memberships"]
-    n34["DELETE /api/groups/{id}/members/{userId} · auth"]
-    n35["GET /internal/groups/role"]
-    n36["PATCH /api/groups/{id}/members/{userId} · auth"]
-    n37["PATCH /api/groups/{id} · auth"]
+    n24["POST /api/groups · auth"]
+    n25["POST /api/invitations/{id}/decline · auth"]
+    n26["DELETE /api/groups/{id} · auth"]
+    n27["GET /api/groups/{id} · auth"]
+    n28["POST /api/groups/{id}/invitations · auth"]
+    n29["GET /api/groups · auth"]
+    n30["GET /api/invitations · auth"]
+    n31["DELETE /api/groups/{id}/members/{userId} · auth"]
+    n32["PATCH /api/groups/{id}/members/{userId} · auth"]
+    n33["PATCH /api/groups/{id} · auth"]
+    n34{"members"}
+    n35{"memberships"}
+    n36{"refs"}
+    n37{"role"}
     n38[("groups")]
     n39[("invitations")]
     n40>"events"]
@@ -123,10 +124,10 @@ flowchart LR
     n52["DELETE /api/auth/sessions/{id} · auth"]
     n53["POST /api/auth/signup"]
     n54["PATCH /api/auth/me · auth"]
-    n55["GET /internal/users/by-email"]
-    n56["POST /internal/users/batch"]
-    n57["POST /api/auth/verify"]
-    n58((("session-reaper")))
+    n55["POST /api/auth/verify"]
+    n56((("session-reaper")))
+    n57{"email-owner"}
+    n58{"users"}
     n59[("accounts")]
     n60[("sessions")]
     n61[("tokens")]
@@ -135,7 +136,7 @@ flowchart LR
     n64{{"tokens"}}
   end
   subgraph n65["notify"]
-    n66["POST /internal/notify/send"]
+    n66[\"send"\]
     n67(("reminders"))
     n68[["mail"]]
     n69[("reminders")]
@@ -151,20 +152,20 @@ flowchart LR
   end
   subgraph n78["tasks"]
     n79["POST /api/tasks/{id}/archive · auth"]
-    n80["GET /internal/tasks/audience"]
-    n81["GET /internal/tasks/census"]
-    n82["POST /api/tasks/{id}/complete · auth"]
-    n83["GET /api/tasks/counts · auth"]
-    n84["POST /api/tasks · auth"]
-    n85["DELETE /api/tasks/{id} · auth"]
-    n86["GET /api/tasks/{id} · auth"]
-    n87["GET /api/tasks · auth"]
-    n88["POST /internal/tasks/open-by-group"]
-    n89["POST /api/tasks/{id}/reopen · auth"]
-    n90["POST /api/tasks/{id}/restore · auth"]
-    n91["POST /api/tasks/{id}/share · auth"]
-    n92["DELETE /api/tasks/{id}/share/{userId} · auth"]
-    n93["PATCH /api/tasks/{id} · auth"]
+    n80["POST /api/tasks/{id}/complete · auth"]
+    n81["GET /api/tasks/counts · auth"]
+    n82["POST /api/tasks · auth"]
+    n83["DELETE /api/tasks/{id} · auth"]
+    n84["GET /api/tasks/{id} · auth"]
+    n85["GET /api/tasks · auth"]
+    n86["POST /api/tasks/{id}/reopen · auth"]
+    n87["POST /api/tasks/{id}/restore · auth"]
+    n88["POST /api/tasks/{id}/share · auth"]
+    n89["DELETE /api/tasks/{id}/share/{userId} · auth"]
+    n90["PATCH /api/tasks/{id} · auth"]
+    n91{"audience"}
+    n92{"census"}
+    n93{"open-by-group"}
     n94[("tasks")]
     n95[/"group-changes"/]
     n96>"events"]
@@ -177,20 +178,20 @@ flowchart LR
   n3 -.->|reads| n5
   n3 -.->|writes| n5
   n4 -.->|reads| n5
-  n6 -.->|calls| n56
+  n6 -.->|asks| n58
   n6 -.->|reads| n5
   n6 -.->|writes| n5
-  n7 -.->|calls| n56
+  n7 -.->|asks| n58
   n7 -.->|reads| n5
   n7 -.->|writes| n5
-  n8 -.->|calls| n24
-  n8 -.->|calls| n56
+  n8 -.->|asks| n36
+  n8 -.->|asks| n58
   n8 -.->|reads| n5
   n8 -.->|writes| n5
-  n10 -.->|calls| n56
+  n10 -.->|asks| n58
   n10 -.->|reads| n18
   n10 -.->|transitions accept| n21
-  n11 -.->|calls| n55
+  n11 -.->|asks| n57
   n11 -.->|publishes| n20
   n11 -.->|reads| n17
   n11 -.->|reads| n18
@@ -202,15 +203,15 @@ flowchart LR
   n12 -.->|transitions cancel| n21
   n12 -.->|writes| n17
   n13 -.->|reads| n18
+  n13 -.->|transitions decline| n21
+  n14 -.->|asks| n58
+  n14 -.->|reads| n17
   n14 -.->|reads| n18
-  n14 -.->|transitions decline| n21
-  n15 -.->|calls| n56
   n15 -.->|reads| n17
   n15 -.->|reads| n18
-  n16 -.->|reads| n17
+  n15 -.->|writes| n17
+  n15 -.->|writes| n18
   n16 -.->|reads| n18
-  n16 -.->|writes| n17
-  n16 -.->|writes| n18
   n19 -.->|reads| n17
   n19 -.->|reads| n18
   n19 -.->|transitions create| n21
@@ -221,50 +222,50 @@ flowchart LR
   n21 -->|persists| n18
   n21 -.->|publishes| n20
   n0 -->|calls| n99
-  n23 -.->|calls| n56
-  n23 -.->|calls| n88
+  n23 -.->|asks| n58
+  n23 -.->|asks| n93
   n23 -.->|reads| n38
   n23 -.->|reads| n39
   n23 -.->|transitions accept| n41
-  n24 -.->|reads| n38
-  n25 -.->|calls| n56
-  n25 -.->|calls| n88
-  n25 -.->|writes| n38
+  n24 -.->|asks| n58
+  n24 -.->|asks| n93
+  n24 -.->|writes| n38
+  n25 -.->|reads| n39
+  n25 -.->|transitions decline| n41
+  n26 -.->|publishes| n40
+  n26 -.->|reads| n38
   n26 -.->|reads| n39
-  n26 -.->|transitions decline| n41
-  n27 -.->|publishes| n40
+  n26 -.->|transitions revoke| n41
+  n26 -.->|writes| n38
+  n27 -.->|asks| n58
+  n27 -.->|asks| n93
   n27 -.->|reads| n38
-  n27 -.->|reads| n39
-  n27 -.->|transitions revoke| n41
-  n27 -.->|writes| n38
-  n28 -.->|calls| n56
-  n28 -.->|calls| n88
+  n28 -.->|asks| n16
+  n28 -.->|asks| n58
   n28 -.->|reads| n38
-  n29 -.->|calls| n13
-  n29 -.->|calls| n56
-  n29 -.->|reads| n38
-  n29 -.->|reads| n39
-  n29 -.->|transitions create| n41
-  n31 -.->|calls| n56
-  n31 -.->|reads| n38
-  n31 -.->|reads| n39
-  n30 -.->|calls| n56
-  n30 -.->|calls| n88
+  n28 -.->|reads| n39
+  n28 -.->|transitions create| n41
+  n30 -.->|asks| n58
   n30 -.->|reads| n38
+  n30 -.->|reads| n39
+  n29 -.->|asks| n58
+  n29 -.->|asks| n93
+  n29 -.->|reads| n38
+  n31 -.->|publishes| n40
+  n31 -.->|reads| n38
+  n31 -.->|writes| n38
+  n32 -.->|asks| n58
+  n32 -.->|asks| n93
   n32 -.->|reads| n38
+  n32 -.->|writes| n38
+  n33 -.->|asks| n58
+  n33 -.->|asks| n93
   n33 -.->|reads| n38
-  n34 -.->|publishes| n40
-  n34 -.->|reads| n38
-  n34 -.->|writes| n38
+  n33 -.->|writes| n38
   n35 -.->|reads| n38
-  n36 -.->|calls| n56
-  n36 -.->|calls| n88
+  n34 -.->|reads| n38
   n36 -.->|reads| n38
-  n36 -.->|writes| n38
-  n37 -.->|calls| n56
-  n37 -.->|calls| n88
   n37 -.->|reads| n38
-  n37 -.->|writes| n38
   n40 -->|delivers| n7
   n40 -->|delivers| n71
   n40 -->|delivers| n95
@@ -279,7 +280,7 @@ flowchart LR
   n44 -.->|reads| n60
   n44 -.->|writes| n59
   n44 -.->|writes| n60
-  n45 -.->|calls| n66
+  n45 -.->|dispatches| n66
   n45 -.->|reads| n59
   n45 -.->|transitions create| n64
   n46 -.->|reads| n60
@@ -288,7 +289,7 @@ flowchart LR
   n47 -.->|writes| n60
   n48 -.->|writes| n60
   n49 -.->|reads| n59
-  n50 -.->|calls| n66
+  n50 -.->|dispatches| n66
   n50 -.->|reads| n59
   n50 -.->|transitions create| n64
   n51 -.->|publishes| n62
@@ -300,119 +301,119 @@ flowchart LR
   n51 -.->|writes| n60
   n52 -.->|reads| n60
   n52 -.->|writes| n60
-  n53 -.->|calls| n66
+  n53 -.->|dispatches| n66
   n53 -.->|reads| n59
   n53 -.->|transitions create| n63
   n53 -.->|transitions create| n64
   n54 -.->|reads| n59
   n54 -.->|writes| n59
-  n55 -.->|reads| n59
-  n56 -.->|reads| n59
-  n57 -.->|reads| n61
-  n57 -.->|transitions verify| n63
-  n57 -.->|transitions use| n64
-  n57 -.->|writes| n60
-  n58 -.->|reads| n60
-  n58 -.->|reads| n61
-  n58 -.->|writes| n60
-  n58 -.->|writes| n61
+  n55 -.->|reads| n61
+  n55 -.->|transitions verify| n63
+  n55 -.->|transitions use| n64
+  n55 -.->|writes| n60
+  n56 -.->|reads| n60
+  n56 -.->|reads| n61
+  n56 -.->|writes| n60
+  n56 -.->|writes| n61
+  n57 -.->|reads| n59
+  n58 -.->|reads| n59
   n62 -->|delivers| n19
   n63 -->|persists| n59
   n63 -.->|publishes| n62
   n64 -->|persists| n61
   n66 -.->|sends| n68
-  n67 -.->|calls| n56
-  n67 -.->|calls| n80
+  n67 -.->|asks| n58
+  n67 -.->|asks| n91
   n67 -.->|reads| n69
   n67 -.->|sends| n68
   n67 -.->|writes| n69
-  n70 -.->|calls| n56
+  n70 -.->|asks| n58
   n70 -.->|sends| n68
-  n71 -.->|calls| n56
+  n71 -.->|asks| n58
   n71 -.->|sends| n68
-  n72 -.->|calls| n56
+  n72 -.->|asks| n58
   n72 -.->|sends| n68
   n73 -.->|reads| n69
   n73 -.->|writes| n69
   n75 -.->|reads| n77
-  n76 -.->|calls| n81
+  n76 -.->|asks| n92
   n76 -.->|reads| n77
   n76 -.->|writes| n77
-  n79 -.->|calls| n24
-  n79 -.->|calls| n35
-  n79 -.->|calls| n56
+  n79 -.->|asks| n36
+  n79 -.->|asks| n37
+  n79 -.->|asks| n58
   n79 -.->|reads| n94
   n79 -.->|transitions archive| n97
+  n80 -.->|asks| n36
+  n80 -.->|asks| n37
+  n80 -.->|asks| n58
   n80 -.->|reads| n94
+  n80 -.->|transitions complete| n97
+  n81 -.->|asks| n4
+  n81 -.->|asks| n35
   n81 -.->|reads| n94
-  n82 -.->|calls| n24
-  n82 -.->|calls| n35
-  n82 -.->|calls| n56
-  n82 -.->|reads| n94
-  n82 -.->|transitions complete| n97
-  n83 -.->|calls| n4
-  n83 -.->|calls| n33
+  n82 -.->|asks| n34
+  n82 -.->|asks| n36
+  n82 -.->|asks| n37
+  n82 -.->|asks| n58
+  n82 -.->|publishes| n96
+  n82 -.->|transitions create| n97
+  n83 -.->|asks| n34
+  n83 -.->|asks| n37
+  n83 -.->|publishes| n96
   n83 -.->|reads| n94
-  n84 -.->|calls| n24
-  n84 -.->|calls| n32
-  n84 -.->|calls| n35
-  n84 -.->|calls| n56
-  n84 -.->|publishes| n96
-  n84 -.->|transitions create| n97
-  n85 -.->|calls| n32
-  n85 -.->|calls| n35
-  n85 -.->|publishes| n96
+  n83 -.->|writes| n94
+  n84 -.->|asks| n36
+  n84 -.->|asks| n37
+  n84 -.->|asks| n58
+  n84 -.->|reads| n94
+  n85 -.->|asks| n35
+  n85 -.->|asks| n36
+  n85 -.->|asks| n58
   n85 -.->|reads| n94
-  n85 -.->|writes| n94
-  n86 -.->|calls| n24
-  n86 -.->|calls| n35
-  n86 -.->|calls| n56
+  n86 -.->|asks| n36
+  n86 -.->|asks| n37
+  n86 -.->|asks| n58
   n86 -.->|reads| n94
-  n87 -.->|calls| n24
-  n87 -.->|calls| n33
-  n87 -.->|calls| n56
+  n86 -.->|transitions reopen| n97
+  n87 -.->|asks| n36
+  n87 -.->|asks| n37
+  n87 -.->|asks| n58
   n87 -.->|reads| n94
+  n87 -.->|transitions restore| n97
+  n88 -.->|asks| n16
+  n88 -.->|asks| n34
+  n88 -.->|asks| n36
+  n88 -.->|asks| n37
+  n88 -.->|asks| n58
+  n88 -.->|publishes| n96
   n88 -.->|reads| n94
-  n89 -.->|calls| n24
-  n89 -.->|calls| n35
-  n89 -.->|calls| n56
+  n88 -.->|writes| n94
+  n89 -.->|asks| n34
+  n89 -.->|asks| n36
+  n89 -.->|asks| n37
+  n89 -.->|asks| n58
+  n89 -.->|publishes| n96
   n89 -.->|reads| n94
-  n89 -.->|transitions reopen| n97
-  n90 -.->|calls| n24
-  n90 -.->|calls| n35
-  n90 -.->|calls| n56
+  n89 -.->|writes| n94
+  n90 -.->|asks| n34
+  n90 -.->|asks| n36
+  n90 -.->|asks| n37
+  n90 -.->|asks| n58
+  n90 -.->|publishes| n96
   n90 -.->|reads| n94
-  n90 -.->|transitions restore| n97
-  n91 -.->|calls| n13
-  n91 -.->|calls| n24
-  n91 -.->|calls| n32
-  n91 -.->|calls| n35
-  n91 -.->|calls| n56
-  n91 -.->|publishes| n96
+  n90 -.->|transitions reschedule| n97
+  n90 -.->|writes| n94
   n91 -.->|reads| n94
-  n91 -.->|writes| n94
-  n92 -.->|calls| n24
-  n92 -.->|calls| n32
-  n92 -.->|calls| n35
-  n92 -.->|calls| n56
-  n92 -.->|publishes| n96
   n92 -.->|reads| n94
-  n92 -.->|writes| n94
-  n93 -.->|calls| n24
-  n93 -.->|calls| n32
-  n93 -.->|calls| n35
-  n93 -.->|calls| n56
-  n93 -.->|publishes| n96
   n93 -.->|reads| n94
-  n93 -.->|transitions reschedule| n97
-  n93 -.->|writes| n94
   n95 -.->|reads| n94
   n95 -.->|writes| n94
   n96 -->|delivers| n8
   n96 -->|delivers| n72
   n96 -->|delivers| n73
   n96 -->|wakes| n67
-  n97 -.->|calls| n32
+  n97 -.->|asks| n34
   n97 -->|persists| n94
   n97 -.->|publishes| n96
 ```

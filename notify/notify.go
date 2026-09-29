@@ -1,7 +1,8 @@
 // Package notify is every mail the product sends: one outbox, one design,
 // and the mails themselves, each in its recipient's language — French, or
-// English (locales/). identity sends its transactional mails through
-// SendAPI, a synchronous call, so a one-time link never travels on a topic.
+// English (locales/). identity sends its transactional mails by dispatching
+// SendMail, a command it runs in process, so a one-time link never travels
+// on a topic.
 // The rules that decide who hears about what — the subscriptions and the
 // reminders loop — live in notify/dispatch, on this same service: they listen
 // to services that depend on identity, which depends on this package.
@@ -30,15 +31,17 @@ var Service = kit.NewService("notify", "Every mail the product sends: the outbox
 // Studio montre les messages.
 var Mail = Service.Mailer("mail", kit.From("Todo", "hello@todo.localhost"))
 
-// SendAPI sends one of identity's transactional mails — the verification,
-// the password reset, the "you already have an account" — on its behalf.
+// SendMail sends one of identity's transactional mails — the verification,
+// the password reset, the "you already have an account" — on its behalf: a
+// command nobody exposes, which identity dispatches in process.
 //
-// fr: SendAPI envoie l’un des mails transactionnels du service identity, en son
-// nom — la vérification, la réinitialisation du mot de passe, le « vous avez
-// déjà un compte ».
-var SendAPI = Service.Endpoint("POST /internal/notify/send", Send, kit.Private())
+// fr: SendMail envoie l’un des mails transactionnels du service identity, en
+// son nom — la vérification, la réinitialisation du mot de passe, le « vous
+// avez déjà un compte » : une commande que personne n’expose, qu’identity
+// envoie dans le processus.
+var SendMail = Service.Command("send", Send)
 
-// The transactional templates SendAPI renders.
+// The transactional templates SendMail renders.
 const (
 	TemplateVerifyEmail   = "verify-email"
 	TemplatePasswordReset = "reset-password"

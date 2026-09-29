@@ -44,7 +44,7 @@ func roleIn(ctx context.Context, group, uid string) (groups.Role, error) {
 	if group == "" || uid == "" {
 		return "", nil
 	}
-	r, err := groups.RoleAPI.Call(ctx, groups.RoleQuery{Group: group, User: uid})
+	r, err := groups.RoleOf.Ask(ctx, groups.RoleQuery{Group: group, User: uid})
 	return r.Role, err
 }
 
@@ -60,7 +60,7 @@ type memberships map[string]groups.Belonging
 
 // membershipsOf asks groups which groups a user belongs to.
 func membershipsOf(ctx context.Context, uid string) (memberships, error) {
-	found, err := groups.MembershipsAPI.Call(ctx, groups.UserQuery{User: uid})
+	found, err := groups.UserGroups.Ask(ctx, groups.UserQuery{User: uid})
 	if err != nil {
 		return nil, err
 	}

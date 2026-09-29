@@ -65,11 +65,13 @@ var (
 	_ = Service.Endpoint("GET /api/activity", Feed, kit.Auth())
 	_ = Service.Endpoint("POST /api/activity/read", MarkRead, kit.Auth(), kit.RateLimitPerClient(10, 20))
 
-	// UnreadAPI counts a user's unread entries, for the task counts.
+	// UnreadCount counts a user's unread entries, for the task counts: a
+	// query tasks asks in process, which nobody exposes.
 	//
-	// fr: UnreadAPI compte les entrées non lues d’un utilisateur, pour les
-	// compteurs des tâches.
-	UnreadAPI = Service.Endpoint("GET /internal/activity/unread", Unread, kit.Private())
+	// fr: UnreadCount compte les entrées non lues d’un utilisateur, pour les
+	// compteurs des tâches : une requête que tasks pose dans le processus, et
+	// que personne n’expose.
+	UnreadCount = Service.Query("unread", Unread)
 )
 
 // FeedEntry is an entry as its owner reads it.
@@ -153,7 +155,7 @@ func MarkRead(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
 
 // UnreadQuery names a user.
 type UnreadQuery struct {
-	User string `query:"user"`
+	User string `json:"user"`
 }
 
 // UnreadOutput counts a user's unread entries.

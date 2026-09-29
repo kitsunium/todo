@@ -103,7 +103,7 @@ func present(ctx context.Context, uid string, gs ...Group) ([]View, error) {
 	}
 	open := tasks.OpenByGroupOutput{Counts: map[string]int{}}
 	if len(ids) > 0 {
-		if open, err = tasks.OpenByGroupAPI.Call(ctx, tasks.GroupIDs{IDs: ids}); err != nil {
+		if open, err = tasks.OpenTasks.Ask(ctx, tasks.GroupIDs{IDs: ids}); err != nil {
 			return nil, err
 		}
 	}
@@ -338,7 +338,7 @@ func Invite(ctx context.Context, in InviteInput) (InvitationView, error) {
 	case in.UserID == uid || g.RoleOf(in.UserID) != "":
 		return InvitationView{}, kit.Conflict("this person is already a member")
 	}
-	check, err := contacts.CheckAPI.Call(ctx, contacts.CheckInput{A: uid, B: in.UserID})
+	check, err := contacts.AreContacts.Ask(ctx, contacts.CheckInput{A: uid, B: in.UserID})
 	if err != nil {
 		return InvitationView{}, err
 	}
