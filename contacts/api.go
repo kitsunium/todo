@@ -26,13 +26,14 @@ var (
 	_ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, kit.Auth(), kit.RateLimitPerClient(10, 20))
 	_ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, kit.Auth(), kit.RateLimitPerClient(10, 20))
 
-	// CheckAPI tells another service whether two users are contacts: tasks
-	// shares only with contacts, groups invites only contacts.
+	// AreContacts tells another service whether two users are contacts:
+	// tasks shares only with contacts, groups invites only contacts. A query
+	// nobody exposes.
 	//
-	// fr: CheckAPI dit à un autre service si deux utilisateurs sont en
+	// fr: AreContacts dit à un autre service si deux utilisateurs sont en
 	// contact : tasks ne partage qu’avec des contacts, groups n’invite que des
-	// contacts.
-	CheckAPI = Service.Endpoint("GET /internal/contacts/check", Check, kit.Private())
+	// contacts. Une requête que personne n’expose.
+	AreContacts = Service.Query("are-contacts", Check)
 )
 
 // Contact is someone the user works with.
@@ -175,7 +176,7 @@ func Add(ctx context.Context, in AddInput) (AddOutput, error) {
 	if !identity.ValidEmail(email) {
 		return AddOutput{}, wire.Invalid("email", "email", "must be an email address")
 	}
-	found, err := identity.UserByEmailAPI.Call(ctx, identity.EmailQuery{Email: email})
+	found, err := identity.EmailOwner.Ask(ctx, identity.EmailQuery{Email: email})
 	if err != nil {
 		return AddOutput{}, err
 	}
@@ -367,8 +368,8 @@ func withdrawInvite(ctx context.Context, id, uid string) error {
 
 // CheckInput names two users.
 type CheckInput struct {
-	A string `query:"a"`
-	B string `query:"b"`
+	A string `json:"a"`
+	B string `json:"b"`
 }
 
 // CheckOutput says whether they are contacts.

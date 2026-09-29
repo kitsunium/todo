@@ -150,7 +150,7 @@ func publish(ctx context.Context, t tasks.Task, e tasks.Event) error {
 func recipients(ctx context.Context, t tasks.Task, actor string) ([]string, error) {
 	users := t.Audience()
 	if t.GroupID != "" {
-		members, err := groups.MembersAPI.Call(ctx, groups.GroupQuery{Group: t.GroupID})
+		members, err := groups.GroupMembers.Ask(ctx, groups.GroupQuery{Group: t.GroupID})
 		if err != nil {
 			return nil, err
 		}

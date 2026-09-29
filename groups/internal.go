@@ -7,39 +7,42 @@ import (
 	"github.com/kitsunium/todo/internal/wire"
 )
 
-// What other services may ask about groups, in-process: tasks decides who
-// sees a task and who may delete it, activity names the groups in the feeds.
+// What other services may ask about groups, in process — queries nobody
+// exposes: tasks decides who sees a task and who may delete it, activity
+// names the groups in the feeds.
 //
 // fr: Ce que les autres services peuvent demander sur les groupes, dans le
-// processus : tasks décide qui voit une tâche et qui peut la supprimer,
-// activity nomme les groupes dans les fils d’activité.
+// processus — des requêtes que personne n’expose : tasks décide qui voit une
+// tâche et qui peut la supprimer, activity nomme les groupes dans les fils
+// d’activité.
 var (
-	// RoleAPI tells a user's role in a group.
+	// RoleOf tells a user's role in a group.
 	//
-	// fr: RoleAPI donne le rôle d’un utilisateur dans un groupe.
-	RoleAPI = Service.Endpoint("GET /internal/groups/role", RoleIn, kit.Private())
+	// fr: RoleOf donne le rôle d’un utilisateur dans un groupe.
+	RoleOf = Service.Query("role", RoleIn)
 
-	// BatchAPI turns group IDs into how groups are shown.
+	// GroupRefs turns group IDs into how groups are shown.
 	//
-	// fr: BatchAPI traduit des ID de groupes en groupes tels qu’on les affiche.
-	BatchAPI = Service.Endpoint("POST /internal/groups/batch", Batch, kit.Private())
+	// fr: GroupRefs traduit des ID de groupes en groupes tels qu’on les
+	// affiche.
+	GroupRefs = Service.Query("refs", Batch)
 
-	// MembershipsAPI lists the groups a user belongs to, with their role.
+	// UserGroups lists the groups a user belongs to, with their role.
 	//
-	// fr: MembershipsAPI liste les groupes dont un utilisateur est membre, avec
+	// fr: UserGroups liste les groupes dont un utilisateur est membre, avec
 	// son rôle.
-	MembershipsAPI = Service.Endpoint("GET /internal/groups/memberships", MembershipsOf, kit.Private())
+	UserGroups = Service.Query("memberships", MembershipsOf)
 
-	// MembersAPI lists the members of a group.
+	// GroupMembers lists the members of a group.
 	//
-	// fr: MembersAPI liste les membres d’un groupe.
-	MembersAPI = Service.Endpoint("GET /internal/groups/members", MembersOf, kit.Private())
+	// fr: GroupMembers liste les membres d’un groupe.
+	GroupMembers = Service.Query("members", MembersOf)
 )
 
 // RoleQuery names a group and a user.
 type RoleQuery struct {
-	Group string `query:"group"`
-	User  string `query:"user"`
+	Group string `json:"group"`
+	User  string `json:"user"`
 }
 
 // RoleOutput is the user's role: "" when they are not a member.
@@ -102,7 +105,7 @@ func Batch(ctx context.Context, in IDs) (BatchOutput, error) {
 
 // UserQuery names a user.
 type UserQuery struct {
-	User string `query:"user"`
+	User string `json:"user"`
 }
 
 // Belonging is one group a user belongs to, and their role in it.
@@ -136,7 +139,7 @@ func MembershipsOf(ctx context.Context, in UserQuery) (MembershipsOutput, error)
 
 // GroupQuery names a group.
 type GroupQuery struct {
-	Group string `query:"group"`
+	Group string `json:"group"`
 }
 
 // MembersOutput is a group's members; empty for a group that does not exist.

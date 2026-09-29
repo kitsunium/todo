@@ -8,32 +8,32 @@ import (
 	"github.com/kitsunium/todo/internal/wire"
 )
 
-// The questions other services may ask about tasks, in-process. A service's
-// data is its own: stats, groups and notify ask here rather than read the
-// store.
+// The questions other services may ask about tasks, in process: queries
+// nobody exposes. A service's data is its own: stats, groups and notify ask
+// here rather than read the store.
 //
 // fr: Les questions que les autres services peuvent poser sur les tâches, dans
-// le processus. Les données d’un service lui appartiennent : stats, groups et
-// notify demandent ici plutôt que de lire le store.
+// le processus : des requêtes que personne n’expose. Les données d’un service
+// lui appartiennent : stats, groups et notify demandent ici plutôt que de lire
+// le store.
 var (
-	// CensusAPI counts every task, for stats.
+	// TaskCensus counts every task, for stats.
 	//
-	// fr: CensusAPI compte toutes les tâches, pour stats.
-	CensusAPI = Service.Endpoint("GET /internal/tasks/census", Census, kit.Private())
+	// fr: TaskCensus compte toutes les tâches, pour stats.
+	TaskCensus = Service.Query("census", Census)
 
-	// OpenByGroupAPI counts the tasks left to do on groups' lists, for
-	// groups.
+	// OpenTasks counts the tasks left to do on groups' lists, for groups.
 	//
-	// fr: OpenByGroupAPI compte les tâches qui restent à faire sur les listes
-	// des groupes, pour groups.
-	OpenByGroupAPI = Service.Endpoint("POST /internal/tasks/open-by-group", OpenByGroup, kit.Private())
+	// fr: OpenTasks compte les tâches qui restent à faire sur les listes des
+	// groupes, pour groups.
+	OpenTasks = Service.Query("open-by-group", OpenByGroup)
 
-	// AudienceAPI says whom a task concerns right now, for notify's
+	// TaskAudience says whom a task concerns right now, for notify's
 	// reminders.
 	//
-	// fr: AudienceAPI dit qui une tâche concerne en ce moment, pour les rappels
-	// de notify.
-	AudienceAPI = Service.Endpoint("GET /internal/tasks/audience", Audience, kit.Private())
+	// fr: TaskAudience dit qui une tâche concerne en ce moment, pour les
+	// rappels de notify.
+	TaskAudience = Service.Query("audience", Audience)
 )
 
 // priorityNames names the priorities in the census.
@@ -118,7 +118,7 @@ func OpenByGroup(ctx context.Context, in GroupIDs) (OpenByGroupOutput, error) {
 
 // AudienceInput names a task.
 type AudienceInput struct {
-	Task string `query:"task"`
+	Task string `json:"task"`
 }
 
 // Brief is a task as a notification shows it.

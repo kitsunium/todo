@@ -55,7 +55,7 @@ const keep = 120
 // par l’endpoint du recensement plutôt que par le store : les données d’un
 // service lui appartiennent.
 func Sample(ctx context.Context) error {
-	census, err := tasks.CensusAPI.Call(ctx, kit.Empty{})
+	census, err := tasks.TaskCensus.Ask(ctx, kit.Empty{})
 	if err != nil {
 		return err
 	}

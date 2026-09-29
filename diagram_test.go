@@ -256,7 +256,7 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 	}
 
 	// Mail: every sender reaches the one mailer.
-	for _, from := range []string{"notify/endpoint/Send", "notify/subscription/task-mail", "notify/subscription/contact-mail", "notify/subscription/group-mail", "notify/loop/reminders"} {
+	for _, from := range []string{"notify/command/send", "notify/subscription/task-mail", "notify/subscription/contact-mail", "notify/subscription/group-mail", "notify/loop/reminders"} {
 		if e := g.Edge(from + "|sends|notify/mailer/mail"); e == nil || len(e.Static) == 0 || e.Observed == nil {
 			t.Errorf("%s does not send through the mailer: %+v", from, e)
 		}

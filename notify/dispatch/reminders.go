@@ -151,7 +151,7 @@ func SendReminders(ctx context.Context, _ kit.Wake) error {
 // remind sends one reminder to the people its task concerns now, after
 // checking the task still wants it.
 func remind(ctx context.Context, r Reminder, now time.Time) error {
-	aud, err := tasks.AudienceAPI.Call(ctx, tasks.AudienceInput{Task: r.TaskID})
+	aud, err := tasks.TaskAudience.Ask(ctx, tasks.AudienceInput{Task: r.TaskID})
 	if err != nil {
 		return err
 	}

@@ -159,7 +159,7 @@ func sendVerification(ctx context.Context, a Account) error {
 	if err != nil {
 		return err
 	}
-	_, err = notify.SendAPI.Call(ctx, notify.SendInput{
+	_, err = notify.SendMail.Dispatch(ctx, notify.SendInput{
 		Template: notify.TemplateVerifyEmail, To: a.Email, Name: a.Name, Locale: a.locale(), Data: map[string]string{"token": secret},
 	})
 	return err
@@ -168,7 +168,7 @@ func sendVerification(ctx context.Context, a Account) error {
 // sendAccountExists tells the owner of an address that someone tried to
 // sign up with it.
 func sendAccountExists(ctx context.Context, a Account) error {
-	_, err := notify.SendAPI.Call(ctx, notify.SendInput{Template: notify.TemplateAccountExists, To: a.Email, Name: a.Name, Locale: a.locale()})
+	_, err := notify.SendMail.Dispatch(ctx, notify.SendInput{Template: notify.TemplateAccountExists, To: a.Email, Name: a.Name, Locale: a.locale()})
 	return err
 }
 
@@ -459,7 +459,7 @@ func ForgotPassword(ctx context.Context, in EmailInput) (SentOutput, error) {
 	if err != nil {
 		return SentOutput{}, err
 	}
-	_, err = notify.SendAPI.Call(ctx, notify.SendInput{
+	_, err = notify.SendMail.Dispatch(ctx, notify.SendInput{
 		Template: notify.TemplatePasswordReset, To: a.Email, Name: a.Name, Locale: a.locale(), Data: map[string]string{"token": secret},
 	})
 	return out, err

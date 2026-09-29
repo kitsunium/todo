@@ -167,7 +167,7 @@ func Counts(ctx context.Context, in CountsInput) (CountsOutput, error) {
 			out.Groups[t.GroupID]++
 		}
 	}
-	unread, err := activity.UnreadAPI.Call(ctx, activity.UnreadQuery{User: uid})
+	unread, err := activity.UnreadCount.Ask(ctx, activity.UnreadQuery{User: uid})
 	if err != nil {
 		return CountsOutput{}, err
 	}
@@ -529,7 +529,7 @@ func Share(ctx context.Context, in ShareInput) (View, error) {
 	case slices.Contains(t.SharedWith, in.UserID):
 		return present(ctx, t, acc)
 	}
-	check, err := contacts.CheckAPI.Call(ctx, contacts.CheckInput{A: uid, B: in.UserID})
+	check, err := contacts.AreContacts.Ask(ctx, contacts.CheckInput{A: uid, B: in.UserID})
 	if err != nil {
 		return View{}, err
 	}

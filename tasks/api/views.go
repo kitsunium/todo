@@ -66,7 +66,7 @@ func resolve(ctx context.Context, ts []tasks.Task, known memberships) (resolver,
 		r.groups[id] = m.Group
 	}
 	if len(unknown) > 0 {
-		found, err := groups.BatchAPI.Call(ctx, groups.IDs{IDs: unknown})
+		found, err := groups.GroupRefs.Ask(ctx, groups.IDs{IDs: unknown})
 		if err != nil {
 			return resolver{}, err
 		}
