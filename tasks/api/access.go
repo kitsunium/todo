@@ -5,7 +5,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/tasks"
@@ -95,7 +95,7 @@ func load(ctx context.Context, id string) (tasks.Task, access, string, error) {
 		return tasks.Task{}, access{}, "", err
 	}
 	t, err := tasks.Tasks.Get(ctx, id)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return tasks.Task{}, access{}, "", errNoTask()
 	}
 	if err != nil {

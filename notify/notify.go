@@ -13,8 +13,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/sdk/pkg/v1/mail"
+	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/pkg/v1/app/mail"
 	"github.com/kitsunium/todo/internal/wire"
 )
 

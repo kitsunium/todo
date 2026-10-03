@@ -1,14 +1,21 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/kitsunium/platform/analyzer"
-	"github.com/kitsunium/platform/model"
+	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/model"
 )
 
 // exercise uses the product the way people do, so that every service works
@@ -130,16 +137,22 @@ func (h *harness) analyzed() *model.Graph {
 // source declares are the same nodes; every edge the source proves is in
 // the diagram; and every edge the running product took is one the source
 // explains — declared by construction, or found in the code.
+//
+// What the running product says of itself is checked everywhere. What only
+// the source says is kit's static analysis: checked when kit is here, and
+// skipped, by name, when it is not.
 func TestTheDiagramMatchesTheCode(t *testing.T) {
-	h := start(t, true)
-	exercise(h)
-	g := h.analyzed()
-	static, err := analyzer.Analyze(t.Context(), analyzer.Options{Dir: "."})
-	if err != nil {
-		t.Fatal(err)
+	source := kitSource()
+	var analysis kit.AnalyzeFunc
+	if source != nil {
+		analysis = source.analyze
 	}
-
-	// The same nodes, both ways.
+	h := start(t, analysis)
+	exercise(h)
+	g := h.app.Graph()
+	if source != nil {
+		g = h.analyzed()
+	}
 	ids := func(nodes []model.Node) []string {
 		var out []string
 		for _, n := range nodes {
@@ -150,81 +163,29 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 		slices.Sort(out)
 		return out
 	}
-	running, declared := ids(g.Nodes), ids(static.Nodes)
-	for _, id := range running {
-		if !slices.Contains(declared, id) {
-			t.Errorf("%s runs, but the static analysis does not find it", id)
-		}
-	}
-	for _, id := range declared {
-		if !slices.Contains(running, id) {
-			t.Errorf("%s is declared, but the product does not run it", id)
-		}
-	}
+
+	// The product as it runs: every node in it, and every edge between two.
+	running := ids(g.Nodes)
 	if len(running) < 90 {
 		t.Errorf("only %d nodes: the product is bigger than that", len(running))
-	}
-
-	// Every edge the code proves is drawn; every edge the product took is
-	// explained by the code — but the requests from outside.
-	for _, e := range static.Edges {
-		if g.Edge(e.ID) == nil {
-			t.Errorf("the code proves %s, the diagram does not draw it", e.ID)
-		}
 	}
 	for _, e := range g.Edges {
 		if g.Node(e.From) == nil || g.Node(e.To) == nil {
 			t.Errorf("edge %s points outside the graph", e.ID)
 		}
-		from := g.Node(e.From)
-		outside := from != nil && (from.Kind == model.KindExternal || from.Kind == model.KindFrontend)
-		if e.Observed != nil && !e.Declared && len(e.Static) == 0 && !outside {
-			t.Errorf("the product took %s, which the code does not explain", e.ID)
-		}
 	}
 
-	// Every node says where it is, what it is, and — when it runs code —
-	// where that code is.
+	// Every node says where it is.
 	for _, n := range g.Nodes {
-		if n.Kind == model.KindExternal {
-			continue
-		}
-		if n.Source == nil || n.Source.File == "" {
+		if n.Kind != model.KindExternal && (n.Source == nil || n.Source.File == "") {
 			t.Errorf("%s has no source", n.ID)
 		}
-		if n.Kind != model.KindService && n.Doc == "" {
-			t.Errorf("%s has no documentation", n.ID)
-		}
-		switch n.Kind {
-		case model.KindEndpoint, model.KindJob, model.KindSubscription, model.KindLoop, model.KindAuth:
-			if n.Handler == nil || n.Handler.EndLine == 0 {
-				t.Errorf("%s has no handler range", n.ID)
-			}
-		}
-	}
-	for _, n := range g.Nodes {
-		if n.Workflow == nil {
-			continue
-		}
-		for _, tr := range n.Workflow.Transitions {
-			if tr.Trigger == model.TriggerEvent && len(tr.Callers) == 0 {
-				t.Errorf("nothing fires %q of %s", tr.Event, n.ID)
-			}
-		}
 	}
 
-	// The daemon's own loops: the reaper written by hand, whose select the
-	// analysis reads; the reminders run by kit, whose wakes are data.
+	// The daemon's own loops: the reaper written by hand; the reminders run
+	// by kit, whose wakes are data.
 	if reaper := g.Node("identity/loop/session-reaper"); reaper == nil || reaper.Loop == nil || reaper.Loop.Style != model.LoopGoroutine {
 		t.Errorf("the session reaper: %+v", reaper)
-	} else {
-		var kinds []string
-		for _, c := range reaper.Loop.Selects {
-			kinds = append(kinds, c.Kind)
-		}
-		if !slices.Contains(kinds, model.SelectTimer) || !slices.Contains(kinds, model.SelectDone) {
-			t.Errorf("the reaper waits on %+v", reaper.Loop.Selects)
-		}
 	}
 	if loop := g.Node("notify/loop/reminders"); loop == nil || loop.Loop == nil || loop.Loop.Style != model.LoopDeclared {
 		t.Errorf("the reminders loop: %+v", loop)
@@ -255,9 +216,10 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 		t.Errorf("the session handler guards %+v of %d endpoints", auth, guarded)
 	}
 
-	// Mail: every sender reaches the one mailer.
-	for _, from := range []string{"notify/command/send", "notify/subscription/task-mail", "notify/subscription/contact-mail", "notify/subscription/group-mail", "notify/loop/reminders"} {
-		if e := g.Edge(from + "|sends|notify/mailer/mail"); e == nil || len(e.Static) == 0 || e.Observed == nil {
+	// Mail: every sender reached the one mailer.
+	senders := []string{"notify/command/send", "notify/subscription/task-mail", "notify/subscription/contact-mail", "notify/subscription/group-mail", "notify/loop/reminders"}
+	for _, from := range senders {
+		if e := g.Edge(from + "|sends|notify/mailer/mail"); e == nil || e.Observed == nil {
 			t.Errorf("%s does not send through the mailer: %+v", from, e)
 		}
 	}
@@ -278,4 +240,179 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 			t.Errorf("diagnostic: %s (%s)", d.Message, d.Node)
 		}
 	}
+
+	if source == nil {
+		t.Skip(withoutKit + "what only the source says: the same nodes both ways, every edge explained, each node's documentation and handler range, who fires each transition, the reaper's select, the mailer's senders in the code")
+	}
+	static := source.graph(t)
+
+	// The same nodes, both ways.
+	declared := ids(static.Nodes)
+	for _, id := range running {
+		if !slices.Contains(declared, id) {
+			t.Errorf("%s runs, but the static analysis does not find it", id)
+		}
+	}
+	for _, id := range declared {
+		if !slices.Contains(running, id) {
+			t.Errorf("%s is declared, but the product does not run it", id)
+		}
+	}
+
+	// Every edge the code proves is drawn; every edge the product took is
+	// explained by the code — but the requests from outside.
+	for _, e := range static.Edges {
+		if g.Edge(e.ID) == nil {
+			t.Errorf("the code proves %s, the diagram does not draw it", e.ID)
+		}
+	}
+	for _, e := range g.Edges {
+		from := g.Node(e.From)
+		outside := from != nil && (from.Kind == model.KindExternal || from.Kind == model.KindFrontend)
+		if e.Observed != nil && !e.Declared && len(e.Static) == 0 && !outside {
+			t.Errorf("the product took %s, which the code does not explain", e.ID)
+		}
+	}
+
+	// Every node says what it is, and — when it runs code — where that code
+	// is.
+	for _, n := range g.Nodes {
+		if n.Kind == model.KindExternal {
+			continue
+		}
+		if n.Kind != model.KindService && n.Doc == "" {
+			t.Errorf("%s has no documentation", n.ID)
+		}
+		switch n.Kind {
+		case model.KindEndpoint, model.KindJob, model.KindSubscription, model.KindLoop, model.KindAuth:
+			if n.Handler == nil || n.Handler.EndLine == 0 {
+				t.Errorf("%s has no handler range", n.ID)
+			}
+		}
+	}
+	for _, n := range g.Nodes {
+		if n.Workflow == nil {
+			continue
+		}
+		for _, tr := range n.Workflow.Transitions {
+			if tr.Trigger == model.TriggerEvent && len(tr.Callers) == 0 {
+				t.Errorf("nothing fires %q of %s", tr.Event, n.ID)
+			}
+		}
+	}
+
+	// The reaper, written by hand: the analysis reads its select.
+	if reaper := g.Node("identity/loop/session-reaper"); reaper != nil && reaper.Loop != nil && reaper.Loop.Style == model.LoopGoroutine {
+		var kinds []string
+		for _, c := range reaper.Loop.Selects {
+			kinds = append(kinds, c.Kind)
+		}
+		if !slices.Contains(kinds, model.SelectTimer) || !slices.Contains(kinds, model.SelectDone) {
+			t.Errorf("the reaper waits on %+v", reaper.Loop.Selects)
+		}
+	}
+
+	// Mail: the code, too, says every sender reaches the one mailer.
+	for _, from := range senders {
+		if e := g.Edge(from + "|sends|notify/mailer/mail"); e != nil && len(e.Static) == 0 {
+			t.Errorf("%s sends through the mailer, which the code does not explain: %+v", from, e)
+		}
+	}
+}
+
+// The static half of the diagram is kit's. The analyzer that reads the
+// source is the platform's, and the todo links none of it: the framework
+// links no analyzer (SDK ADR 0147 §1), and a product imports nothing from the
+// platform (the platform's ADR 0010, D2). The tests run the kit tool instead,
+// as a process, and give the product what it read through the framework's own
+// hook, kit.Analyzer — as the product's graph had it when it linked the
+// analyzer.
+
+// withoutKit says which half of the diagram suite did not run, and why.
+const withoutKit = "kit's static analysis reads the source, and there is no kit here — put kit on PATH, or set KIT to its binary — to check "
+
+// kitSource is kit's analysis of the todo's source, by the kit binary $KIT
+// names, else by kit on PATH; nil when there is neither.
+func kitSource() *sourceAnalysis {
+	bin := os.Getenv("KIT")
+	if bin == "" {
+		var err error
+		if bin, err = exec.LookPath("kit"); err != nil {
+			return nil
+		}
+	}
+	return &sourceAnalysis{bin: bin}
+}
+
+// sourceAnalysis runs `kit graph -static -format json` on the product's
+// module: the graph kit's analyzer reads from the source alone.
+type sourceAnalysis struct {
+	bin string
+	mu  sync.Mutex
+	raw []byte // the graph kit printed last
+	err error  // why kit's last run gave none
+}
+
+// analyze is the product's kit.AnalyzeFunc: kit run on the module rooted at
+// dir.
+func (s *sourceAnalysis) analyze(ctx context.Context, dir string, modules []string) (*model.Graph, error) {
+	raw, g, err := s.run(ctx, dir, modules)
+	s.mu.Lock()
+	s.raw, s.err = raw, err
+	s.mu.Unlock()
+	return g, err
+}
+
+// run runs kit, and reads what it printed.
+func (s *sourceAnalysis) run(ctx context.Context, dir string, modules []string) ([]byte, *model.Graph, error) {
+	if len(modules) > 0 {
+		// kit graph -static reads one module: the nodes of a mounted one
+		// would be missing, and the diagram would lie.
+		return nil, nil, fmt.Errorf("kit graph -static reads the product's module alone, and the app mounts %v", modules)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, s.bin, "graph", "-static", "-format", "json", dir)
+	cmd.Stdout, cmd.Stderr, cmd.WaitDelay = &stdout, &stderr, 5*time.Second
+	if err := cmd.Run(); err != nil {
+		return nil, nil, fmt.Errorf("%s graph -static %s: %w: %s", s.bin, dir, err, bytes.TrimSpace(stderr.Bytes()))
+	}
+	g, err := decodeGraph(stdout.Bytes())
+	if err != nil {
+		return nil, nil, err
+	}
+	return stdout.Bytes(), g, nil
+}
+
+// graph is the graph kit printed last, decoded afresh — the product merged
+// its own copy into the graph it runs —, or the test's end when kit gave
+// none.
+func (s *sourceAnalysis) graph(t *testing.T) *model.Graph {
+	t.Helper()
+	s.mu.Lock()
+	raw, err := s.raw, s.err
+	s.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw == nil {
+		t.Fatal("kit has not analyzed the source")
+	}
+	g, err := decodeGraph(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
+// decodeGraph reads the graph kit printed, which must be in the model the
+// framework go.mod requires speaks.
+func decodeGraph(raw []byte) (*model.Graph, error) {
+	var g model.Graph
+	if err := json.Unmarshal(raw, &g); err != nil {
+		return nil, fmt.Errorf("kit's graph: %w", err)
+	}
+	if g.Version != model.Version {
+		return nil, fmt.Errorf("kit's graph is model version %d and the framework reads version %d: use a kit built on the framework go.mod requires", g.Version, model.Version)
+	}
+	return &g, nil
 }

@@ -11,7 +11,7 @@ import (
 // at sign-up, then at each sign-in — a user who travelled reads the zone
 // they signed in from. A zone the IANA database does not know is refused.
 func TestMailsSpeakTheReadersTimeZone(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	signupIn := func(name, email, zone string) *client {
 		t.Helper()
 		c := h.client(name)

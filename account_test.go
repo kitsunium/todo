@@ -25,7 +25,7 @@ func sessionCookie(h http.Header) (*http.Cookie, bool) {
 // A new account: signed up, told to verify, verified by the link of its
 // mail, signed in by it, renamed, used from an API client, signed out.
 func TestAnAccountFromSignupToSignOut(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.client("alice")
 	signup := map[string]any{"email": "  Alice@Example.com ", "name": "Alice Martin", "password": testPassword}
 
@@ -124,7 +124,7 @@ func TestAnAccountFromSignupToSignOut(t *testing.T) {
 // A session lasts thirty days without use: then it signs no one in, and its
 // cookie is cleared.
 func TestASessionExpires(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	eve := h.signup("Eve", "eve@example.com")
 	eve.expect(http.StatusOK, "GET", "/api/auth/me", nil)
 	h.clk.Advance(identity.SessionFor + time.Minute)
@@ -137,7 +137,7 @@ func TestASessionExpires(t *testing.T) {
 // Wrong passwords answer the same as unknown addresses; five in a row lock
 // the account, whose own timer unlocks it fifteen minutes later.
 func TestSignInFailuresLockTheAccount(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	h.signup("Bob", "bob@example.com")
 	anon := h.client("anon")
 	wrong := map[string]any{"email": "bob@example.com", "password": "not the password"}
@@ -176,7 +176,7 @@ func TestSignInFailuresLockTheAccount(t *testing.T) {
 // used the link; changing the password signs out every other session. A
 // reset also unlocks a locked account.
 func TestPasswordsResetAndChange(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	laptop := h.signup("Carol", "carol@example.com")
 	phone := h.client("phone")
 	phone.expect(http.StatusOK, "POST", "/api/auth/login", map[string]any{"email": "carol@example.com", "password": testPassword})
@@ -223,7 +223,7 @@ func TestPasswordsResetAndChange(t *testing.T) {
 // A session is revoked from the list of sessions; revoking another user's
 // is revoking nothing.
 func TestSessionsAreRevoked(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	laptop := h.signup("Dan", "dan@example.com")
 	phone := h.client("phone")
 	phone.expect(http.StatusOK, "POST", "/api/auth/login", map[string]any{"email": "dan@example.com", "password": testPassword})
@@ -254,7 +254,7 @@ func TestSessionsAreRevoked(t *testing.T) {
 // French when neither does. The account changes it later, and the next
 // mails follow; a mail to someone without an account is in the inviter's.
 func TestEachAccountReadsItsLanguage(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 
 	// A browser that prefers English opens an English account.
 	eve := h.client("eve")

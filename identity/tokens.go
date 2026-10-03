@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -155,7 +155,7 @@ func redeem(ctx context.Context, secret string, p Purpose) (Token, error) {
 		return Token{}, errBadLink()
 	}
 	used, err := TokenLifecycle.Fire(ctx, t.ID, "use")
-	if wire.Is(err, kit.CodeConflict) || wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireConflict) || wire.Is(err, kit.WireNotFound) {
 		return Token{}, errBadLink() // another request used it first
 	}
 	return used, err

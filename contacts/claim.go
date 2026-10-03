@@ -3,7 +3,7 @@ package contacts
 import (
 	"context"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
 )
@@ -37,7 +37,7 @@ func ClaimInvites(ctx context.Context, e identity.AccountEvent) error {
 			continue
 		}
 		if inv.InviterID != e.UserID {
-			if _, err := request(ctx, inv.InviterID, e.UserID); err != nil && !wire.Is(err, kit.CodeConflict) {
+			if _, err := request(ctx, inv.InviterID, e.UserID); err != nil && !wire.Is(err, kit.WireConflict) {
 				return err
 			}
 		}
@@ -45,7 +45,7 @@ func ClaimInvites(ctx context.Context, e identity.AccountEvent) error {
 		if _, err := Invites.Update(ctx, inv.ID, func(i *Invite) error {
 			i.Status, i.JoinedAt = Joined, &now
 			return nil
-		}); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		}); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return err
 		}
 	}

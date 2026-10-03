@@ -3,7 +3,7 @@ package identity
 import (
 	"context"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -93,7 +93,7 @@ func Users(ctx context.Context, in IDs) (UsersOutput, error) {
 		}
 		seen[id] = true
 		a, err := Accounts.Get(ctx, id)
-		if wire.Is(err, kit.CodeNotFound) {
+		if wire.Is(err, kit.WireNotFound) {
 			continue
 		}
 		if err != nil {

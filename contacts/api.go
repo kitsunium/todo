@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
 )
@@ -232,7 +232,7 @@ func errAnswered() error { return kit.Conflict("this request is not waiting for 
 // linkOf returns the link with the given ID, if uid is part of it.
 func linkOf(ctx context.Context, id, uid string) (Link, error) {
 	l, err := Links.Lookup(ctx, "id", id)
-	if wire.Is(err, kit.CodeNotFound) || (err == nil && l.RequesterID != uid && l.AddresseeID != uid) {
+	if wire.Is(err, kit.WireNotFound) || (err == nil && l.RequesterID != uid && l.AddresseeID != uid) {
 		return Link{}, errNoLink()
 	}
 	return l, err
@@ -257,7 +257,7 @@ func Accept(ctx context.Context, in ByID) (ContactOutput, error) {
 		return ContactOutput{}, errAnswered()
 	}
 	l, err = Requests.Fire(ctx, l.Pair, "accept")
-	if wire.Is(err, kit.CodeConflict) {
+	if wire.Is(err, kit.WireConflict) {
 		return ContactOutput{}, errAnswered()
 	}
 	if err != nil {
@@ -290,7 +290,7 @@ func Decline(ctx context.Context, in ByID) (kit.Empty, error) {
 	if l.Status != Pending {
 		return kit.Empty{}, errAnswered()
 	}
-	if _, err := Requests.Fire(ctx, l.Pair, "decline"); wire.Is(err, kit.CodeConflict) {
+	if _, err := Requests.Fire(ctx, l.Pair, "decline"); wire.Is(err, kit.WireConflict) {
 		return kit.Empty{}, errAnswered()
 	} else if err != nil {
 		return kit.Empty{}, err
@@ -320,7 +320,7 @@ func Cancel(ctx context.Context, in ByID) (kit.Empty, error) {
 	if l.Status != Pending {
 		return kit.Empty{}, errAnswered()
 	}
-	if _, err := Requests.Fire(ctx, l.Pair, "cancel"); wire.Is(err, kit.CodeConflict) {
+	if _, err := Requests.Fire(ctx, l.Pair, "cancel"); wire.Is(err, kit.WireConflict) {
 		return kit.Empty{}, errAnswered()
 	} else if err != nil {
 		return kit.Empty{}, err
@@ -345,7 +345,7 @@ func Remove(ctx context.Context, in ByID) (kit.Empty, error) {
 	if err != nil {
 		return kit.Empty{}, err
 	}
-	if err := Links.Delete(ctx, l.Pair); err != nil && !wire.Is(err, kit.CodeNotFound) {
+	if err := Links.Delete(ctx, l.Pair); err != nil && !wire.Is(err, kit.WireNotFound) {
 		return kit.Empty{}, err
 	}
 	return kit.Empty{}, nil
@@ -354,13 +354,13 @@ func Remove(ctx context.Context, in ByID) (kit.Empty, error) {
 // withdrawInvite deletes an invitation by email the user sent.
 func withdrawInvite(ctx context.Context, id, uid string) error {
 	i, err := Invites.Get(ctx, id)
-	if wire.Is(err, kit.CodeNotFound) || (err == nil && i.InviterID != uid) {
+	if wire.Is(err, kit.WireNotFound) || (err == nil && i.InviterID != uid) {
 		return errNoLink()
 	}
 	if err != nil {
 		return err
 	}
-	if err := Invites.Delete(ctx, id); err != nil && !wire.Is(err, kit.CodeNotFound) {
+	if err := Invites.Delete(ctx, id); err != nil && !wire.Is(err, kit.WireNotFound) {
 		return err
 	}
 	return nil

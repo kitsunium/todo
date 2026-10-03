@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
@@ -76,7 +76,7 @@ func errNoGroup() error { return kit.NotFound("no such group") }
 // membership returns a group the user is a member of, and their role.
 func membership(ctx context.Context, id, uid string) (Group, Role, error) {
 	g, err := Groups.Get(ctx, id)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return Group{}, "", errNoGroup()
 	}
 	if err != nil {
@@ -291,7 +291,7 @@ func Delete(ctx context.Context, in GroupID) (kit.Empty, error) {
 		if inv.Status != Pending {
 			continue
 		}
-		if _, err := InvitationLifecycle.Fire(ctx, inv.ID, "revoke"); err != nil && !wire.Is(err, kit.CodeConflict) {
+		if _, err := InvitationLifecycle.Fire(ctx, inv.ID, "revoke"); err != nil && !wire.Is(err, kit.WireConflict) {
 			return kit.Empty{}, err
 		}
 	}
@@ -395,7 +395,7 @@ func ListInvitations(ctx context.Context, _ kit.Empty) (InvitationsOutput, error
 			continue
 		}
 		g, err := Groups.Get(ctx, inv.GroupID)
-		if wire.Is(err, kit.CodeNotFound) {
+		if wire.Is(err, kit.WireNotFound) {
 			continue
 		}
 		if err != nil {
@@ -427,7 +427,7 @@ type InvitationID struct {
 // received returns an invitation waiting for the caller's answer.
 func received(ctx context.Context, id, uid string) (Invitation, error) {
 	inv, err := Invitations.Get(ctx, id)
-	if wire.Is(err, kit.CodeNotFound) || (err == nil && inv.InviteeID != uid) {
+	if wire.Is(err, kit.WireNotFound) || (err == nil && inv.InviteeID != uid) {
 		return Invitation{}, kit.NotFound("no such invitation")
 	}
 	if err != nil {

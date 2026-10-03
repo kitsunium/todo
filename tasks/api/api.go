@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/activity"
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/internal/wire"
@@ -382,7 +382,7 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 		cur.UpdatedAt = now
 		return nil
 	})
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return View{}, errNoTask()
 	}
 	if err != nil {
@@ -390,7 +390,7 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 	}
 	if updated.Status == tasks.Overdue && !pastDue(updated, now) {
 		rescheduled, err := Lifecycle.Fire(ctx, updated.ID, "reschedule")
-		if err != nil && !wire.Is(err, kit.CodeConflict) {
+		if err != nil && !wire.Is(err, kit.WireConflict) {
 			return View{}, err
 		}
 		if err == nil {
@@ -416,10 +416,10 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 
 // conflict explains a transition the task's state refuses.
 func conflict(err error, what string) error {
-	if wire.Is(err, kit.CodeConflict) {
+	if wire.Is(err, kit.WireConflict) {
 		return kit.Conflict("this task cannot be " + what + " now")
 	}
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return errNoTask()
 	}
 	return err
