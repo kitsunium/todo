@@ -12,7 +12,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/activity"
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/groups"
@@ -21,6 +21,11 @@ import (
 	"github.com/kitsunium/todo/stats"
 	"github.com/kitsunium/todo/tasks"
 	"github.com/kitsunium/todo/web"
+
+	// The todo serves HTTP — the server profile, the default. The framework
+	// links its HTTP engine only into a program that imports this package,
+	// and refuses to start a server that does not (profile.server-missing).
+	_ "github.com/kitsunium/sdk/framework/kit/server"
 
 	// Two services declare part of their building blocks in a second
 	// package, because they call services that call them back: tasks/api

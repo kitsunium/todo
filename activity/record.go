@@ -5,7 +5,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/identity"
@@ -192,7 +192,7 @@ func ref(names map[string]identity.UserRef, id string) *identity.UserRef {
 // the entry, read or not, as it is — and trims the feed to Keep entries.
 func write(ctx context.Context, e Entry) error {
 	if err := Entries.Insert(ctx, e); err != nil {
-		if wire.Is(err, kit.CodeConflict) {
+		if wire.Is(err, kit.WireConflict) {
 			return nil
 		}
 		return err
@@ -203,7 +203,7 @@ func write(ctx context.Context, e Entry) error {
 	}
 	slices.SortFunc(feed, func(a, b Entry) int { return cmp.Or(a.At.Compare(b.At), cmp.Compare(a.ID, b.ID)) })
 	for _, old := range feed[:len(feed)-Keep] {
-		if err := Entries.Delete(ctx, old.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Entries.Delete(ctx, old.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return err
 		}
 	}

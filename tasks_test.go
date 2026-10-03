@@ -50,7 +50,7 @@ func (c *client) titles(query string) []string {
 // the views and their counts, edits, the lifecycle — with the workflow's own
 // timers marking a task overdue at its due date and archiving a done one.
 func TestTheTaskList(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.signup("Alice", "alice@example.com")
 	at := func(d time.Duration) string { return epoch.Add(d).Format(time.RFC3339) }
 
@@ -165,7 +165,7 @@ func TestTheTaskList(t *testing.T) {
 // and whoever sees it may work on it, but only its owner shares or deletes
 // it. Everyone concerned hears about it: by mail, and in their feed.
 func TestSharingATask(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.signup("Alice", "alice@example.com")
 	bob := h.signup("Bob", "bob@example.com")
 	dave := h.signup("Dave", "dave@example.com")
@@ -241,7 +241,7 @@ func TestSharingATask(t *testing.T) {
 // A task's reminder goes out fifteen minutes before it is due, once, to its
 // owner and to the users it is shared with.
 func TestRemindersGoOutBeforeTheDueDate(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.signup("Alice", "alice@example.com")
 	bob := h.signup("Bob", "bob@example.com")
 	bob.expect(http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"locale": "en"}) // each is reminded in their language

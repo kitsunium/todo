@@ -12,7 +12,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 )
 
 // Service owns the task list.

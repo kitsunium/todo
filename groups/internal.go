@@ -3,7 +3,7 @@ package groups
 import (
 	"context"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -60,7 +60,7 @@ func RoleIn(ctx context.Context, in RoleQuery) (RoleOutput, error) {
 		return RoleOutput{}, nil
 	}
 	g, err := Groups.Get(ctx, in.Group)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return RoleOutput{}, nil
 	}
 	if err != nil {
@@ -92,7 +92,7 @@ func Batch(ctx context.Context, in IDs) (BatchOutput, error) {
 		}
 		seen[id] = true
 		g, err := Groups.Get(ctx, id)
-		if wire.Is(err, kit.CodeNotFound) {
+		if wire.Is(err, kit.WireNotFound) {
 			continue
 		}
 		if err != nil {
@@ -156,7 +156,7 @@ func MembersOf(ctx context.Context, in GroupQuery) (MembersOutput, error) {
 		return out, nil
 	}
 	g, err := Groups.Get(ctx, in.Group)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return out, nil
 	}
 	if err != nil {

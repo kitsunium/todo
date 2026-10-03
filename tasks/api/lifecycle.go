@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/tasks"

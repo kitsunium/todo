@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/sdk/pkg/v1/logger"
+	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -57,7 +57,7 @@ func Reap(ctx context.Context) error {
 		return err
 	}
 	for _, s := range expired {
-		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return err
 		}
 	}
@@ -68,7 +68,7 @@ func Reap(ctx context.Context) error {
 		return err
 	}
 	for _, t := range spent {
-		if err := Tokens.Delete(ctx, t.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Tokens.Delete(ctx, t.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return err
 		}
 	}

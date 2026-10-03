@@ -8,7 +8,7 @@ package web
 import (
 	"embed"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 )
 
 // dist is the committed production build. Vite never emits a file whose

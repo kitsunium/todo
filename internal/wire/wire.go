@@ -15,7 +15,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 )
 
 // Now is the app's time, in UTC, to the millisecond: every timestamp the
@@ -31,7 +31,7 @@ func Now(ctx context.Context) time.Time {
 func Invalid(path, rule, message string) error {
 	return &kit.Error{
 		Status:     http.StatusBadRequest,
-		Code:       kit.CodeInvalid,
+		Code:       kit.WireInvalid,
 		Message:    "the request is invalid",
 		Violations: []kit.Violation{{Path: path, Rule: rule, Message: message}},
 	}
@@ -54,8 +54,8 @@ func Line(path, s string, max int) (string, error) {
 	return s, nil
 }
 
-// Is reports whether err is a kit error with the given code: kit.CodeNotFound,
-// kit.CodeConflict…
+// Is reports whether err is a kit error with the given code: kit.WireNotFound,
+// kit.WireConflict…
 func Is(err error, code string) bool {
 	var ke *kit.Error
 	return errors.As(err, &ke) && ke.Code == code

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -106,7 +106,7 @@ func Authenticate(ctx context.Context, c Credentials) (kit.UID, Principal, error
 			s.LastSeenAt, s.ExpiresAt = now, now.Add(SessionFor)
 			return nil
 		})
-		if wire.Is(err, kit.CodeNotFound) {
+		if wire.Is(err, kit.WireNotFound) {
 			return refuse() // revoked while this request ran
 		}
 		if err != nil {
@@ -155,7 +155,7 @@ func revokeSessions(ctx context.Context, userID, keep string) error {
 		if s.ID == keep {
 			continue
 		}
-		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return err
 		}
 	}

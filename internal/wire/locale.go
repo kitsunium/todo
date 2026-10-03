@@ -3,7 +3,7 @@ package wire
 import (
 	"slices"
 
-	"github.com/kitsunium/sdk/pkg/v1/i18n"
+	"github.com/kitsunium/sdk/pkg/v1/app/i18n"
 )
 
 // Locale is a language the product speaks, spelled the way the API and the
