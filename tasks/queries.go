@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -146,7 +146,7 @@ type AudienceOutput struct {
 // programmé.
 func Audience(ctx context.Context, in AudienceInput) (AudienceOutput, error) {
 	t, err := Tasks.Get(ctx, in.Task)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return AudienceOutput{Users: []string{}}, nil
 	}
 	if err != nil {

@@ -2,10 +2,11 @@
 #
 # The todo, as one static binary in a distroless image.
 #
-#   docker build --build-context platform=../platform -t todo .
+#   docker build -t todo .
 #
-# go.mod replaces github.com/kitsunium/platform with ../platform until the
-# platform is published; the named build context provides that directory.
+# The product imports the SDK alone — one module, github.com/kitsunium/sdk, a
+# published version, no replace — so the build needs this directory and the
+# module proxy, and no other checkout.
 # The web app needs no Node stage: web/dist is committed and embedded.
 #
 # Configuration, with `docker run -e NAME=value`:
@@ -21,12 +22,6 @@
 
 FROM golang:1.27.1 AS build
 WORKDIR /src/todo
-COPY --from=platform go.mod go.sum /src/platform/
-COPY --from=platform kit /src/platform/kit
-COPY --from=platform model /src/platform/model
-COPY --from=platform analyzer /src/platform/analyzer
-COPY --from=platform studio/studio.go /src/platform/studio/studio.go
-COPY --from=platform studio/dist /src/platform/studio/dist
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .

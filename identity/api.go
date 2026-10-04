@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/sdk/pkg/v1/logger"
-	"github.com/kitsunium/sdk/pkg/v1/password"
+	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/pkg/v1/crypto/password"
+	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/notify"
 )
@@ -137,7 +137,7 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	acct, err := AccountLifecycle.Start(ctx, Account{
 		ID: kit.NewID("user"), Email: email, Name: name, Locale: locale, TimeZone: zone, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
 	})
-	if wire.Is(err, kit.CodeConflict) {
+	if wire.Is(err, kit.WireConflict) {
 		// A concurrent sign-up took the address first: it is now an
 		// address with an account.
 		winner, found, err := accountByEmail(ctx, email)
@@ -190,7 +190,7 @@ func Verify(ctx context.Context, in TokenInput) (UserOutput, error) {
 		return UserOutput{}, err
 	}
 	a, err := AccountLifecycle.Fire(ctx, t.UserID, "verify")
-	if wire.Is(err, kit.CodeConflict) {
+	if wire.Is(err, kit.WireConflict) {
 		// Verified already, by another link of the same account: this one
 		// signs no one in.
 		return UserOutput{}, errBadLink()
@@ -320,7 +320,7 @@ func Logout(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
 	if err != nil {
 		return kit.Empty{}, err
 	}
-	if err := Sessions.Delete(ctx, p.SessionID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+	if err := Sessions.Delete(ctx, p.SessionID); err != nil && !wire.Is(err, kit.WireNotFound) {
 		return kit.Empty{}, err
 	}
 	kit.ClearCookie(ctx, CookieName)
@@ -573,13 +573,13 @@ func RevokeSession(ctx context.Context, in SessionID) (kit.Empty, error) {
 		return kit.Empty{}, err
 	}
 	s, err := Sessions.Get(ctx, in.ID)
-	if wire.Is(err, kit.CodeNotFound) || (err == nil && s.UserID != uid) {
+	if wire.Is(err, kit.WireNotFound) || (err == nil && s.UserID != uid) {
 		return kit.Empty{}, kit.NotFound("no such session")
 	}
 	if err != nil {
 		return kit.Empty{}, err
 	}
-	if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+	if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 		return kit.Empty{}, err
 	}
 	if s.ID == p.SessionID {

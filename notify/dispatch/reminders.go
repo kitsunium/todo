@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/sdk/pkg/v1/logger"
+	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/notify"
@@ -79,7 +79,7 @@ func TrackDue(ctx context.Context, e tasks.Event) error {
 	}
 	if len(found) == 0 {
 		err := Reminders.Insert(ctx, Reminder{ID: kit.NewID("reminder"), TaskID: e.TaskID, Title: e.Title, Due: due, At: due.Add(-Remind)})
-		if wire.Is(err, kit.CodeConflict) {
+		if wire.Is(err, kit.WireConflict) {
 			return nil // a redelivery, or a concurrent event, scheduled it
 		}
 		return err
@@ -94,7 +94,7 @@ func TrackDue(ctx context.Context, e tasks.Event) error {
 		r.Title = e.Title
 		return nil
 	})
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return nil
 	}
 	return err
@@ -141,7 +141,7 @@ func SendReminders(ctx context.Context, _ kit.Wake) error {
 		return errors.Join(append(failed, err)...)
 	}
 	for _, r := range old {
-		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 			failed = append(failed, err)
 		}
 	}
@@ -159,7 +159,7 @@ func remind(ctx context.Context, r Reminder, now time.Time) error {
 	switch {
 	case t == nil || t.Due == nil || (t.Status != tasks.Open && t.Status != tasks.Overdue):
 		// Gone, done, or undated: nothing to remind.
-		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return err
 		}
 		return nil
@@ -203,7 +203,7 @@ func markSent(ctx context.Context, r Reminder, now time.Time) error {
 
 // ignoreGone treats a reminder deleted meanwhile as done with.
 func ignoreGone(err error) error {
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return nil
 	}
 	return err

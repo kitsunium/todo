@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -73,7 +73,7 @@ func join(ctx context.Context, inv *Invitation) error {
 		}
 		return nil
 	})
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return kit.NotFound("this group no longer exists")
 	}
 	return err
@@ -99,7 +99,7 @@ func announceInvitation(ctx context.Context, c kit.Change[Invitation, Invitation
 		return nil
 	}
 	g, err := Groups.Get(ctx, inv.GroupID)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, kit.WireNotFound) {
 		return nil
 	}
 	if err != nil {

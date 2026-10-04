@@ -12,9 +12,14 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
 	"github.com/kitsunium/todo/internal/wire"
+
+	// withBaseURL's app is a server, the default profile, as the todo is:
+	// the framework refuses to start one whose program does not link its
+	// server subsystem (profile.server-missing).
+	_ "github.com/kitsunium/sdk/framework/kit/server"
 )
 
 // withBaseURL runs the notify service in an app whose base-url is u, for

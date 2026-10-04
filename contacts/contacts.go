@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/kit"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -200,14 +200,14 @@ func request(ctx context.Context, from, to string) (Link, error) {
 	case found && old.Status == Pending:
 		return Link{}, kit.Conflict("a contact request between you is already waiting for an answer")
 	case found:
-		if err := Links.Delete(ctx, old.Pair); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Links.Delete(ctx, old.Pair); err != nil && !wire.Is(err, kit.WireNotFound) {
 			return Link{}, err
 		}
 	}
 	l, err := Requests.Start(ctx, Link{
 		ID: kit.NewID("link"), Pair: pairOf(from, to), RequesterID: from, AddresseeID: to, CreatedAt: wire.Now(ctx),
 	})
-	if wire.Is(err, kit.CodeConflict) {
+	if wire.Is(err, kit.WireConflict) {
 		return Link{}, kit.Conflict("a contact request between you is already waiting for an answer")
 	}
 	return l, err

@@ -1,15 +1,23 @@
-<!-- updated: 2026-09-29T20:07:00Z -->
+<!-- updated: 2026-10-04T20:38:53Z -->
 # kitsunium/todo
 
 The reference product of kit (`github.com/kitsunium/platform`), and its
 end-to-end test: a task list for people who work together — accounts,
 contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 
+It is written on the SDK's framework and imports the SDK alone: one module,
+`github.com/kitsunium/sdk` v0.18.0, published, no `replace` — its
+`framework/*` packages (`kit`, `model`) and its `pkg/v1/*` packages.
+`go list -m all` names the todo and the SDK, nothing else. kit, the
+platform's tool, runs the product (`kit dev`) and reads its source (the
+static analysis); the product links none of it.
+
 ## Layout
 
 | Path | Service | Role |
 |---|---|---|
-| `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck / config / secrets |
+| `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck / config / secrets. It imports `framework/kit/server`: the framework serves HTTP only in a program that links it, and refuses to start a server that does not (`profile.server-missing`) |
+| `kitdev.go` | — | `//go:build kitdev`, the tag `kit dev` builds with: imports `framework/kit/studio`, the Studio's API at `/_kit/` in dev. A release build, and the tests, link none of it |
 | `identity/` | identity | accounts (workflow `accounts`) and their language, one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (the queries `UsersByID` → `Directory`, `People` with each user's locale and time zone; `EmailOwner`), the hand-written `session-reaper` loop |
 | `contacts/` | contacts | links between users (workflow `requests`), invitations by email, `claim-invites` on `identity.AccountEvents`, the query `AreContacts` |
 | `groups/` | groups | groups and roles, invitations (workflow `invitations`), the queries `RoleOf` `GroupRefs` `UserGroups` `GroupMembers` |
@@ -21,7 +29,7 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 | `stats/` | stats | the `sample` job and `GET /api/stats` |
 | `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code), `Locale` (`fr` first, `en`; `NegotiateLocale`, `CheckLocale`, `Resolve`), time zones (`CheckTimeZone`, `Zone`; the zone database is embedded, `time/tzdata`) |
 | `web/` | web | the SPA (`web/src` → committed `web/dist`), owned by the web agent |
-| `*_test.go` | — | end-to-end tests, including `TestTheDiagramMatchesTheCode` |
+| `*_test.go` | — | end-to-end tests, including the diagram suite: `TestTheDiagramMatchesTheCode` (`diagram_test.go`) and `TestTheReadmeDiagramIsCurrent` (`main_test.go`). Their static half is kit's analysis, run as a process (`kit graph -static -format json`) and given to the product through `kit.Analyzer` |
 
 ## Rules
 
@@ -54,9 +62,10 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
   `kit.NotFound` for what the caller may not see (never 403 for a task, a
   group or a contact of someone else), and the codes of the contract
   (`invalid_credentials`, `email_unverified`, `account_locked`,
-  `invalid_token`). Never return or log a password, a secret or a hash;
-  a secret is stored as its SHA-256, a password with the SDK's
-  `password.Hash`.
+  `invalid_token`). A kit error is matched by its wire code:
+  `wire.Is(err, kit.WireNotFound)`, `kit.WireConflict`. Never return or log
+  a password, a secret or a hash; a secret is stored as its SHA-256, a
+  password with the SDK's `password.Hash` (`pkg/v1/crypto/password`).
 - Ask "is there one?" with `Find` on an index, not `Get`: a missing key is
   an error span, and the Studio paints the store red.
 - The product speaks French first, and English. An account's `Locale` is
@@ -80,21 +89,46 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
   French is written for French readers — vous, `’`, `\u00a0` before
   `: ? !` and inside `« »`, no elision a name could break ("envoyée par
   {actor}", not "de {actor}") — and mails stay light: no dark mode.
+- Import the SDK only — `sdk/framework/*` and `sdk/pkg/v1/*` — never
+  `github.com/kitsunium/platform`: a product never imports the platform
+  (its ADR 0010, D2; `kit check`'s `imports` rule). What the platform gives
+  the product, it gives as a tool: `kit dev`, and the static analysis the
+  diagram tests run through `kit graph -static`.
 - The README's Mermaid diagram is generated: after a change to the graph,
-  replace it with `go run . graph -format mermaid`
-  (`TestTheReadmeDiagramIsCurrent`).
+  replace it with what `TestTheReadmeDiagramIsCurrent` prints where kit is —
+  the product's `graph -format mermaid`, given kit's static analysis. `go
+  run . graph -format mermaid` prints its solid arrows alone (what the
+  product declares): the dashed ones are what kit finds in the code.
 
 ## Develop
 
-The platform is not published yet. `go.mod` replaces it with `../platform`;
-on a machine where the platform branch lives elsewhere, an untracked `go.work`
-with a `replace` points at it.
+The build needs the Go toolchain and the module proxy, nothing else: no
+platform checkout and no `go.work` (git-ignored, machine-local: build with
+`GOWORK=off` to be sure none is read). kit is installed apart, from a
+platform checkout: `go install ./cmd/kit` there.
+
+The SDK is one module since v0.18.0: never require
+`github.com/kitsunium/sdk/framework` or `github.com/kitsunium/sdk/pkg`, whose
+v0.18.0 tags are deprecated tombstones holding no package; the import paths
+did not change. Moving to another SDK version is
+`GOWORK=off go get github.com/kitsunium/sdk@<version> && GOWORK=off go mod tidy`.
 
 ```sh
-kit dev                             # :4000, Studio at /_kit/, mails in its Mail view
-go vet ./... && go test -race ./... # end to end, on a manual clock
+kit dev                             # :4000; kit prints the Studio's link, mails in its Mail view
+GOWORK=off go build ./... && GOWORK=off go vet ./... && GOWORK=off go vet -tags kitdev ./...
+GOWORK=off go test -race ./...      # end to end, on a manual clock
 gofmt -l .                          # empty
-docker build --build-context platform=../platform -t todo .
+docker build -t todo .
+```
+
+The diagram suite's static half needs kit: kit on `PATH`, or `KIT=<its
+binary>`. Without it, `TestTheDiagramMatchesTheCode` checks what the
+running product says of itself and `TestTheReadmeDiagramIsCurrent` the
+diagram's solid arrows, then each skips the rest, naming it (`go test -v`
+shows the skip). With it, both run whole:
+
+```sh
+KIT=$(command -v kit) GOWORK=off go test -race -v -run 'TestTheDiagramMatchesTheCode|TestTheReadmeDiagramIsCurrent' .
 ```
 
 Commits: conventional, authored as `kodflow` (the `post-commit` gate checks
