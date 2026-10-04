@@ -1,15 +1,16 @@
-<!-- updated: 2026-10-03T19:05:00Z -->
+<!-- updated: 2026-10-04T20:38:53Z -->
 # kitsunium/todo
 
 The reference product of kit (`github.com/kitsunium/platform`), and its
 end-to-end test: a task list for people who work together — accounts,
 contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 
-It is written on the SDK's framework and imports the SDK alone:
-`github.com/kitsunium/sdk/framework` (`kit`, `model`) and
-`github.com/kitsunium/sdk/pkg` (`pkg/v1/*`), both v0.17.0, published, no
-`replace`. kit, the platform's tool, runs the product (`kit dev`) and reads
-its source (the static analysis); the product links none of it.
+It is written on the SDK's framework and imports the SDK alone: one module,
+`github.com/kitsunium/sdk` v0.18.0, published, no `replace` — its
+`framework/*` packages (`kit`, `model`) and its `pkg/v1/*` packages.
+`go list -m all` names the todo and the SDK, nothing else. kit, the
+platform's tool, runs the product (`kit dev`) and reads its source (the
+static analysis); the product links none of it.
 
 ## Layout
 
@@ -105,6 +106,12 @@ The build needs the Go toolchain and the module proxy, nothing else: no
 platform checkout and no `go.work` (git-ignored, machine-local: build with
 `GOWORK=off` to be sure none is read). kit is installed apart, from a
 platform checkout: `go install ./cmd/kit` there.
+
+The SDK is one module since v0.18.0: never require
+`github.com/kitsunium/sdk/framework` or `github.com/kitsunium/sdk/pkg`, whose
+v0.18.0 tags are deprecated tombstones holding no package; the import paths
+did not change. Moving to another SDK version is
+`GOWORK=off go get github.com/kitsunium/sdk@<version> && GOWORK=off go mod tidy`.
 
 ```sh
 kit dev                             # :4000; kit prints the Studio's link, mails in its Mail view

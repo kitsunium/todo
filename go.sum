@@ -1,10 +1,2 @@
-github.com/kitsunium/sdk/framework v0.17.0 h1:YNzkosHcEse05da89Z3aKF+nqgpUrh9S8ggzzS3hE5E=
-github.com/kitsunium/sdk/framework v0.17.0/go.mod h1:Rw149mou2DzU/7AdXoDBgnMVhRfmPU/bVlsUu0YFXmo=
-github.com/kitsunium/sdk/internal/core v0.17.0 h1:HetpKp+a3FipTH3DgM9YCIGGfUS5EJukRadmBI45nso=
-github.com/kitsunium/sdk/internal/core v0.17.0/go.mod h1:H9p9QKye0pqF8QQNoCUZbKrX9NDagxjUzkVDRe0bdV8=
-github.com/kitsunium/sdk/internal/kernel v0.17.0 h1:ySSkgxHp4XeJxWniLwIY7bGIXlk51cxt9biM8XaI/M0=
-github.com/kitsunium/sdk/internal/kernel v0.17.0/go.mod h1:g7rsnZJ6o3ko3V1bSzHvQlWusqiPD+VqltQv3Gd7qm8=
-github.com/kitsunium/sdk/internal/service v0.17.0 h1:fsButqshsN12ImRIH8bb7ClTVAaTe+xqD0VvkvYhMPo=
-github.com/kitsunium/sdk/internal/service v0.17.0/go.mod h1:7MJslPHAY1OH0p1roWOEuGdlDoskO1uSJclSrcrwPHI=
-github.com/kitsunium/sdk/pkg v0.17.0 h1:Xf1K10mkJwOtfU/jMq0ky7L7wKz9HPq/VyUzaRPvuhM=
-github.com/kitsunium/sdk/pkg v0.17.0/go.mod h1:rPsVJjfKxOMQtMWtCw1TqxZ6Prs9RIxsps5sqZl1ldk=
+github.com/kitsunium/sdk v0.18.0 h1:tzXRCNEvjoMqNOlX4jLgVIWNT64Hcpqh6h/25BufTr0=
+github.com/kitsunium/sdk v0.18.0/go.mod h1:Qoz78HfPrwQoisMVlPH9/mfnECrYGfyn9dvF1jPPZIo=

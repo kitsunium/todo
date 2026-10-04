@@ -427,8 +427,8 @@ flowchart LR
 ## Run it
 
 The product builds with the Go toolchain alone, on the SDK's published
-modules (`go build .`). kit, the platform's tool, runs it in dev; install it
-from a platform checkout:
+module, `github.com/kitsunium/sdk` v0.18.0 (`go build .`). kit, the
+platform's tool, runs it in dev; install it from a platform checkout:
 
 ```sh
 git clone https://github.com/kitsunium/platform ../platform

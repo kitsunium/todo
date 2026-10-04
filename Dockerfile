@@ -4,9 +4,9 @@
 #
 #   docker build -t todo .
 #
-# The product imports the SDK alone — github.com/kitsunium/sdk/framework and
-# github.com/kitsunium/sdk/pkg, published versions, no replace — so the build
-# needs this directory and the module proxy, and no other checkout.
+# The product imports the SDK alone — one module, github.com/kitsunium/sdk, a
+# published version, no replace — so the build needs this directory and the
+# module proxy, and no other checkout.
 # The web app needs no Node stage: web/dist is committed and embedded.
 #
 # Configuration, with `docker run -e NAME=value`:
