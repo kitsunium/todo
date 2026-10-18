@@ -427,7 +427,7 @@ flowchart LR
 ## Run it
 
 The product builds with the Go toolchain alone, on the SDK's published
-modules, `github.com/kitsunium/sdk` v0.44.0 and its `pkg/v1` families
+modules, `github.com/kitsunium/sdk` v0.44.2 and its `pkg/v1` families
 (`go build .`). The platform's dev tool runs it in dev with the Studio;
 install it from a platform checkout:
 
