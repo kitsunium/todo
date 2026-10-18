@@ -9,12 +9,12 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Service owns groups, their members and the invitations into them.
-var Service = kit.NewService("groups", "Teams: groups sharing a task list, their members' roles, and the invitations that bring members in.\n\nfr: Les équipes : des groupes qui partagent une liste de tâches, les rôles de leurs membres, et les invitations qui y font entrer de nouveaux membres.")
+var Service = app.NewService("groups", "Teams: groups sharing a task list, their members' roles, and the invitations that bring members in.\n\nfr: Les équipes : des groupes qui partagent une liste de tâches, les rôles de leurs membres, et les invitations qui y font entrer de nouveaux membres.")
 
 // Role is what a member may do in a group.
 type Role string
@@ -87,7 +87,7 @@ func (g Group) memberIDs() []string {
 //
 // fr: Groups garde chaque groupe, listé par membre.
 var Groups = Service.Store("groups", func(g Group) string { return g.ID },
-	kit.Index("member", func(g Group) []string { return g.memberIDs() }))
+	app.Index("member", func(g Group) []string { return g.memberIDs() }))
 
 // The kinds of Event.
 const (
@@ -134,7 +134,7 @@ func announce(ctx context.Context, g Group, kind, actor, user, invitation string
 		}
 	}
 	return Events.Publish(ctx, Event{
-		ID: kit.NewID("event"), Kind: kind, GroupID: g.ID, GroupName: g.Name, Color: g.Color,
+		ID: app.NewID("event"), Kind: kind, GroupID: g.ID, GroupName: g.Name, Color: g.Color,
 		ActorID: actor, UserID: user, InvitationID: invitation, Recipients: recipients, At: wire.Now(ctx),
 	})
 }

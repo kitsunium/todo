@@ -1,4 +1,5 @@
 .git
+.app
 .kit
 go.work
 go.work.sum

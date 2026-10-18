@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
@@ -22,17 +22,17 @@ import (
 // pas pour lui : 404, jamais 403. Un membre qui n’a pas le droit de faire
 // quelque chose en est averti : 403.
 var (
-	_ = Service.Endpoint("GET /api/groups", List, kit.Auth())
-	_ = Service.Endpoint("POST /api/groups", Create, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("GET /api/groups/{id}", Get, kit.Auth())
-	_ = Service.Endpoint("PATCH /api/groups/{id}", Update, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("DELETE /api/groups/{id}", Delete, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("POST /api/groups/{id}/invitations", Invite, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("GET /api/invitations", ListInvitations, kit.Auth())
-	_ = Service.Endpoint("POST /api/invitations/{id}/accept", AcceptInvitation, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("POST /api/invitations/{id}/decline", DeclineInvitation, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("DELETE /api/groups/{id}/members/{userId}", RemoveMember, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("PATCH /api/groups/{id}/members/{userId}", SetRole, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("GET /api/groups", List, app.Auth())
+	_ = Service.Endpoint("POST /api/groups", Create, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("GET /api/groups/{id}", Get, app.Auth())
+	_ = Service.Endpoint("PATCH /api/groups/{id}", Update, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("DELETE /api/groups/{id}", Delete, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/groups/{id}/invitations", Invite, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("GET /api/invitations", ListInvitations, app.Auth())
+	_ = Service.Endpoint("POST /api/invitations/{id}/accept", AcceptInvitation, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/invitations/{id}/decline", DeclineInvitation, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("DELETE /api/groups/{id}/members/{userId}", RemoveMember, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("PATCH /api/groups/{id}/members/{userId}", SetRole, app.Auth(), app.RateLimitPerClient(10, 20))
 )
 
 // MemberView is a member, as the group's page shows them.
@@ -62,21 +62,21 @@ type ListOutput struct {
 
 // me is the signed-in user.
 func me(ctx context.Context) (string, error) {
-	uid, ok := kit.UserID(ctx)
+	uid, ok := app.UserID(ctx)
 	if !ok {
-		return "", kit.Unauthenticated("sign in first")
+		return "", app.Unauthenticated("sign in first")
 	}
 	return string(uid), nil
 }
 
 // errNoGroup answers for a group that does not exist, or not for the
 // caller.
-func errNoGroup() error { return kit.NotFound("no such group") }
+func errNoGroup() error { return app.NotFound("no such group") }
 
 // membership returns a group the user is a member of, and their role.
 func membership(ctx context.Context, id, uid string) (Group, Role, error) {
 	g, err := Groups.Get(ctx, id)
-	if wire.Is(err, kit.WireNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return Group{}, "", errNoGroup()
 	}
 	if err != nil {
@@ -133,7 +133,7 @@ func presentOne(ctx context.Context, uid string, g Group) (View, error) {
 // List returns the caller's groups, by name.
 //
 // fr: List renvoie les groupes de l’appelant, par nom.
-func List(ctx context.Context, _ kit.Empty) (ListOutput, error) {
+func List(ctx context.Context, _ app.Empty) (ListOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
 		return ListOutput{}, err
@@ -189,7 +189,7 @@ func Create(ctx context.Context, in CreateInput) (View, error) {
 		return View{}, err
 	}
 	now := wire.Now(ctx)
-	g := Group{ID: kit.NewID("group"), Name: name, Color: c, CreatedAt: now, UpdatedAt: now,
+	g := Group{ID: app.NewID("group"), Name: name, Color: c, CreatedAt: now, UpdatedAt: now,
 		Members: []Membership{{UserID: uid, Role: Owner, JoinedAt: now}}}
 	if err := Groups.Insert(ctx, g); err != nil {
 		return View{}, err
@@ -238,7 +238,7 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 		return View{}, err
 	}
 	if !role.manages() {
-		return View{}, kit.Forbidden("only the group's owner and admins can change it")
+		return View{}, app.Forbidden("only the group's owner and admins can change it")
 	}
 	name, c := g.Name, g.Color
 	if in.Name != nil {
@@ -271,34 +271,34 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 // fr: Delete supprime un groupe : ses invitations en attente sont révoquées, et
 // ses tâches retournent sur les listes de leurs propriétaires. Seul son
 // propriétaire en a le droit.
-func Delete(ctx context.Context, in GroupID) (kit.Empty, error) {
+func Delete(ctx context.Context, in GroupID) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	g, role, err := membership(ctx, in.ID, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if role != Owner {
-		return kit.Empty{}, kit.Forbidden("only the group's owner can delete it")
+		return app.Empty{}, app.Forbidden("only the group's owner can delete it")
 	}
 	invitations, err := Invitations.Find(ctx, "group", g.ID)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	for _, inv := range invitations {
 		if inv.Status != Pending {
 			continue
 		}
-		if _, err := InvitationLifecycle.Fire(ctx, inv.ID, "revoke"); err != nil && !wire.Is(err, kit.WireConflict) {
-			return kit.Empty{}, err
+		if _, err := InvitationLifecycle.Fire(ctx, inv.ID, "revoke"); err != nil && !wire.Is(err, app.WireConflict) {
+			return app.Empty{}, err
 		}
 	}
 	if err := Groups.Delete(ctx, g.ID); err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	return kit.Empty{}, announce(ctx, g, KindDeleted, uid, "", "", g.memberIDs())
+	return app.Empty{}, announce(ctx, g, KindDeleted, uid, "", "", g.memberIDs())
 }
 
 // InviteInput names the contact to invite.
@@ -334,16 +334,16 @@ func Invite(ctx context.Context, in InviteInput) (InvitationView, error) {
 	}
 	switch {
 	case !role.manages():
-		return InvitationView{}, kit.Forbidden("only the group's owner and admins can invite")
+		return InvitationView{}, app.Forbidden("only the group's owner and admins can invite")
 	case in.UserID == uid || g.RoleOf(in.UserID) != "":
-		return InvitationView{}, kit.Conflict("this person is already a member")
+		return InvitationView{}, app.Conflict("this person is already a member")
 	}
 	check, err := contacts.AreContacts.Ask(ctx, contacts.CheckInput{A: uid, B: in.UserID})
 	if err != nil {
 		return InvitationView{}, err
 	}
 	if !check.Contacts {
-		return InvitationView{}, kit.Forbidden("you can only invite your contacts")
+		return InvitationView{}, app.Forbidden("you can only invite your contacts")
 	}
 	pending, err := Invitations.Find(ctx, "invitee", in.UserID)
 	if err != nil {
@@ -351,11 +351,11 @@ func Invite(ctx context.Context, in InviteInput) (InvitationView, error) {
 	}
 	for _, inv := range pending {
 		if inv.GroupID == g.ID && inv.Status == Pending {
-			return InvitationView{}, kit.Conflict("this person is already invited")
+			return InvitationView{}, app.Conflict("this person is already invited")
 		}
 	}
 	inv, err := InvitationLifecycle.Start(ctx, Invitation{
-		ID: kit.NewID("invitation"), GroupID: g.ID, InviterID: uid, InviteeID: in.UserID, CreatedAt: wire.Now(ctx),
+		ID: app.NewID("invitation"), GroupID: g.ID, InviterID: uid, InviteeID: in.UserID, CreatedAt: wire.Now(ctx),
 	})
 	if err != nil {
 		return InvitationView{}, err
@@ -378,7 +378,7 @@ type InvitationsOutput struct {
 //
 // fr: ListInvitations renvoie les invitations qui attendent la réponse de
 // l’appelant, les plus récentes d’abord.
-func ListInvitations(ctx context.Context, _ kit.Empty) (InvitationsOutput, error) {
+func ListInvitations(ctx context.Context, _ app.Empty) (InvitationsOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
 		return InvitationsOutput{}, err
@@ -395,7 +395,7 @@ func ListInvitations(ctx context.Context, _ kit.Empty) (InvitationsOutput, error
 			continue
 		}
 		g, err := Groups.Get(ctx, inv.GroupID)
-		if wire.Is(err, kit.WireNotFound) {
+		if wire.Is(err, app.WireNotFound) {
 			continue
 		}
 		if err != nil {
@@ -427,14 +427,14 @@ type InvitationID struct {
 // received returns an invitation waiting for the caller's answer.
 func received(ctx context.Context, id, uid string) (Invitation, error) {
 	inv, err := Invitations.Get(ctx, id)
-	if wire.Is(err, kit.WireNotFound) || (err == nil && inv.InviteeID != uid) {
-		return Invitation{}, kit.NotFound("no such invitation")
+	if wire.Is(err, app.WireNotFound) || (err == nil && inv.InviteeID != uid) {
+		return Invitation{}, app.NotFound("no such invitation")
 	}
 	if err != nil {
 		return Invitation{}, err
 	}
 	if inv.Status != Pending {
-		return Invitation{}, kit.Conflict("this invitation is not waiting for an answer any more")
+		return Invitation{}, app.Conflict("this invitation is not waiting for an answer any more")
 	}
 	return inv, nil
 }
@@ -464,17 +464,17 @@ func AcceptInvitation(ctx context.Context, in InvitationID) (View, error) {
 // DeclineInvitation turns an invitation down.
 //
 // fr: DeclineInvitation refuse une invitation.
-func DeclineInvitation(ctx context.Context, in InvitationID) (kit.Empty, error) {
+func DeclineInvitation(ctx context.Context, in InvitationID) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	inv, err := received(ctx, in.ID, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	_, err = InvitationLifecycle.Fire(ctx, inv.ID, "decline")
-	return kit.Empty{}, err
+	return app.Empty{}, err
 }
 
 // MemberInput addresses a member of a group.
@@ -490,23 +490,23 @@ type MemberInput struct {
 // fr: RemoveMember retire un membre d’un groupe. Chacun peut partir, sauf le
 // propriétaire, qui supprime le groupe à la place ; le propriétaire retire qui
 // il veut, un admin retire des membres.
-func RemoveMember(ctx context.Context, in MemberInput) (kit.Empty, error) {
+func RemoveMember(ctx context.Context, in MemberInput) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	g, role, err := membership(ctx, in.ID, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	target := g.RoleOf(in.UserID)
 	switch {
 	case target == "":
-		return kit.Empty{}, kit.NotFound("no such member")
+		return app.Empty{}, app.NotFound("no such member")
 	case in.UserID == uid && role == Owner:
-		return kit.Empty{}, kit.Conflict("the owner cannot leave the group: delete it instead")
+		return app.Empty{}, app.Conflict("the owner cannot leave the group: delete it instead")
 	case in.UserID != uid && (target == Owner || role == Member || (role == Admin && target == Admin)):
-		return kit.Empty{}, kit.Forbidden("you cannot remove this member")
+		return app.Empty{}, app.Forbidden("you cannot remove this member")
 	}
 	now := wire.Now(ctx)
 	g, err = Groups.Update(ctx, g.ID, func(g *Group) error {
@@ -515,12 +515,12 @@ func RemoveMember(ctx context.Context, in MemberInput) (kit.Empty, error) {
 		return nil
 	})
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if in.UserID == uid {
-		return kit.Empty{}, announce(ctx, g, KindLeft, uid, uid, "", g.memberIDs())
+		return app.Empty{}, announce(ctx, g, KindLeft, uid, uid, "", g.memberIDs())
 	}
-	return kit.Empty{}, announce(ctx, g, KindRemoved, uid, in.UserID, "", append(g.memberIDs(), in.UserID))
+	return app.Empty{}, announce(ctx, g, KindRemoved, uid, in.UserID, "", append(g.memberIDs(), in.UserID))
 }
 
 // RoleInput is a member's new role.
@@ -545,11 +545,11 @@ func SetRole(ctx context.Context, in RoleInput) (View, error) {
 	}
 	switch target := g.RoleOf(in.UserID); {
 	case role != Owner:
-		return View{}, kit.Forbidden("only the group's owner can change roles")
+		return View{}, app.Forbidden("only the group's owner can change roles")
 	case target == "":
-		return View{}, kit.NotFound("no such member")
+		return View{}, app.NotFound("no such member")
 	case target == Owner:
-		return View{}, kit.Forbidden("the owner's role cannot change")
+		return View{}, app.Forbidden("the owner's role cannot change")
 	}
 	now := wire.Now(ctx)
 	g, err = Groups.Update(ctx, g.ID, func(g *Group) error {

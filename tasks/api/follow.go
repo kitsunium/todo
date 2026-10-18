@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/tasks"
@@ -60,7 +60,7 @@ func FollowGroups(ctx context.Context, e groups.Event) error {
 			cur.UpdatedAt = now
 			return nil
 		})
-		if err != nil && !wire.Is(err, kit.WireNotFound) {
+		if err != nil && !wire.Is(err, app.WireNotFound) {
 			return err
 		}
 	}

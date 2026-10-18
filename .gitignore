@@ -1,4 +1,5 @@
-# kit's local state: the dev binary and the dev data.
+# The dev data directory, and the dev tool's local state.
+.app/
 .kit/
 
 # Go workspaces are local to a machine.

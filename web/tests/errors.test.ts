@@ -7,7 +7,7 @@ const fr = { locale: "fr" } as const;
 const en = { locale: "en" } as const;
 
 describe("toApiError", () => {
-  it("reads the kit error body", () => {
+  it("reads the framework error body", () => {
     const e = toApiError(400, {
       error: {
         code: "invalid_argument",

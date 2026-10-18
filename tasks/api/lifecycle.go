@@ -10,7 +10,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/tasks"
@@ -51,11 +51,11 @@ var Lifecycle = tasks.Service.Workflow("lifecycle", tasks.Tasks, func(t *tasks.T
 	OnTransition(announceTransition)
 
 // dueDate is when an open task becomes overdue: its due date, if it has one.
-// kit reads it again each time the task is written, and wakes the workflow's
+// The framework reads it again each time the task is written, and wakes the workflow's
 // loop at the earliest.
 //
 // fr: dueDate est le moment où une tâche ouverte passe en retard : son
-// échéance, si elle en a une. kit la relit à chaque écriture de la tâche, et
+// échéance, si elle en a une. Le framework la relit à chaque écriture de la tâche, et
 // réveille la boucle du workflow à la plus proche.
 func dueDate(t tasks.Task) (time.Time, bool) {
 	if t.Due == nil {
@@ -82,7 +82,7 @@ func pastDue(t tasks.Task, now time.Time) bool {
 func stampCompletion(ctx context.Context, t *tasks.Task) error {
 	now := wire.Now(ctx)
 	t.CompletedAt, t.UpdatedAt = &now, now
-	if uid, ok := kit.UserID(ctx); ok {
+	if uid, ok := app.UserID(ctx); ok {
 		t.CompletedBy = string(uid)
 	}
 	return nil
@@ -114,12 +114,12 @@ var transitionKinds = map[string]tasks.Kind{
 // fr: announceTransition publie chaque transition, quel que soit son
 // déclencheur — un utilisateur, la garde du retard, le timer d’archivage
 // automatique — à tous ceux qui voient la tâche.
-func announceTransition(ctx context.Context, c kit.Change[tasks.Task, tasks.Status]) error {
+func announceTransition(ctx context.Context, c app.Change[tasks.Task, tasks.Status]) error {
 	kind, ok := transitionKinds[c.Event]
 	if !ok {
 		return nil
 	}
-	actor, _ := kit.UserID(ctx)
+	actor, _ := app.UserID(ctx)
 	e := newEvent(ctx, c.Entity, kind, string(actor))
 	if c.Event != "create" {
 		e.From, e.To = c.From, c.To
@@ -130,7 +130,7 @@ func announceTransition(ctx context.Context, c kit.Change[tasks.Task, tasks.Stat
 // newEvent describes what just happened to t.
 func newEvent(ctx context.Context, t tasks.Task, kind tasks.Kind, actor string) tasks.Event {
 	return tasks.Event{
-		ID: kit.NewID("event"), TaskID: t.ID, Title: t.Title, Kind: kind, ActorID: actor, GroupID: t.GroupID,
+		ID: app.NewID("event"), TaskID: t.ID, Title: t.Title, Kind: kind, ActorID: actor, GroupID: t.GroupID,
 		At: wire.Now(ctx), Status: t.Status, Due: t.Due, Priority: t.Priority,
 	}
 }

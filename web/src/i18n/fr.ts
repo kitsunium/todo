@@ -65,7 +65,7 @@ export const fr = {
   "auth.newHere": "Nouveau sur Todo ?",
   "auth.signIn": "Se connecter",
   "auth.createAccount": "Créer un compte",
-  "auth.builtWith": "Conçu avec kit",
+  "auth.builtWith": "Conçu avec le SDK Kitsunium",
   "auth.brand.tag": "Des tâches partagées, en toute sérénité",
   "auth.brand.title":
     "Une seule liste, sereine, pour tout ce que vous et les vôtres avez à faire.",

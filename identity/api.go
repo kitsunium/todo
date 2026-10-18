@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/crypto/password"
 	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
 	"github.com/kitsunium/todo/internal/wire"
@@ -25,32 +25,32 @@ import (
 // un compte ou non, et son débit est sévèrement limité : chacun de ces appels
 // envoie un mail ou vérifie un mot de passe.
 var (
-	_ = Service.Endpoint("POST /api/auth/signup", Signup, kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/auth/verify", Verify, kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/auth/verify/resend", ResendVerification, kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/auth/login", Login, kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/auth/logout", Logout, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("GET /api/auth/me", Me, kit.Auth())
-	_ = Service.Endpoint("PATCH /api/auth/me", UpdateProfile, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("POST /api/auth/password", ChangePassword, kit.Auth(), kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/auth/password/forgot", ForgotPassword, kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/auth/password/reset", ResetPassword, kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("GET /api/auth/sessions", ListSessions, kit.Auth())
-	_ = Service.Endpoint("DELETE /api/auth/sessions/{id}", RevokeSession, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/auth/signup", Signup, app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/verify", Verify, app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/verify/resend", ResendVerification, app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/login", Login, app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/logout", Logout, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("GET /api/auth/me", Me, app.Auth())
+	_ = Service.Endpoint("PATCH /api/auth/me", UpdateProfile, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/auth/password", ChangePassword, app.Auth(), app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/password/forgot", ForgotPassword, app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/auth/password/reset", ResetPassword, app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("GET /api/auth/sessions", ListSessions, app.Auth())
+	_ = Service.Endpoint("DELETE /api/auth/sessions/{id}", RevokeSession, app.Auth(), app.RateLimitPerClient(10, 20))
 )
 
 // The errors of sign-in. Their codes are the contract the web app branches
 // on.
 func errInvalidCredentials() error {
-	return &kit.Error{Status: http.StatusUnauthorized, Code: "invalid_credentials", Message: "the email address or the password is not right"}
+	return &app.Error{Status: http.StatusUnauthorized, Code: "invalid_credentials", Message: "the email address or the password is not right"}
 }
 
 func errUnverified() error {
-	return &kit.Error{Status: http.StatusForbidden, Code: "email_unverified", Message: "confirm your email address first: the link is in your inbox"}
+	return &app.Error{Status: http.StatusForbidden, Code: "email_unverified", Message: "confirm your email address first: the link is in your inbox"}
 }
 
 func errLocked() error {
-	return &kit.Error{Status: http.StatusForbidden, Code: "account_locked", Message: "too many wrong passwords: the account is locked for 15 minutes, or until you reset the password"}
+	return &app.Error{Status: http.StatusForbidden, Code: "account_locked", Message: "too many wrong passwords: the account is locked for 15 minutes, or until you reset the password"}
 }
 
 // hashPassword stretches a password with the SDK's PBKDF2-SHA256.
@@ -135,9 +135,9 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	}
 	now := wire.Now(ctx)
 	acct, err := AccountLifecycle.Start(ctx, Account{
-		ID: kit.NewID("user"), Email: email, Name: name, Locale: locale, TimeZone: zone, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
+		ID: app.NewID("user"), Email: email, Name: name, Locale: locale, TimeZone: zone, PasswordHash: hash, CreatedAt: now, UpdatedAt: now,
 	})
-	if wire.Is(err, kit.WireConflict) {
+	if wire.Is(err, app.WireConflict) {
 		// A concurrent sign-up took the address first: it is now an
 		// address with an account.
 		winner, found, err := accountByEmail(ctx, email)
@@ -149,7 +149,7 @@ func Signup(ctx context.Context, in SignupInput) (SignupOutput, error) {
 	if err != nil {
 		return SignupOutput{}, err
 	}
-	logger.Info(ctx, kit.Log(ctx), "account created", logger.String("user", acct.ID), logger.String("locale", string(acct.Locale)))
+	logger.Info(ctx, app.Log(ctx), "account created", logger.String("user", acct.ID), logger.String("locale", string(acct.Locale)))
 	return out, sendVerification(ctx, acct)
 }
 
@@ -190,7 +190,7 @@ func Verify(ctx context.Context, in TokenInput) (UserOutput, error) {
 		return UserOutput{}, err
 	}
 	a, err := AccountLifecycle.Fire(ctx, t.UserID, "verify")
-	if wire.Is(err, kit.WireConflict) {
+	if wire.Is(err, app.WireConflict) {
 		// Verified already, by another link of the same account: this one
 		// signs no one in.
 		return UserOutput{}, errBadLink()
@@ -276,7 +276,7 @@ func Login(ctx context.Context, in LoginInput) (UserOutput, error) {
 			if _, err := Accounts.Update(ctx, a.ID, func(a *Account) error { a.FailedLogins++; return nil }); err != nil {
 				return UserOutput{}, err
 			}
-			logger.Warn(ctx, kit.Log(ctx), "wrong password", logger.String("user", a.ID), logger.Int("failures", a.FailedLogins+1))
+			logger.Warn(ctx, app.Log(ctx), "wrong password", logger.String("user", a.ID), logger.Int("failures", a.FailedLogins+1))
 		}
 		return UserOutput{}, errInvalidCredentials()
 	}
@@ -315,22 +315,22 @@ func Login(ctx context.Context, in LoginInput) (UserOutput, error) {
 // Logout ends the caller's session and forgets its cookie.
 //
 // fr: Logout ferme la session de l’appelant et oublie son cookie.
-func Logout(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
+func Logout(ctx context.Context, _ app.Empty) (app.Empty, error) {
 	_, p, err := caller(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	if err := Sessions.Delete(ctx, p.SessionID); err != nil && !wire.Is(err, kit.WireNotFound) {
-		return kit.Empty{}, err
+	if err := Sessions.Delete(ctx, p.SessionID); err != nil && !wire.Is(err, app.WireNotFound) {
+		return app.Empty{}, err
 	}
-	kit.ClearCookie(ctx, CookieName)
-	return kit.Empty{}, nil
+	app.ClearCookie(ctx, CookieName)
+	return app.Empty{}, nil
 }
 
 // Me returns the caller's account.
 //
 // fr: Me renvoie le compte de l’appelant.
-func Me(ctx context.Context, _ kit.Empty) (UserOutput, error) {
+func Me(ctx context.Context, _ app.Empty) (UserOutput, error) {
 	uid, _, err := caller(ctx)
 	if err != nil {
 		return UserOutput{}, err
@@ -406,37 +406,37 @@ type ChangePasswordInput struct {
 //
 // fr: ChangePassword remplace le mot de passe de l’appelant, une fois l’actuel
 // prouvé, et déconnecte toutes ses autres sessions.
-func ChangePassword(ctx context.Context, in ChangePasswordInput) (kit.Empty, error) {
+func ChangePassword(ctx context.Context, in ChangePasswordInput) (app.Empty, error) {
 	uid, p, err := caller(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	a, err := Accounts.Get(ctx, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	ok, err := password.Verify([]byte(in.Current), a.PasswordHash)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if !ok {
-		return kit.Empty{}, wire.Invalid("current", "match", "is not your current password")
+		return app.Empty{}, wire.Invalid("current", "match", "is not your current password")
 	}
 	hash, err := hashPassword(in.Password)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	now := wire.Now(ctx)
 	if a, err = Accounts.Update(ctx, uid, func(a *Account) error {
 		a.PasswordHash, a.UpdatedAt = hash, now
 		return nil
 	}); err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if err := revokeSessions(ctx, uid, p.SessionID); err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	return kit.Empty{}, publishAccount(ctx, a, PasswordChanged)
+	return app.Empty{}, publishAccount(ctx, a, PasswordChanged)
 }
 
 // ForgotPassword mails a password reset link to the account of an address,
@@ -532,7 +532,7 @@ type SessionsOutput struct {
 //
 // fr: ListSessions liste les sessions actives de l’appelant : là où il est
 // connecté.
-func ListSessions(ctx context.Context, _ kit.Empty) (SessionsOutput, error) {
+func ListSessions(ctx context.Context, _ app.Empty) (SessionsOutput, error) {
 	uid, p, err := caller(ctx)
 	if err != nil {
 		return SessionsOutput{}, err
@@ -567,23 +567,23 @@ type SessionID struct {
 //
 // fr: RevokeSession déconnecte l’une des sessions de l’appelant. Révoquer la
 // session courante oublie aussi son cookie.
-func RevokeSession(ctx context.Context, in SessionID) (kit.Empty, error) {
+func RevokeSession(ctx context.Context, in SessionID) (app.Empty, error) {
 	uid, p, err := caller(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	s, err := Sessions.Get(ctx, in.ID)
-	if wire.Is(err, kit.WireNotFound) || (err == nil && s.UserID != uid) {
-		return kit.Empty{}, kit.NotFound("no such session")
+	if wire.Is(err, app.WireNotFound) || (err == nil && s.UserID != uid) {
+		return app.Empty{}, app.NotFound("no such session")
 	}
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
-		return kit.Empty{}, err
+	if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, app.WireNotFound) {
+		return app.Empty{}, err
 	}
 	if s.ID == p.SessionID {
-		kit.ClearCookie(ctx, CookieName)
+		app.ClearCookie(ctx, CookieName)
 	}
-	return kit.Empty{}, nil
+	return app.Empty{}, nil
 }

@@ -61,7 +61,7 @@ export const en: Messages = {
   "auth.newHere": "New to Todo?",
   "auth.signIn": "Sign in",
   "auth.createAccount": "Create an account",
-  "auth.builtWith": "Built with kit",
+  "auth.builtWith": "Built with the Kitsunium SDK",
   "auth.brand.tag": "Tasks, shared the calm way",
   "auth.brand.title":
     "One calm list for everything you and your people need to get done.",
