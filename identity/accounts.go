@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -39,7 +39,7 @@ type Account struct {
 	TimeZone string `json:"timeZone,omitempty"`
 	// PasswordHash is the PHC string of the SDK's password hashing: salted,
 	// slow, self-describing. The password itself is never stored.
-	PasswordHash string        `json:"passwordHash" kit:"secret"`
+	PasswordHash string        `json:"passwordHash" app:"secret"`
 	Status       AccountStatus `json:"status"`
 	// FailedLogins counts the wrong passwords since the last success.
 	FailedLogins int        `json:"failedLogins"`
@@ -66,7 +66,7 @@ func (a Account) locale() wire.Locale { return a.Locale.Resolve() }
 // fr: Accounts garde chaque compte, sous l’ID de son utilisateur. Deux comptes
 // ne partagent jamais une adresse : l’index unique refuse le second.
 var Accounts = Service.Store("accounts", func(a Account) string { return a.ID },
-	kit.Unique("email", func(a Account) string { return a.Email }))
+	app.Unique("email", func(a Account) string { return a.Email }))
 
 // MaxFailedLogins wrong passwords in a row lock an account.
 const MaxFailedLogins = 5
@@ -95,10 +95,10 @@ var AccountLifecycle = Service.Workflow("accounts", Accounts, func(a *Account) *
 	OnTransition(announceAccount)
 
 // tooManyFailures holds once an account refused MaxFailedLogins passwords
-// in a row. kit checks it each time the account is written.
+// in a row. The framework checks it each time the account is written.
 //
 // fr: tooManyFailures est vraie dès qu’un compte a refusé MaxFailedLogins mots
-// de passe d’affilée. kit la vérifie à chaque écriture du compte.
+// de passe d’affilée. Le framework la vérifie à chaque écriture du compte.
 func tooManyFailures(a Account) bool { return a.FailedLogins >= MaxFailedLogins }
 
 // activate gives an account a clean slate: no failures, no lock, and the
@@ -159,7 +159,7 @@ var AccountEvents = Service.Topic[AccountEvent]("accounts")
 // fr: announceAccount publie les transitions qui intéressent les autres
 // services, quel que soit leur déclencheur : un endpoint, la garde de
 // verrouillage.
-func announceAccount(ctx context.Context, c kit.Change[Account, AccountStatus]) error {
+func announceAccount(ctx context.Context, c app.Change[Account, AccountStatus]) error {
 	kind := ""
 	switch {
 	case c.Event == "create":
@@ -177,7 +177,7 @@ func announceAccount(ctx context.Context, c kit.Change[Account, AccountStatus]) 
 // publishAccount announces kind for the account a.
 func publishAccount(ctx context.Context, a Account, kind string) error {
 	return AccountEvents.Publish(ctx, AccountEvent{
-		ID: kit.NewID("event"), Kind: kind, UserID: a.ID, Email: a.Email, Name: a.Name, At: wire.Now(ctx),
+		ID: app.NewID("event"), Kind: kind, UserID: a.ID, Email: a.Email, Name: a.Name, At: wire.Now(ctx),
 	})
 }
 

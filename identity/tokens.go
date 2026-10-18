@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -46,7 +46,7 @@ const (
 // opens nothing.
 type Token struct {
 	ID        string      `json:"id"`
-	Hash      string      `json:"hash" kit:"secret"`
+	Hash      string      `json:"hash" app:"secret"`
 	Purpose   Purpose     `json:"purpose"`
 	UserID    string      `json:"userId"`
 	Status    TokenStatus `json:"status"`
@@ -61,7 +61,7 @@ type Token struct {
 // fr: Tokens garde les liens à usage unique, sous leur ID, retrouvés par le
 // hash de leur secret.
 var Tokens = Service.Store("tokens", func(t Token) string { return t.ID },
-	kit.Unique("hash", func(t Token) string { return t.Hash }))
+	app.Unique("hash", func(t Token) string { return t.Hash }))
 
 // TokenLifecycle is the life of a one-time link: used once, or expired by
 // its own timer at its deadline.
@@ -121,7 +121,7 @@ func sameDigest(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a),
 // errBadLink answers a link that is unknown, used, expired or meant for
 // something else — the same answer for all four, so a link reveals nothing.
 func errBadLink() error {
-	return &kit.Error{Status: http.StatusBadRequest, Code: "invalid_token", Message: "this link is invalid or has expired: ask for a new one"}
+	return &app.Error{Status: http.StatusBadRequest, Code: "invalid_token", Message: "this link is invalid or has expired: ask for a new one"}
 }
 
 // issue creates a one-time link for the user and returns its secret, which
@@ -130,7 +130,7 @@ func issue(ctx context.Context, userID string, p Purpose, valid time.Duration) (
 	secret, digest := newSecret()
 	now := wire.Now(ctx)
 	_, err := TokenLifecycle.Start(ctx, Token{
-		ID: kit.NewID("token"), Hash: digest, Purpose: p, UserID: userID, CreatedAt: now, ExpiresAt: now.Add(valid),
+		ID: app.NewID("token"), Hash: digest, Purpose: p, UserID: userID, CreatedAt: now, ExpiresAt: now.Add(valid),
 	})
 	return secret, err
 }
@@ -155,7 +155,7 @@ func redeem(ctx context.Context, secret string, p Purpose) (Token, error) {
 		return Token{}, errBadLink()
 	}
 	used, err := TokenLifecycle.Fire(ctx, t.ID, "use")
-	if wire.Is(err, kit.CodeConflict) || wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, app.WireConflict) || wire.Is(err, app.WireNotFound) {
 		return Token{}, errBadLink() // another request used it first
 	}
 	return used, err

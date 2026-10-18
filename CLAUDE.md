@@ -1,15 +1,22 @@
-<!-- updated: 2026-09-29T20:07:00Z -->
+<!-- updated: 2026-10-04T20:38:53Z -->
 # kitsunium/todo
 
-The reference product of kit (`github.com/kitsunium/platform`), and its
-end-to-end test: a task list for people who work together — accounts,
+A product of the SDK's framework, and its end-to-end test: a task list for people who work together — accounts,
 contacts, groups, shared tasks, mail. Read `README.md` for what it does.
+
+It is written on the SDK's framework and imports the SDK alone: one module,
+`github.com/kitsunium/sdk` v0.44.2 and its `pkg/v1/<family>` modules,
+published, no `replace` — its `framework/*` packages (`app` and its
+subsystems, `model`) and its `pkg/v1/*` packages. `go list -m all` names the
+todo and the SDK's modules, nothing else. The platform's dev tool runs the
+product in dev and reads its source (the static analysis); the product links
+none of it and its tree names none of it (SDK ADR 0180).
 
 ## Layout
 
 | Path | Service | Role |
 |---|---|---|
-| `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck / config / secrets |
+| `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck / config / secrets. It imports `framework/app/server` and the subsystems the services declare (`framework/app/{store,queue,workflow,mail,jobs}`): the framework links each only into a program that imports it, and refuses to start a declaration whose subsystem is not imported (`CodeSubsystemMissing`) |
 | `identity/` | identity | accounts (workflow `accounts`) and their language, one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (the queries `UsersByID` → `Directory`, `People` with each user's locale and time zone; `EmailOwner`), the hand-written `session-reaper` loop |
 | `contacts/` | contacts | links between users (workflow `requests`), invitations by email, `claim-invites` on `identity.AccountEvents`, the query `AreContacts` |
 | `groups/` | groups | groups and roles, invitations (workflow `invitations`), the queries `RoleOf` `GroupRefs` `UserGroups` `GroupMembers` |
@@ -21,7 +28,7 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 | `stats/` | stats | the `sample` job and `GET /api/stats` |
 | `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code), `Locale` (`fr` first, `en`; `NegotiateLocale`, `CheckLocale`, `Resolve`), time zones (`CheckTimeZone`, `Zone`; the zone database is embedded, `time/tzdata`) |
 | `web/` | web | the SPA (`web/src` → committed `web/dist`), owned by the web agent |
-| `*_test.go` | — | end-to-end tests, including `TestTheDiagramMatchesTheCode` |
+| `*_test.go` | — | end-to-end tests, including the diagram suite: `TestTheDiagramMatchesTheCode` (`diagram_test.go`) and `TestTheReadmeDiagramIsCurrent` (`main_test.go`). Their static half is the platform's analysis, run as a process (`$GRAPH_ANALYZER graph -static -format json`) and given to the product through `app.Analyzer` |
 
 ## Rules
 
@@ -43,20 +50,21 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 - Subscriptions are at-least-once: key what they write by the event's own
   ID, insert rather than overwrite, and do the one irreversible thing — a
   mail — last.
-- Every timestamp and deadline reads `wire.Now(ctx)` (kit's clock): the
-  tests move it. Logs go through `kit.Log(ctx)` and name users by ID, never
+- Every timestamp and deadline reads `wire.Now(ctx)` (the framework's clock): the
+  tests move it. Logs go through `app.Log(ctx)` and name users by ID, never
   by address.
 - A transition due at a date the entity carries (a due date, a link's
-  deadline) is an `At`: kit wakes the workflow's loop at that instant. A
+  deadline) is an `At`: the framework wakes the workflow's loop at that instant. A
   `When` guard sees the entity only and is checked each time it is written —
   never a condition on the time. No workflow loop runs while nothing is due.
-- Errors to callers are `kit.Error` values: `wire.Invalid` for a field,
-  `kit.NotFound` for what the caller may not see (never 403 for a task, a
+- Errors to callers are `app.Error` values: `wire.Invalid` for a field,
+  `app.NotFound` for what the caller may not see (never 403 for a task, a
   group or a contact of someone else), and the codes of the contract
   (`invalid_credentials`, `email_unverified`, `account_locked`,
-  `invalid_token`). Never return or log a password, a secret or a hash;
-  a secret is stored as its SHA-256, a password with the SDK's
-  `password.Hash`.
+  `invalid_token`). A framework error is matched by its wire code:
+  `wire.Is(err, app.WireNotFound)`, `app.WireConflict`. Never return or log
+  a password, a secret or a hash; a secret is stored as its SHA-256, a
+  password with the SDK's `password.Hash` (`pkg/v1/crypto/password`).
 - Ask "is there one?" with `Find` on an index, not `Get`: a missing key is
   an error span, and the Studio paints the store red.
 - The product speaks French first, and English. An account's `Locale` is
@@ -72,7 +80,7 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
   `date.long`), UTC when they gave none.
 - Settings are declared where they are used (`Service.Setting`), never read
   from the environment by hand: `base-url` (notify), `archive-after` (tasks,
-  the auto-archive timer waits it). A test gives one with `kit.Set`.
+  the auto-archive timer waits it). A test gives one with `app.Set`.
 - Every word of a mail comes from `notify/locales/{fr,en}.json` (flat keys,
   `{name}` placeholders, CLDR plural forms for a count) through the SDK's
   `i18n` printers. A new mail adds its keys to both files: the process
@@ -80,21 +88,50 @@ contacts, groups, shared tasks, mail. Read `README.md` for what it does.
   French is written for French readers — vous, `’`, `\u00a0` before
   `: ? !` and inside `« »`, no elision a name could break ("envoyée par
   {actor}", not "de {actor}") — and mails stay light: no dark mode.
+- Import the SDK only — `sdk/framework/*` and `sdk/pkg/v1/*` — never
+  `github.com/kitsunium/platform`: a product never imports the platform
+  (its ADR 0010, D2). What the platform gives the product, it gives as a
+  tool: the dev run with the Studio, and the static analysis the diagram
+  tests run through `$GRAPH_ANALYZER graph -static`. No file of the product
+  names the tool (SDK ADR 0180): the Studio is plugged into a dev build from
+  outside the tree.
 - The README's Mermaid diagram is generated: after a change to the graph,
-  replace it with `go run . graph -format mermaid`
-  (`TestTheReadmeDiagramIsCurrent`).
+  replace it with what `TestTheReadmeDiagramIsCurrent` prints where the
+  analyzer is — the product's `graph -format mermaid`, given the static
+  analysis. `go
+  run . graph -format mermaid` prints its solid arrows alone (what the
+  product declares): the dashed ones are what the analyzer finds in the code.
 
 ## Develop
 
-The platform is not published yet. `go.mod` replaces it with `../platform`;
-on a machine where the platform branch lives elsewhere, an untracked `go.work`
-with a `replace` points at it.
+The build needs the Go toolchain and the module proxy, nothing else: no
+platform checkout and no `go.work` (git-ignored, machine-local: build with
+`GOWORK=off` to be sure none is read). The dev tool and the analyzer are
+installed apart, from a platform checkout.
+
+The SDK is a module per `pkg/v1` family since v0.20.0 (its ADR 0171), and
+the framework is its root module: never require
+`github.com/kitsunium/sdk/framework` or `github.com/kitsunium/sdk/pkg`, whose
+v0.18.0 tags are tombstones holding no package. Moving to another SDK version
+is `GOWORK=off go get github.com/kitsunium/sdk@<version> && GOWORK=off go mod
+tidy`, then `go get` of each `pkg/v1/<family>` the product imports.
 
 ```sh
-kit dev                             # :4000, Studio at /_kit/, mails in its Mail view
-go vet ./... && go test -race ./... # end to end, on a manual clock
+TODO_ENV=dev GOWORK=off go run .    # :4000, in dev (the dev tool adds the Studio)
+GOWORK=off go build ./... && GOWORK=off go vet ./...
+GOWORK=off go test -race ./...      # end to end, on a manual clock
 gofmt -l .                          # empty
-docker build --build-context platform=../platform -t todo .
+docker build -t todo .
+```
+
+The diagram suite's static half needs the analyzer: `GRAPH_ANALYZER=<its
+binary>`. Without it, `TestTheDiagramMatchesTheCode` checks what the
+running product says of itself and `TestTheReadmeDiagramIsCurrent` the
+diagram's solid arrows, then each skips the rest, naming it (`go test -v`
+shows the skip). With it, both run whole:
+
+```sh
+GRAPH_ANALYZER=<the analyzer> GOWORK=off go test -race -v -run 'TestTheDiagramMatchesTheCode|TestTheReadmeDiagramIsCurrent' .
 ```
 
 Commits: conventional, authored as `kodflow` (the `post-commit` gate checks

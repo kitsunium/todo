@@ -6,7 +6,7 @@ Radix primitives, TanStack Query, React Router, cmdk, sonner, motion, date-fns a
 lucide icons, with Inter self-hosted. One light design, and an interface in French
 first, English second. `npm run build` writes `dist/`, which
 `web.go` embeds (`//go:embed dist`) and serves at `/` with
-`Service.Static("app", "/", dist, kit.Root("dist"))`. A path without an extension
+`Service.Static("app", "/", dist, app.Root("dist"))`. A path without an extension
 that matches no file serves `index.html`, so client routes survive a reload.
 
 `dist/` is committed: the Go build never needs Node. Rebuild it after any change
@@ -17,8 +17,8 @@ under `src/`.
 ```sh
 npm ci
 npm run dev:mock     # http://localhost:5173 — the whole API in memory, no backend
-npm run dev          # http://localhost:5173 — /api and /_kit proxied to KIT_APP
-                     # (default http://localhost:4000: run `KIT_ENV=dev go run .` first)
+npm run dev          # http://localhost:5173 — /api and /_app proxied to APP_URL
+                     # (default http://localhost:4000: run `TODO_ENV=dev go run .` first)
 ```
 
 **Mock mode** (`vite --mode mock`) answers every route of the HTTP contract from
@@ -40,7 +40,7 @@ point sits behind `import.meta.env.MODE === "mock"`, which a production build
 replaces with `false` and drops — `grep -r __mock dist` finds nothing.
 
 With a real app in dev, the "Check your inbox" page links to the Studio's dev
-mailbox (`/_kit/#/mail`), shown only when `/_kit/api/graph` answers JSON.
+mailbox (`/_app/#/mail`), shown only when `/_app/api/graph` answers JSON.
 
 ## Languages
 
@@ -90,7 +90,7 @@ npx vite --mode mock --port 5299 &
 node scripts/shoot.mjs                     # → /tmp/todo-web-shots
 ONLY=today,panel LOCALES=en MOBILE=0 SCALE=2 node scripts/shoot.mjs
 
-# The real app (KIT_ENV=dev go run . — seeded users, mails in /_kit/api/mail):
+# The real app (TODO_ENV=dev go run . — seeded users, mails in /_app/api/mail):
 REAL=1 BASE=http://127.0.0.1:4000 OUT=/tmp/todo-web-real node scripts/shoot.mjs
 ```
 

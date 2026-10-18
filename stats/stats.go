@@ -8,13 +8,13 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/tasks"
 )
 
 // Service owns the samples.
-var Service = kit.NewService("stats", "Vital signs of the task list, sampled by a job of the daemon.\n\nfr: Les signes vitaux de la liste de tâches, échantillonnés par un job du daemon.")
+var Service = app.NewService("stats", "Vital signs of the task list, sampled by a job of the daemon.\n\nfr: Les signes vitaux de la liste de tâches, échantillonnés par un job du daemon.")
 
 // Snapshot is the task list at one instant.
 type Snapshot struct {
@@ -55,7 +55,7 @@ const keep = 120
 // par l’endpoint du recensement plutôt que par le store : les données d’un
 // service lui appartiennent.
 func Sample(ctx context.Context) error {
-	census, err := tasks.TaskCensus.Ask(ctx, kit.Empty{})
+	census, err := tasks.TaskCensus.Ask(ctx, app.Empty{})
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func Sample(ctx context.Context) error {
 		rate = float64(counts[string(tasks.Done)]+counts[string(tasks.Archived)]) / float64(census.Total)
 	}
 	if err := Snapshots.Put(ctx, Snapshot{
-		ID: kit.NewID("snapshot"), At: wire.Now(ctx), Counts: counts, Total: census.Total, CompletionRate: rate,
+		ID: app.NewID("snapshot"), At: wire.Now(ctx), Counts: counts, Total: census.Total, CompletionRate: rate,
 		OpenByPriority: census.OpenByPriority, Shared: census.Shared, Grouped: census.Grouped,
 	}); err != nil {
 		return err
@@ -104,7 +104,7 @@ type CurrentOutput struct {
 // Current returns the latest sample and the recent history.
 //
 // fr: Current renvoie le dernier échantillon et l’historique récent.
-func Current(ctx context.Context, _ kit.Empty) (CurrentOutput, error) {
+func Current(ctx context.Context, _ app.Empty) (CurrentOutput, error) {
 	all, err := Snapshots.List(ctx)
 	if err != nil {
 		return CurrentOutput{}, err

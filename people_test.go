@@ -55,7 +55,7 @@ func (c *client) hasEntry(kind, text string) entry {
 // without an account is invited by mail, and the invitation turns into a
 // request once they sign up and verify their address.
 func TestContactsAndInvitations(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.signup("Alice", "alice@example.com")
 	bob := h.signup("Bob", "bob@example.com")
 
@@ -162,7 +162,7 @@ type group struct {
 // run by its owner and admins, left by its members, deleted by its owner,
 // whose tasks then go back to their owners' lists.
 func TestGroups(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.signup("Alice", "alice@example.com")
 	bob := h.signup("Bob", "bob@example.com")
 	carol := h.signup("Carol", "carol@example.com")
@@ -262,7 +262,7 @@ func TestGroups(t *testing.T) {
 // its reader's language rather than parse the English one; and no one when
 // the actor acted on themselves.
 func TestFeedEntriesNameWhomTheyAreAbout(t *testing.T) {
-	h := start(t, false)
+	h := start(t, nil)
 	alice := h.signup("Alice", "alice@example.com")
 	bob := h.signup("Bob", "bob@example.com")
 	carol := h.signup("Carol", "carol@example.com")

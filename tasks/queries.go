@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -56,7 +56,7 @@ type CensusOutput struct {
 //
 // fr: Census compte toutes les tâches par statut, et les tâches ouvertes par
 // priorité.
-func Census(ctx context.Context, _ kit.Empty) (CensusOutput, error) {
+func Census(ctx context.Context, _ app.Empty) (CensusOutput, error) {
 	all, err := Tasks.List(ctx)
 	if err != nil {
 		return CensusOutput{}, err
@@ -146,7 +146,7 @@ type AudienceOutput struct {
 // programmé.
 func Audience(ctx context.Context, in AudienceInput) (AudienceOutput, error) {
 	t, err := Tasks.Get(ctx, in.Task)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return AudienceOutput{Users: []string{}}, nil
 	}
 	if err != nil {

@@ -1,9 +1,11 @@
 package main
 
-// The todo is the end-to-end test of kit: every test runs the whole product
+// The todo is tested end to end: every test runs the whole product
 // in-process — eight services, in memory, on a free port, in dev (the
-// capture mailer, the Studio), on a manual clock the test moves — and talks
-// to it over HTTP like the web app does, one cookie jar per user.
+// capture mailer), on a manual clock the test moves — and talks to it over
+// HTTP like the web app does, one cookie jar per user. The test binary links
+// what a release build links: the server and the subsystems the services
+// declare, never the Studio's API, which only a dev build is given.
 
 import (
 	"bytes"
@@ -20,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/platform/model"
+	"github.com/kitsunium/sdk/framework/app"
+	"github.com/kitsunium/sdk/framework/model"
 	"github.com/kitsunium/sdk/pkg/v1/clock"
 	"github.com/kitsunium/todo/notify"
 )
@@ -35,7 +37,7 @@ var epoch = time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 // harness is one run of the product.
 type harness struct {
 	t   *testing.T
-	app *kit.App
+	app *app.App
 	clk *clock.ManualClock
 }
 
@@ -58,28 +60,34 @@ func (l *logBuffer) String() string {
 }
 
 // start runs the whole product for one test: in dev, in memory, on a free
-// port, on a manual clock at epoch, with the capture mailer.
-func start(t *testing.T, analyze bool) *harness {
+// port, on a manual clock at epoch, with the capture mailer. Given an
+// analysis, the product runs it in the background once it serves, and merges
+// what it finds in the source into its graph; nil runs none.
+func start(t *testing.T, analysis app.AnalyzeFunc) *harness {
 	t.Helper()
-	t.Setenv("KIT_SMTP_URL", "") // never a real relay, whatever the machine says
+	t.Setenv("TODO_SMTP_URL", "") // never a real relay, whatever the machine says
 	t.Setenv("TODO_BASE_URL", "")
 	clk := clock.NewManualClock(epoch)
 	logs := &logBuffer{}
-	app := App.With(kit.InMemory(), kit.Listen("127.0.0.1:0"), kit.Env(kit.EnvDev), kit.Analyze(analyze), kit.Logs(logs), kit.Clock(clk))
-	if err := app.Start(t.Context()); err != nil {
+	opts := []app.AppOption{app.InMemory(), app.Listen("127.0.0.1:0"), app.Env(app.EnvDev), app.Analyze(analysis != nil), app.Logs(logs), app.Clock(clk)}
+	if analysis != nil {
+		opts = append(opts, app.Analyzer(analysis))
+	}
+	a := App.With(opts...)
+	if err := a.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := app.Stop(ctx); err != nil {
+		if err := a.Stop(ctx); err != nil {
 			t.Error(err)
 		}
 		if t.Failed() {
 			t.Logf("the product's logs:\n%s", logs)
 		}
 	})
-	return &harness{t: t, app: app, clk: clk}
+	return &harness{t: t, app: a, clk: clk}
 }
 
 // settle moves the app's clock forward by step until cond holds. The
@@ -208,7 +216,7 @@ func (c *client) fails(status int, code, method, path string, body any) apiError
 // violates sends a request that must be refused for its field path.
 func (c *client) violates(path, method, route string, body any) {
 	c.h.t.Helper()
-	e := c.fails(http.StatusBadRequest, kit.CodeInvalid, method, route, body)
+	e := c.fails(http.StatusBadRequest, app.WireInvalid, method, route, body)
 	if !slices.ContainsFunc(e.Error.Violations, func(v struct{ Path, Rule, Message string }) bool { return v.Path == path }) {
 		c.h.t.Fatalf("%s: %s %s: violations %+v, want one on %q", c.name, method, route, e.Error.Violations, path)
 	}
@@ -293,20 +301,20 @@ func befriend(a, b *client, bEmail string) {
 	b.expect(http.StatusOK, "POST", "/api/contacts/"+added.Request.ID+"/accept", nil)
 }
 
-// In production the Studio does not exist, and /_kit/ must say so rather than
+// In production the Studio does not exist, and /_app/ must say so rather than
 // fall through to the web app.
 func TestNoStudioInProduction(t *testing.T) {
-	t.Setenv("KIT_SMTP_URL", "")
-	app := App.With(kit.InMemory(), kit.Listen("127.0.0.1:0"), kit.Env(kit.EnvProduction), kit.Logs(io.Discard), kit.Clock(clock.NewManualClock(epoch)))
-	if err := app.Start(t.Context()); err != nil {
+	t.Setenv("TODO_SMTP_URL", "")
+	a := App.With(app.InMemory(), app.Listen("127.0.0.1:0"), app.Env(app.EnvProduction), app.Logs(io.Discard), app.Clock(clock.NewManualClock(epoch)))
+	if err := a.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	defer app.Stop(context.Background())
+	defer a.Stop(context.Background())
 	for path, want := range map[string]int{
-		"/_kit/api/graph": 404, "/_kit/": 404, "/_kit/api/source?file=main.go": 404, "/_kit/api/mail": 404,
-		"/_kit/health/ready": 200, "/": 200, "/app/today": 200, "/api/auth/me": 401,
+		"/_app/api/graph": 404, "/_app/": 404, "/_app/api/source?file=main.go": 404, "/_app/api/mail": 404,
+		"/_app/health/ready": 200, "/": 200, "/app/today": 200, "/api/auth/me": 401,
 	} {
-		resp, err := http.Get(app.URL() + path)
+		resp, err := http.Get(a.URL() + path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -318,9 +326,14 @@ func TestNoStudioInProduction(t *testing.T) {
 }
 
 // The README's architecture diagram is generated, and stays so: this fails
-// when the code changes the graph and the README was not regenerated with
-//
-//	go run . graph -format mermaid
+// when the code changes the graph and the README was not regenerated. It is
+// what the product's own graph command prints — `go run . graph -format
+// mermaid` — given the static analysis through app.Analyzer, as the
+// diagram test gives it (diagram_test.go): its solid arrows the product
+// declares, its dashed ones the analyzer found in the code. Without the
+// analyzer the solid part alone is checked, and the dashed part skipped by
+// name; regenerate the diagram where the analyzer is, from what this test
+// prints.
 func TestTheReadmeDiagramIsCurrent(t *testing.T) {
 	raw, err := os.ReadFile("README.md")
 	if err != nil {
@@ -333,6 +346,11 @@ func TestTheReadmeDiagramIsCurrent(t *testing.T) {
 	}
 	body := readme[start+len("```mermaid\n"):]
 	body = body[:strings.Index(body, "```")]
+	a := app.NewApp("todo", services()...)
+	source := staticSource()
+	if source != nil {
+		a = a.With(app.Analyzer(source.analyze))
+	}
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -344,14 +362,33 @@ func TestTheReadmeDiagramIsCurrent(t *testing.T) {
 		out, _ := io.ReadAll(r)
 		done <- string(out)
 	}()
-	code := kit.NewApp("todo", services()...).Main(t.Context(), []string{"graph", "-format", "mermaid"})
+	code := a.Main(t.Context(), []string{"graph", "-format", "mermaid"})
 	os.Stdout = stdout
 	_ = w.Close()
 	got := <-done
 	if code != 0 {
 		t.Fatalf("graph exited %d", code)
 	}
-	if got != body {
-		t.Fatalf("the README's diagram is stale; regenerate it with `go run . graph -format mermaid`.\nwant:\n%s", got)
+	if source == nil {
+		if solid(got) != solid(body) {
+			t.Fatalf("the README's diagram is stale; regenerate it where the analyzer is, from what this test prints there.\nits solid arrows are now:\n%s", solid(got))
+		}
+		t.Skip(withoutAnalyzer + "the dashed arrows of the README's diagram; its solid ones match the code")
 	}
+	source.graph(t) // the analysis ran: got lacks no arrow for want of it
+	if got != body {
+		t.Fatalf("the README's diagram is stale; replace it with:\n%s", got)
+	}
+}
+
+// solid is a Mermaid flowchart without its dashed arrows: the edges found in
+// the code alone, and a port's binding to its own fallback.
+func solid(chart string) string {
+	var out strings.Builder
+	for line := range strings.Lines(chart) {
+		if !strings.Contains(line, " -.->|") {
+			out.WriteString(line)
+		}
+	}
+	return out.String()
 }

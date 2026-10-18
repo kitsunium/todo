@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/activity"
 	"github.com/kitsunium/todo/contacts"
 	"github.com/kitsunium/todo/internal/wire"
@@ -19,18 +19,18 @@ import (
 // fr: L’API de la liste de tâches. Chaque route agit pour l’utilisateur
 // connecté, sur les tâches qu’il voit.
 var (
-	_ = tasks.Service.Endpoint("GET /api/tasks", List, kit.Auth())
-	_ = tasks.Service.Endpoint("GET /api/tasks/counts", Counts, kit.Auth())
-	_ = tasks.Service.Endpoint("POST /api/tasks", Create, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("GET /api/tasks/{id}", Get, kit.Auth())
-	_ = tasks.Service.Endpoint("PATCH /api/tasks/{id}", Update, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/complete", Complete, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/reopen", Reopen, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/archive", Archive, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/restore", Restore, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("DELETE /api/tasks/{id}", Delete, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/share", Share, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = tasks.Service.Endpoint("DELETE /api/tasks/{id}/share/{userId}", Unshare, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("GET /api/tasks", List, app.Auth())
+	_ = tasks.Service.Endpoint("GET /api/tasks/counts", Counts, app.Auth())
+	_ = tasks.Service.Endpoint("POST /api/tasks", Create, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("GET /api/tasks/{id}", Get, app.Auth())
+	_ = tasks.Service.Endpoint("PATCH /api/tasks/{id}", Update, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/complete", Complete, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/reopen", Reopen, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/archive", Archive, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/restore", Restore, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("DELETE /api/tasks/{id}", Delete, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("POST /api/tasks/{id}/share", Share, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = tasks.Service.Endpoint("DELETE /api/tasks/{id}/share/{userId}", Unshare, app.Auth(), app.RateLimitPerClient(10, 20))
 )
 
 // maxNotes bounds a task's notes, in characters.
@@ -79,7 +79,7 @@ func List(ctx context.Context, in ListInput) (ListOutput, error) {
 		return ListOutput{}, err
 	}
 	if _, member := ms[in.Group]; in.Group != "" && !member {
-		return ListOutput{}, kit.NotFound("no such group")
+		return ListOutput{}, app.NotFound("no such group")
 	}
 	var picked []tasks.Task
 	for _, t := range all {
@@ -203,7 +203,7 @@ func Create(ctx context.Context, in CreateInput) (View, error) {
 	}
 	now := wire.Now(ctx)
 	t := tasks.Task{
-		ID: kit.NewID("task"), Title: title, Notes: in.Notes, Priority: in.Priority, OwnerID: uid,
+		ID: app.NewID("task"), Title: title, Notes: in.Notes, Priority: in.Priority, OwnerID: uid,
 		GroupID: in.GroupID, AssigneeID: in.AssigneeID, SharedWith: []string{}, CreatedAt: now, UpdatedAt: now,
 	}
 	if in.Due != nil {
@@ -311,7 +311,7 @@ func (in UpdateInput) check(ctx context.Context, t tasks.Task, uid string) (edit
 	}
 	if in.GroupID != nil && *in.GroupID != t.GroupID {
 		if t.OwnerID != uid {
-			return e, kit.Forbidden("only the task's owner can move it to another group")
+			return e, app.Forbidden("only the task's owner can move it to another group")
 		}
 		if *in.GroupID != "" {
 			role, err := roleIn(ctx, *in.GroupID, uid)
@@ -382,7 +382,7 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 		cur.UpdatedAt = now
 		return nil
 	})
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return View{}, errNoTask()
 	}
 	if err != nil {
@@ -390,7 +390,7 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 	}
 	if updated.Status == tasks.Overdue && !pastDue(updated, now) {
 		rescheduled, err := Lifecycle.Fire(ctx, updated.ID, "reschedule")
-		if err != nil && !wire.Is(err, kit.CodeConflict) {
+		if err != nil && !wire.Is(err, app.WireConflict) {
 			return View{}, err
 		}
 		if err == nil {
@@ -416,10 +416,10 @@ func Update(ctx context.Context, in UpdateInput) (View, error) {
 
 // conflict explains a transition the task's state refuses.
 func conflict(err error, what string) error {
-	if wire.Is(err, kit.CodeConflict) {
-		return kit.Conflict("this task cannot be " + what + " now")
+	if wire.Is(err, app.WireConflict) {
+		return app.Conflict("this task cannot be " + what + " now")
 	}
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return errNoTask()
 	}
 	return err
@@ -487,22 +487,22 @@ func Restore(ctx context.Context, in TaskID) (View, error) {
 //
 // fr: Delete supprime une tâche pour tout le monde. Son propriétaire le peut,
 // tout comme un propriétaire ou un admin de son groupe.
-func Delete(ctx context.Context, in TaskID) (kit.Empty, error) {
+func Delete(ctx context.Context, in TaskID) (app.Empty, error) {
 	t, acc, uid, err := load(ctx, in.ID)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if !acc.deletes {
-		return kit.Empty{}, kit.Forbidden("only the task's owner, or an owner or admin of its group, can delete it")
+		return app.Empty{}, app.Forbidden("only the task's owner, or an owner or admin of its group, can delete it")
 	}
 	e := newEvent(ctx, t, tasks.KindDeleted, uid)
 	if e.Recipients, err = recipients(ctx, t, uid); err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if err := tasks.Tasks.Delete(ctx, t.ID); err != nil {
-		return kit.Empty{}, conflict(err, "deleted")
+		return app.Empty{}, conflict(err, "deleted")
 	}
-	return kit.Empty{}, tasks.Events.Publish(ctx, e)
+	return app.Empty{}, tasks.Events.Publish(ctx, e)
 }
 
 // ShareInput names the contact to share a task with.
@@ -523,7 +523,7 @@ func Share(ctx context.Context, in ShareInput) (View, error) {
 	}
 	switch {
 	case !acc.shares:
-		return View{}, kit.Forbidden("only the task's owner can share it")
+		return View{}, app.Forbidden("only the task's owner can share it")
 	case in.UserID == uid:
 		return View{}, wire.Invalid("userId", "self", "is you: you own this task")
 	case slices.Contains(t.SharedWith, in.UserID):
@@ -534,7 +534,7 @@ func Share(ctx context.Context, in ShareInput) (View, error) {
 		return View{}, err
 	}
 	if !check.Contacts {
-		return View{}, kit.Forbidden("you can only share a task with your contacts")
+		return View{}, app.Forbidden("you can only share a task with your contacts")
 	}
 	now := wire.Now(ctx)
 	updated, err := tasks.Tasks.Update(ctx, t.ID, func(cur *tasks.Task) error {
@@ -574,7 +574,7 @@ func Unshare(ctx context.Context, in UnshareInput) (View, error) {
 		return View{}, err
 	}
 	if !acc.shares && in.UserID != uid {
-		return View{}, kit.Forbidden("only the task's owner can stop sharing it")
+		return View{}, app.Forbidden("only the task's owner can stop sharing it")
 	}
 	if !slices.Contains(t.SharedWith, in.UserID) {
 		return present(ctx, t, acc)

@@ -5,7 +5,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/internal/wire"
 	"github.com/kitsunium/todo/tasks"
@@ -78,15 +78,15 @@ func (ms memberships) access(t tasks.Task, uid string) access {
 
 // me is the signed-in user.
 func me(ctx context.Context) (string, error) {
-	uid, ok := kit.UserID(ctx)
+	uid, ok := app.UserID(ctx)
 	if !ok {
-		return "", kit.Unauthenticated("sign in first")
+		return "", app.Unauthenticated("sign in first")
 	}
 	return string(uid), nil
 }
 
 // errNoTask answers for a task that does not exist, or not for the caller.
-func errNoTask() error { return kit.NotFound("no such task") }
+func errNoTask() error { return app.NotFound("no such task") }
 
 // load reads a task the caller sees, with what they may do with it.
 func load(ctx context.Context, id string) (tasks.Task, access, string, error) {
@@ -95,7 +95,7 @@ func load(ctx context.Context, id string) (tasks.Task, access, string, error) {
 		return tasks.Task{}, access{}, "", err
 	}
 	t, err := tasks.Tasks.Get(ctx, id)
-	if wire.Is(err, kit.CodeNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return tasks.Task{}, access{}, "", errNoTask()
 	}
 	if err != nil {

@@ -1,5 +1,5 @@
 // The HTTP contract of the todo backend (plan "The todo — domain and HTTP
-// contract"). JSON is camelCase, timestamps are RFC 3339 UTC, IDs are kit
+// contract"). JSON is camelCase, timestamps are RFC 3339 UTC, IDs are
 // TypeIDs (user_…, task_…, group_…).
 import type { Locale } from "../i18n/types";
 

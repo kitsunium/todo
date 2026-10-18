@@ -12,16 +12,21 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
 	"github.com/kitsunium/todo/internal/wire"
+
+	// withBaseURL's app is a server, the default profile, as the todo is:
+	// the framework refuses to start one whose program does not link its
+	// server subsystem (profile.server-missing).
+	_ "github.com/kitsunium/sdk/framework/app/server"
 )
 
 // withBaseURL runs the notify service in an app whose base-url is u, for
 // the length of the test.
 func withBaseURL(t *testing.T, u string) {
 	t.Helper()
-	app := kit.NewApp("todo", Service).With(kit.InMemory(), kit.Listen("127.0.0.1:0"), kit.Logs(io.Discard), kit.Set("base-url", u))
+	app := app.NewApp("todo", Service).With(app.InMemory(), app.Listen("127.0.0.1:0"), app.Logs(io.Discard), app.Set("base-url", u))
 	if err := app.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}

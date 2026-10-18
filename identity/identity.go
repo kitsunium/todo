@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/sdk/pkg/v1/mail"
+	"github.com/kitsunium/sdk/framework/app"
+	"github.com/kitsunium/sdk/pkg/v1/app/mail"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Service owns accounts, passwords and sessions.
-var Service = kit.NewService("identity", "Accounts, passwords, sessions, and the one-time links that verify an address or reset a password.\n\nfr: Comptes, mots de passe, sessions, et les liens à usage unique qui vérifient une adresse ou réinitialisent un mot de passe.")
+var Service = app.NewService("identity", "Accounts, passwords, sessions, and the one-time links that verify an address or reset a password.\n\nfr: Comptes, mots de passe, sessions, et les liens à usage unique qui vérifient une adresse ou réinitialisent un mot de passe.")
 
 // UserRef is how the product shows a user to another user.
 type UserRef struct {

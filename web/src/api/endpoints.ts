@@ -127,10 +127,10 @@ export const activity = {
   markRead: () => api.post<void>("/api/activity/read"),
 };
 
-/** Whether the kit Studio answers: the app runs in dev, with a dev mailbox. */
+/** Whether the Studio answers: the app runs in dev, with a dev mailbox. */
 export async function studioAvailable(): Promise<boolean> {
   try {
-    const res = await fetch("/_kit/api/graph", { credentials: "same-origin", headers: { Accept: "application/json" } });
+    const res = await fetch("/_app/api/graph", { credentials: "same-origin", headers: { Accept: "application/json" } });
     if (!res.ok) return false;
     const type = res.headers.get("content-type") ?? "";
     await res.body?.cancel();

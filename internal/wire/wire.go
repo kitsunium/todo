@@ -15,25 +15,25 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 )
 
 // Now is the app's time, in UTC, to the millisecond: every timestamp the
-// product stores or answers. It reads kit.Now, so a test's manual clock and
+// product stores or answers. It reads app.Now, so a test's manual clock and
 // the Studio's clock reach every deadline the product computes.
 func Now(ctx context.Context) time.Time {
-	return kit.Now(ctx).UTC().Truncate(time.Millisecond)
+	return app.Now(ctx).UTC().Truncate(time.Millisecond)
 }
 
-// Invalid refuses a request because of one field, the way kit refuses a
+// Invalid refuses a request because of one field, the way the framework refuses a
 // request whose validate tags fail: 400, code invalid_argument, and one
 // violation a form can show beside the field.
 func Invalid(path, rule, message string) error {
-	return &kit.Error{
+	return &app.Error{
 		Status:     http.StatusBadRequest,
-		Code:       kit.CodeInvalid,
+		Code:       app.WireInvalid,
 		Message:    "the request is invalid",
-		Violations: []kit.Violation{{Path: path, Rule: rule, Message: message}},
+		Violations: []app.Violation{{Path: path, Rule: rule, Message: message}},
 	}
 }
 
@@ -54,9 +54,9 @@ func Line(path, s string, max int) (string, error) {
 	return s, nil
 }
 
-// Is reports whether err is a kit error with the given code: kit.CodeNotFound,
-// kit.CodeConflict…
+// Is reports whether err is a framework error with the given code: app.WireNotFound,
+// app.WireConflict…
 func Is(err error, code string) bool {
-	var ke *kit.Error
+	var ke *app.Error
 	return errors.As(err, &ke) && ke.Code == code
 }

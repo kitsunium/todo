@@ -12,11 +12,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
+	"github.com/kitsunium/sdk/framework/app"
 )
 
 // Service owns the task list.
-var Service = kit.NewService("tasks", "The task list: every task, its lifecycle, who sees it and what happens to it.\n\nfr: La liste de tâches : chaque tâche, son cycle de vie, qui la voit et ce qui lui arrive.")
+var Service = app.NewService("tasks", "The task list: every task, its lifecycle, who sees it and what happens to it.\n\nfr: La liste de tâches : chaque tâche, son cycle de vie, qui la voit et ce qui lui arrive.")
 
 // Status is where a task stands in its lifecycle.
 type Status string
@@ -87,10 +87,10 @@ func (t Task) Audience() []string {
 // qu’elle concerne : ce que voit un utilisateur se trouve par les index, jamais
 // en les lisant toutes.
 var Tasks = Service.Store("tasks", func(t Task) string { return t.ID },
-	kit.Index("owner", func(t Task) []string { return []string{t.OwnerID} }),
-	kit.Index("shared", func(t Task) []string { return t.SharedWith }),
-	kit.Index("group", func(t Task) []string { return []string{t.GroupID} }),
-	kit.Index("assignee", func(t Task) []string { return []string{t.AssigneeID} }))
+	app.Index("owner", func(t Task) []string { return []string{t.OwnerID} }),
+	app.Index("shared", func(t Task) []string { return t.SharedWith }),
+	app.Index("group", func(t Task) []string { return []string{t.GroupID} }),
+	app.Index("assignee", func(t Task) []string { return []string{t.AssigneeID} }))
 
 // Kind says what happened to a task.
 type Kind string

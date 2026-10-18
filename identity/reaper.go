@@ -4,18 +4,18 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/platform/kit"
-	"github.com/kitsunium/sdk/pkg/v1/logger"
+	"github.com/kitsunium/sdk/framework/app"
+	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
 // SessionReaper is identity's own event loop, written by hand: a ticker and
-// a select, the way a Go program waits. kit starts it with the app, cancels
+// a select, the way a Go program waits. The framework starts it with the app, cancels
 // it on shutdown, restarts it after a failure, and reads its select to draw
 // what it waits on.
 //
 // fr: SessionReaper est la boucle d’événements du service identity, écrite à la
-// main : un ticker et un select, comme attend un programme Go. kit la démarre
+// main : un ticker et un select, comme attend un programme Go. Le framework la démarre
 // avec l’app, l’annule à l’arrêt, la relance après une panne, et lit son select
 // pour dessiner ce qu’elle attend.
 var SessionReaper = Service.Go("session-reaper", ReapSessions)
@@ -35,7 +35,7 @@ const spentFor = 24 * time.Hour
 // connecte déjà plus personne ; le reaper empêche le store de grossir sans fin.
 func ReapSessions(ctx context.Context) error {
 	// The app's clock, not the wall's: a test's manual clock drives it.
-	t := kit.NewTicker(ctx, reapEvery)
+	t := app.NewTicker(ctx, reapEvery)
 	defer t.Stop()
 	for {
 		select {
@@ -43,7 +43,7 @@ func ReapSessions(ctx context.Context) error {
 			return nil
 		case <-t.C():
 			if err := Reap(ctx); err != nil {
-				return err // kit restarts the loop after a backoff
+				return err // the framework restarts the loop after a backoff
 			}
 		}
 	}
@@ -57,7 +57,7 @@ func Reap(ctx context.Context) error {
 		return err
 	}
 	for _, s := range expired {
-		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, app.WireNotFound) {
 			return err
 		}
 	}
@@ -68,12 +68,12 @@ func Reap(ctx context.Context) error {
 		return err
 	}
 	for _, t := range spent {
-		if err := Tokens.Delete(ctx, t.ID); err != nil && !wire.Is(err, kit.CodeNotFound) {
+		if err := Tokens.Delete(ctx, t.ID); err != nil && !wire.Is(err, app.WireNotFound) {
 			return err
 		}
 	}
 	if len(expired)+len(spent) > 0 {
-		logger.Info(ctx, kit.Log(ctx), "reaped", logger.Int("sessions", len(expired)), logger.Int("links", len(spent)))
+		logger.Info(ctx, app.Log(ctx), "reaped", logger.Int("sessions", len(expired)), logger.Int("links", len(spent)))
 	}
 	return nil
 }

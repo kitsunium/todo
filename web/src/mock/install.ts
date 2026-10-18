@@ -1,4 +1,4 @@
-// Mock mode: answers /api/* (and the Studio probe /_kit/api/graph, with a
+// Mock mode: answers /api/* (and the Studio probe /_app/api/graph, with a
 // 404) from the in-memory backend, after a short realistic delay.
 // Imported only when import.meta.env.MODE === "mock".
 import { clear, DEMO_EMAIL, seed, type DB } from "./db";
@@ -27,7 +27,7 @@ export function installMock(): void {
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(href, location.origin);
-    const ours = url.origin === location.origin && (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_kit/api/"));
+    const ours = url.origin === location.origin && (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_app/api/"));
     if (!ours) return realFetch(input, init);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     const body = typeof init?.body === "string" ? init.body : undefined;
@@ -40,7 +40,7 @@ export function installMock(): void {
         reject(new DOMException("The operation was aborted.", "AbortError"));
       });
     });
-    const res = url.pathname.startsWith("/_kit/")
+    const res = url.pathname.startsWith("/_app/")
       ? { status: 404, body: { error: { code: "not_found", message: "no Studio in mock mode" } } }
       : handle(method, url, body);
     return new Response(res.status === 204 ? null : JSON.stringify(res.body), {
