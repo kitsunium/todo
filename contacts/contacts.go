@@ -8,12 +8,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Service owns contacts, contact requests and invitations.
-var Service = kit.NewService("contacts", "Who you work with: contact requests between users, and invitations for people who have no account yet.\n\nfr: Ceux avec qui vous travaillez : les demandes de contact entre utilisateurs, et les invitations adressées aux personnes qui n’ont pas encore de compte.")
+var Service = app.NewService("contacts", "Who you work with: contact requests between users, and invitations for people who have no account yet.\n\nfr: Ceux avec qui vous travaillez : les demandes de contact entre utilisateurs, et les invitations adressées aux personnes qui n’ont pas encore de compte.")
 
 // LinkStatus is where a contact request stands.
 type LinkStatus string
@@ -62,8 +62,8 @@ func pairOf(a, b string) string {
 // fr: Links garde un lien par paire d’utilisateurs, retrouvé par ID et listé
 // par utilisateur.
 var Links = Service.Store("links", func(l Link) string { return l.Pair },
-	kit.Unique("id", func(l Link) string { return l.ID }),
-	kit.Index("user", func(l Link) []string { return []string{l.RequesterID, l.AddresseeID} }))
+	app.Unique("id", func(l Link) string { return l.ID }),
+	app.Index("user", func(l Link) []string { return []string{l.RequesterID, l.AddresseeID} }))
 
 // RequestsExpireAfter is how long a request waits for an answer.
 const RequestsExpireAfter = 14 * 24 * time.Hour
@@ -118,8 +118,8 @@ type Invite struct {
 // fr: Invites garde les invitations par mail, retrouvées par l’adresse qu’elles
 // attendent et par leur expéditeur.
 var Invites = Service.Store("invites", func(i Invite) string { return i.ID },
-	kit.Index("email", func(i Invite) []string { return []string{i.Email} }),
-	kit.Index("inviter", func(i Invite) []string { return []string{i.InviterID} }))
+	app.Index("email", func(i Invite) []string { return []string{i.Email} }),
+	app.Index("inviter", func(i Invite) []string { return []string{i.InviterID} }))
 
 // The kinds of Event.
 const (
@@ -157,8 +157,8 @@ var Events = Service.Topic[Event]("events")
 // fr: announceLink publie une nouvelle demande et une demande acceptée, quel
 // qu’en soit l’auteur : un utilisateur, ou une invitation réclamée par un
 // nouveau compte.
-func announceLink(ctx context.Context, c kit.Change[Link, LinkStatus]) error {
-	e := Event{ID: kit.NewID("event"), LinkID: c.Entity.ID, At: wire.Now(ctx)}
+func announceLink(ctx context.Context, c app.Change[Link, LinkStatus]) error {
+	e := Event{ID: app.NewID("event"), LinkID: c.Entity.ID, At: wire.Now(ctx)}
 	switch c.To {
 	case Pending:
 		e.Kind, e.ActorID, e.UserID = KindRequested, c.Entity.RequesterID, c.Entity.AddresseeID
@@ -196,19 +196,19 @@ func request(ctx context.Context, from, to string) (Link, error) {
 	}
 	switch {
 	case found && old.Status == Accepted:
-		return Link{}, kit.Conflict("you are already contacts")
+		return Link{}, app.Conflict("you are already contacts")
 	case found && old.Status == Pending:
-		return Link{}, kit.Conflict("a contact request between you is already waiting for an answer")
+		return Link{}, app.Conflict("a contact request between you is already waiting for an answer")
 	case found:
-		if err := Links.Delete(ctx, old.Pair); err != nil && !wire.Is(err, kit.WireNotFound) {
+		if err := Links.Delete(ctx, old.Pair); err != nil && !wire.Is(err, app.WireNotFound) {
 			return Link{}, err
 		}
 	}
 	l, err := Requests.Start(ctx, Link{
-		ID: kit.NewID("link"), Pair: pairOf(from, to), RequesterID: from, AddresseeID: to, CreatedAt: wire.Now(ctx),
+		ID: app.NewID("link"), Pair: pairOf(from, to), RequesterID: from, AddresseeID: to, CreatedAt: wire.Now(ctx),
 	})
-	if wire.Is(err, kit.WireConflict) {
-		return Link{}, kit.Conflict("a contact request between you is already waiting for an answer")
+	if wire.Is(err, app.WireConflict) {
+		return Link{}, app.Conflict("a contact request between you is already waiting for an answer")
 	}
 	return l, err
 }

@@ -13,7 +13,7 @@ import (
 const maxTimeZone = 64
 
 // CheckTimeZone refuses anything but a zone of the IANA database —
-// "Europe/Paris", "UTC" — the way kit refuses a malformed field: 400,
+// "Europe/Paris", "UTC" — the way the framework refuses a malformed field: 400,
 // invalid_argument, a violation on path. The empty name is no zone, and
 // comes back empty.
 func CheckTimeZone(path, name string) (string, error) {

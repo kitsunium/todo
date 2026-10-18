@@ -31,7 +31,7 @@ func (l Locale) Resolve() Locale {
 }
 
 // CheckLocale refuses anything but a language the product speaks, the way
-// kit refuses a oneof tag: 400, invalid_argument, a violation on path.
+// the framework refuses a oneof tag: 400, invalid_argument, a violation on path.
 func CheckLocale(path, s string) (Locale, error) {
 	if l := Locale(s); slices.Contains(Locales, l) {
 		return l, nil

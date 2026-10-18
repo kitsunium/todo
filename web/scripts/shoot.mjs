@@ -12,7 +12,7 @@
 //   LOCALES=fr,en               which languages (the account's, and the signed-out pages')
 //   MOBILE=0                    skip the mobile pass
 //   SCALE=2                     desktop device pixel ratio (details, typography)
-//   REAL=1                      the real app (kit dev): signs in as REAL_EMAIL / REAL_PASSWORD
+//   REAL=1                      the real app (in dev): signs in as REAL_EMAIL / REAL_PASSWORD
 //                               (camille@example.com), adds demo data through the API first
 //   PROD=1                      a production build (no mock): signed-out scenes only,
 //                               e.g. served with the frontend CSP to catch violations
@@ -266,7 +266,7 @@ async function shot(name) {
 // ── modes ─────────────────────────────────────────────────────────────
 //
 // Mock (default): the in-memory backend, re-seeded before every scene.
-// REAL=1: a running app (kit dev) with its seeded users; a one-time setup
+// REAL=1: a running app (in dev) with its seeded users; a one-time setup
 // through the API gives every screen something to show, and scenes that
 // change data put it back.
 // PROD=1: a production build without a backend: signed-out scenes only.
@@ -314,10 +314,10 @@ async function as(email, password = PASSWORD) {
 async function mailLink(to, prefix, timeout = 8000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    const list = await (await fetch(`${BASE}/_kit/api/mail`)).json();
+    const list = await (await fetch(`${BASE}/_app/api/mail`)).json();
     for (const m of list) {
       if (!m.to.some((t) => t.includes(to))) continue;
-      const full = await (await fetch(`${BASE}/_kit/api/mail/${encodeURIComponent(m.id)}`)).json();
+      const full = await (await fetch(`${BASE}/_app/api/mail/${encodeURIComponent(m.id)}`)).json();
       const hit = (full.text ?? "").match(new RegExp(`${prefix.replace("?", "\\?")}[A-Za-z0-9_=-]+`));
       if (hit) return hit[0];
     }

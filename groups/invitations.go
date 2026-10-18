@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -35,8 +35,8 @@ type Invitation struct {
 //
 // fr: Invitations garde les invitations, listées par invité et par groupe.
 var Invitations = Service.Store("invitations", func(i Invitation) string { return i.ID },
-	kit.Index("invitee", func(i Invitation) []string { return []string{i.InviteeID} }),
-	kit.Index("group", func(i Invitation) []string { return []string{i.GroupID} }))
+	app.Index("invitee", func(i Invitation) []string { return []string{i.InviteeID} }),
+	app.Index("group", func(i Invitation) []string { return []string{i.GroupID} }))
 
 // InvitationsExpireAfter is how long an invitation waits for an answer.
 const InvitationsExpireAfter = 7 * 24 * time.Hour
@@ -73,8 +73,8 @@ func join(ctx context.Context, inv *Invitation) error {
 		}
 		return nil
 	})
-	if wire.Is(err, kit.WireNotFound) {
-		return kit.NotFound("this group no longer exists")
+	if wire.Is(err, app.WireNotFound) {
+		return app.NotFound("this group no longer exists")
 	}
 	return err
 }
@@ -93,13 +93,13 @@ func stampAnswer(ctx context.Context, inv *Invitation) error {
 //
 // fr: announceInvitation annonce à l’invité qu’il est invité, et aux membres
 // que quelqu’un les a rejoints.
-func announceInvitation(ctx context.Context, c kit.Change[Invitation, InvitationStatus]) error {
+func announceInvitation(ctx context.Context, c app.Change[Invitation, InvitationStatus]) error {
 	inv := c.Entity
 	if c.To != Pending && c.To != Accepted {
 		return nil
 	}
 	g, err := Groups.Get(ctx, inv.GroupID)
-	if wire.Is(err, kit.WireNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return nil
 	}
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
@@ -35,7 +35,7 @@ type Reminder struct {
 // fr: Reminders garde un rappel par tâche qui a une échéance, retrouvé par
 // tâche.
 var Reminders = notify.Service.Store("reminders", func(r Reminder) string { return r.ID },
-	kit.Unique("task", func(r Reminder) string { return r.TaskID }))
+	app.Unique("task", func(r Reminder) string { return r.TaskID }))
 
 // The due dates reach the reminders through the task events.
 //
@@ -43,18 +43,18 @@ var Reminders = notify.Service.Store("reminders", func(r Reminder) string { retu
 var _ = notify.Service.Subscribe("track-due", tasks.Events, TrackDue)
 
 // ReminderLoop mails a task's owner, assignee and the users it is shared
-// with fifteen minutes before it is due, each in their language. kit runs it: it sleeps until the
+// with fifteen minutes before it is due, each in their language. The framework runs it: it sleeps until the
 // next reminder is due, wakes early when a task changes, and every minute
 // regardless — a task event may land after the wake it caused.
 //
 // fr: ReminderLoop écrit, quinze minutes avant l’échéance d’une tâche, à son
 // propriétaire, à la personne assignée et aux utilisateurs avec qui elle est
-// partagée, à chacun dans sa langue. kit la fait tourner : elle dort jusqu’au
+// partagée, à chacun dans sa langue. Le framework la fait tourner : elle dort jusqu’au
 // prochain rappel dû, se réveille plus tôt quand une tâche change, et chaque
 // minute quoi qu’il arrive — un événement de tâche peut arriver après le réveil
 // qu’il a causé.
 var ReminderLoop = notify.Service.Loop("reminders", SendReminders,
-	kit.WakeAt(NextReminder), kit.WakeOn(tasks.Events), kit.WakeEvery(time.Minute))
+	app.WakeAt(NextReminder), app.WakeOn(tasks.Events), app.WakeEvery(time.Minute))
 
 // TrackDue schedules the reminder of a task that has a due date ahead and is
 // still to do, and moves it when the due date moves. It never deletes one: a
@@ -78,8 +78,8 @@ func TrackDue(ctx context.Context, e tasks.Event) error {
 		return err
 	}
 	if len(found) == 0 {
-		err := Reminders.Insert(ctx, Reminder{ID: kit.NewID("reminder"), TaskID: e.TaskID, Title: e.Title, Due: due, At: due.Add(-Remind)})
-		if wire.Is(err, kit.WireConflict) {
+		err := Reminders.Insert(ctx, Reminder{ID: app.NewID("reminder"), TaskID: e.TaskID, Title: e.Title, Due: due, At: due.Add(-Remind)})
+		if wire.Is(err, app.WireConflict) {
 			return nil // a redelivery, or a concurrent event, scheduled it
 		}
 		return err
@@ -94,7 +94,7 @@ func TrackDue(ctx context.Context, e tasks.Event) error {
 		r.Title = e.Title
 		return nil
 	})
-	if wire.Is(err, kit.WireNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return nil
 	}
 	return err
@@ -124,7 +124,7 @@ func NextReminder(ctx context.Context) (time.Time, bool) {
 //
 // fr: SendReminders envoie chaque rappel dû, et oublie ceux envoyés il y a un
 // jour.
-func SendReminders(ctx context.Context, _ kit.Wake) error {
+func SendReminders(ctx context.Context, _ app.Wake) error {
 	now := wire.Now(ctx)
 	due, err := Reminders.Filter(ctx, func(r Reminder) bool { return !r.Sent && !r.At.After(now) })
 	if err != nil {
@@ -141,7 +141,7 @@ func SendReminders(ctx context.Context, _ kit.Wake) error {
 		return errors.Join(append(failed, err)...)
 	}
 	for _, r := range old {
-		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
+		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, app.WireNotFound) {
 			failed = append(failed, err)
 		}
 	}
@@ -159,7 +159,7 @@ func remind(ctx context.Context, r Reminder, now time.Time) error {
 	switch {
 	case t == nil || t.Due == nil || (t.Status != tasks.Open && t.Status != tasks.Overdue):
 		// Gone, done, or undated: nothing to remind.
-		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
+		if err := Reminders.Delete(ctx, r.ID); err != nil && !wire.Is(err, app.WireNotFound) {
 			return err
 		}
 		return nil
@@ -188,7 +188,7 @@ func remind(ctx context.Context, r Reminder, now time.Time) error {
 			return err
 		}
 	}
-	logger.Info(ctx, kit.Log(ctx), "reminder sent", logger.String("task", t.ID), logger.Int("recipients", len(aud.Users)))
+	logger.Info(ctx, app.Log(ctx), "reminder sent", logger.String("task", t.ID), logger.Int("recipients", len(aud.Users)))
 	return markSent(ctx, r, now)
 }
 
@@ -203,7 +203,7 @@ func markSent(ctx context.Context, r Reminder, now time.Time) error {
 
 // ignoreGone treats a reminder deleted meanwhile as done with.
 func ignoreGone(err error) error {
-	if wire.Is(err, kit.WireNotFound) {
+	if wire.Is(err, app.WireNotFound) {
 		return nil
 	}
 	return err

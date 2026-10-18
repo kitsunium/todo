@@ -9,8 +9,8 @@ import { useT } from "../../i18n";
 const MockMailbox = import.meta.env.MODE === "mock" ? lazy(() => import("../../mock/MockMailbox")) : null;
 
 /**
- * Development only: a way to the mail that was just sent. With a running kit
- * app in dev, the Studio's mailbox (shown only when /_kit/api/graph answers);
+ * Development only: a way to the mail that was just sent. With the app
+ * running in dev, the Studio's mailbox (shown only when /_app/api/graph answers);
  * in mock mode, the mock's.
  */
 export function DevMailbox({ email }: { email?: string }) {
@@ -26,7 +26,7 @@ export function DevMailbox({ email }: { email?: string }) {
   if (!studio.data) return null;
   return (
     <a
-      href="/_kit/#/mail"
+      href="/_app/#/mail"
       target="_blank"
       rel="noopener"
       className="mt-6 flex items-center justify-between rounded-lg border border-dashed border-line-strong px-3.5 py-3 text-sm text-fg-2 transition-colors hover:border-accent hover:text-fg focus-visible:outline-2 focus-visible:outline-ring"

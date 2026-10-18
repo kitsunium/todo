@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
@@ -26,7 +26,7 @@ const (
 type Session struct {
 	ID         string    `json:"id"`
 	UserID     string    `json:"userId"`
-	TokenHash  string    `json:"tokenHash" kit:"secret"`
+	TokenHash  string    `json:"tokenHash" app:"secret"`
 	CreatedAt  time.Time `json:"createdAt"`
 	LastSeenAt time.Time `json:"lastSeenAt"`
 	ExpiresAt  time.Time `json:"expiresAt"`
@@ -40,8 +40,8 @@ type Session struct {
 // fr: Sessions garde chaque session, retrouvée par le hash de son secret et
 // listée par utilisateur.
 var Sessions = Service.Store("sessions", func(s Session) string { return s.ID },
-	kit.Unique("token", func(s Session) string { return s.TokenHash }),
-	kit.Index("user", func(s Session) []string { return []string{s.UserID} }))
+	app.Unique("token", func(s Session) string { return s.TokenHash }),
+	app.Index("user", func(s Session) []string { return []string{s.UserID} }))
 
 // Credentials are what a request proves its user with: the session cookie a
 // browser sends, or the same secret as a bearer token from an API client.
@@ -59,10 +59,10 @@ type Principal struct {
 }
 
 // SessionAuth is the app's authentication: every endpoint declared with
-// kit.Auth() runs it first.
+// app.Auth() runs it first.
 //
 // fr: SessionAuth est l’authentification de l’app : tout endpoint déclaré avec
-// kit.Auth() l’exécute d’abord.
+// app.Auth() l’exécute d’abord.
 var SessionAuth = Service.AuthHandler("session", Authenticate)
 
 // Authenticate turns a session secret into its user. An unknown or expired
@@ -73,7 +73,7 @@ var SessionAuth = Service.AuthHandler("session", Authenticate)
 // inconnue ou expirée est refusée, et son cookie effacé ; une session vivante
 // repousse son expiration, au plus toutes les cinq minutes, pour qu’un
 // utilisateur actif reste connecté.
-func Authenticate(ctx context.Context, c Credentials) (kit.UID, Principal, error) {
+func Authenticate(ctx context.Context, c Credentials) (app.UID, Principal, error) {
 	secret, fromCookie := c.Cookie, c.Cookie != ""
 	if !fromCookie {
 		scheme, token, ok := strings.Cut(c.Authorization, " ")
@@ -82,11 +82,11 @@ func Authenticate(ctx context.Context, c Credentials) (kit.UID, Principal, error
 		}
 		secret = strings.TrimSpace(token)
 	}
-	refuse := func() (kit.UID, Principal, error) {
+	refuse := func() (app.UID, Principal, error) {
 		if fromCookie {
-			kit.ClearCookie(ctx, CookieName)
+			app.ClearCookie(ctx, CookieName)
 		}
-		return "", Principal{}, kit.Unauthenticated("your session has expired: sign in again")
+		return "", Principal{}, app.Unauthenticated("your session has expired: sign in again")
 	}
 	if !wellFormed(secret) {
 		return refuse()
@@ -106,7 +106,7 @@ func Authenticate(ctx context.Context, c Credentials) (kit.UID, Principal, error
 			s.LastSeenAt, s.ExpiresAt = now, now.Add(SessionFor)
 			return nil
 		})
-		if wire.Is(err, kit.WireNotFound) {
+		if wire.Is(err, app.WireNotFound) {
 			return refuse() // revoked while this request ran
 		}
 		if err != nil {
@@ -116,7 +116,7 @@ func Authenticate(ctx context.Context, c Credentials) (kit.UID, Principal, error
 			setSessionCookie(ctx, secret)
 		}
 	}
-	return kit.UID(s.UserID), Principal{SessionID: s.ID}, nil
+	return app.UID(s.UserID), Principal{SessionID: s.ID}, nil
 }
 
 // openSession signs the user in: a new session, and its cookie on the
@@ -125,9 +125,9 @@ func openSession(ctx context.Context, userID string) error {
 	secret, digest := newSecret()
 	now := wire.Now(ctx)
 	if err := Sessions.Insert(ctx, Session{
-		ID: kit.NewID("session"), UserID: userID, TokenHash: digest,
+		ID: app.NewID("session"), UserID: userID, TokenHash: digest,
 		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionFor),
-		UserAgent: kit.UserAgent(ctx), IP: kit.ClientIP(ctx),
+		UserAgent: app.UserAgent(ctx), IP: app.ClientIP(ctx),
 	}); err != nil {
 		return err
 	}
@@ -135,11 +135,11 @@ func openSession(ctx context.Context, userID string) error {
 	return nil
 }
 
-// setSessionCookie gives the browser the session's secret. kit adds Secure
+// setSessionCookie gives the browser the session's secret. The framework adds Secure
 // outside dev; HttpOnly and SameSite=Lax keep it from scripts and from
 // cross-site requests.
 func setSessionCookie(ctx context.Context, secret string) {
-	kit.SetCookie(ctx, &http.Cookie{
+	app.SetCookie(ctx, &http.Cookie{
 		Name: CookieName, Value: secret, Path: "/", MaxAge: int(SessionFor / time.Second),
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
 	})
@@ -155,7 +155,7 @@ func revokeSessions(ctx context.Context, userID, keep string) error {
 		if s.ID == keep {
 			continue
 		}
-		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, kit.WireNotFound) {
+		if err := Sessions.Delete(ctx, s.ID); err != nil && !wire.Is(err, app.WireNotFound) {
 			return err
 		}
 	}
@@ -163,13 +163,13 @@ func revokeSessions(ctx context.Context, userID, keep string) error {
 }
 
 // caller returns the authenticated user of the request and their session.
-// Every endpoint that calls it is declared with kit.Auth(), so a missing
-// user is kit's bug or an in-process call without one: refused either way.
+// Every endpoint that calls it is declared with app.Auth(), so a missing
+// user is the framework's bug or an in-process call without one: refused either way.
 func caller(ctx context.Context) (string, Principal, error) {
-	uid, ok := kit.UserID(ctx)
+	uid, ok := app.UserID(ctx)
 	if !ok {
-		return "", Principal{}, kit.Unauthenticated("sign in first")
+		return "", Principal{}, app.Unauthenticated("sign in first")
 	}
-	p, _ := kit.AuthData[Principal](ctx)
+	p, _ := app.AuthData[Principal](ctx)
 	return string(uid), p, nil
 }

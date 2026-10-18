@@ -2,15 +2,15 @@
 // The todo web app. `npm run build` writes ./dist, which web.go embeds
 // (//go:embed dist) and the Go binary serves at "/".
 //
-//   npm run dev        http://localhost:5173, /api and /_kit proxied to the app (KIT_APP)
+//   npm run dev        http://localhost:5173, /api and /_app proxied to the app (APP_URL)
 //   npm run dev:mock   the whole HTTP contract in memory: no backend needed
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-/** The running kit app `npm run dev` proxies to. */
-const KIT_APP = process.env.KIT_APP ?? "http://localhost:4000";
+/** The running app `npm run dev` proxies to. */
+const APP_URL = process.env.APP_URL ?? "http://localhost:4000";
 
 export default defineConfig(({ mode }) => ({
   base: "/",
@@ -37,8 +37,8 @@ export default defineConfig(({ mode }) => ({
       mode === "mock"
         ? undefined
         : {
-            "/api": { target: KIT_APP, changeOrigin: true },
-            "/_kit": { target: KIT_APP, changeOrigin: true },
+            "/api": { target: APP_URL, changeOrigin: true },
+            "/_app": { target: APP_URL, changeOrigin: true },
           },
   },
   test: {

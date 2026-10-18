@@ -9,13 +9,13 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/groups"
 	"github.com/kitsunium/todo/identity"
 )
 
 // Service owns the feeds.
-var Service = kit.NewService("activity", "What happened to me: a feed per user, written from the events of tasks, contacts and groups.\n\nfr: Ce qui m’est arrivé : un fil par utilisateur, écrit à partir des événements des tâches, des contacts et des groupes.")
+var Service = app.NewService("activity", "What happened to me: a feed per user, written from the events of tasks, contacts and groups.\n\nfr: Ce qui m’est arrivé : un fil par utilisateur, écrit à partir des événements des tâches, des contacts et des groupes.")
 
 // TaskRef is the task an entry is about.
 type TaskRef struct {
@@ -52,7 +52,7 @@ type Entry struct {
 //
 // fr: Entries garde tous les fils, listés par utilisateur.
 var Entries = Service.Store("entries", func(e Entry) string { return e.ID },
-	kit.Index("user", func(e Entry) []string { return []string{e.UserID} }))
+	app.Index("user", func(e Entry) []string { return []string{e.UserID} }))
 
 // Keep is how many entries a feed keeps: the oldest go first.
 const Keep = 200
@@ -62,8 +62,8 @@ const Keep = 200
 // fr: L’API du fil, et le nombre de non-lus que la liste de tâches affiche dans
 // sa barre latérale.
 var (
-	_ = Service.Endpoint("GET /api/activity", Feed, kit.Auth())
-	_ = Service.Endpoint("POST /api/activity/read", MarkRead, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("GET /api/activity", Feed, app.Auth())
+	_ = Service.Endpoint("POST /api/activity/read", MarkRead, app.Auth(), app.RateLimitPerClient(10, 20))
 
 	// UnreadCount counts a user's unread entries, for the task counts: a
 	// query tasks asks in process, which nobody exposes.
@@ -94,9 +94,9 @@ type FeedOutput struct {
 
 // me is the signed-in user.
 func me(ctx context.Context) (string, error) {
-	uid, ok := kit.UserID(ctx)
+	uid, ok := app.UserID(ctx)
 	if !ok {
-		return "", kit.Unauthenticated("sign in first")
+		return "", app.Unauthenticated("sign in first")
 	}
 	return string(uid), nil
 }
@@ -114,7 +114,7 @@ func feedOf(ctx context.Context, uid string) ([]Entry, error) {
 // Feed returns the caller's feed, newest first.
 //
 // fr: Feed renvoie le fil de l’appelant, du plus récent au plus ancien.
-func Feed(ctx context.Context, _ kit.Empty) (FeedOutput, error) {
+func Feed(ctx context.Context, _ app.Empty) (FeedOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
 		return FeedOutput{}, err
@@ -133,24 +133,24 @@ func Feed(ctx context.Context, _ kit.Empty) (FeedOutput, error) {
 // MarkRead marks the caller's whole feed read.
 //
 // fr: MarkRead marque comme lu tout le fil de l’appelant.
-func MarkRead(ctx context.Context, _ kit.Empty) (kit.Empty, error) {
+func MarkRead(ctx context.Context, _ app.Empty) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	entries, err := Entries.Find(ctx, "user", uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	for _, e := range entries {
 		if e.Read {
 			continue
 		}
 		if _, err := Entries.Update(ctx, e.ID, func(e *Entry) error { e.Read = true; return nil }); err != nil {
-			return kit.Empty{}, err
+			return app.Empty{}, err
 		}
 	}
-	return kit.Empty{}, nil
+	return app.Empty{}, nil
 }
 
 // UnreadQuery names a user.

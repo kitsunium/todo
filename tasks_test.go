@@ -54,8 +54,8 @@ func TestTheTaskList(t *testing.T) {
 	alice := h.signup("Alice", "alice@example.com")
 	at := func(d time.Duration) string { return epoch.Add(d).Format(time.RFC3339) }
 
-	readme := call[task](alice, http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "  Write the kit README  ", "priority": 1, "due": at(8 * time.Hour)})
-	if readme.Title != "Write the kit README" || readme.Status != "open" || readme.Priority != 1 || !strings.HasPrefix(readme.ID, "task_") ||
+	readme := call[task](alice, http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "  Write the README  ", "priority": 1, "due": at(8 * time.Hour)})
+	if readme.Title != "Write the README" || readme.Status != "open" || readme.Priority != 1 || !strings.HasPrefix(readme.ID, "task_") ||
 		readme.Owner.Name != "Alice" || readme.SharedWith == nil || !readme.Can.Edit || !readme.Can.Delete || !readme.Can.Share {
 		t.Fatalf("created %+v", readme)
 	}
@@ -74,7 +74,7 @@ func TestTheTaskList(t *testing.T) {
 	h.settle("the overdue timer", 200*time.Millisecond, func() bool {
 		return call[task](alice, http.StatusOK, "GET", "/api/tasks/"+domain.ID, nil).Status == "overdue"
 	})
-	if got := alice.titles("?view=today"); !slices.Equal(got, []string{"Renew the domain", "Write the kit README"}) {
+	if got := alice.titles("?view=today"); !slices.Equal(got, []string{"Renew the domain", "Write the README"}) {
 		t.Errorf("today %q", got)
 	}
 	if got := alice.titles("?view=upcoming"); !slices.Equal(got, []string{"Plan the offsite"}) {
@@ -87,7 +87,7 @@ func TestTheTaskList(t *testing.T) {
 	// UTC, is due today in New York (13:00), but tomorrow in Tokyo (02:00)
 	// and in Honolulu, where it is still yesterday evening.
 	for tz, want := range map[string][]string{
-		"America/New_York": {"Renew the domain", "Write the kit README"},
+		"America/New_York": {"Renew the domain", "Write the README"},
 		"Asia/Tokyo":       {"Renew the domain"},
 		"Pacific/Honolulu": {"Renew the domain"},
 	} {
@@ -95,7 +95,7 @@ func TestTheTaskList(t *testing.T) {
 			t.Errorf("today in %s: %q, want %q", tz, got, want)
 		}
 	}
-	if got := alice.titles("?view=upcoming&tz=Asia/Tokyo"); !slices.Equal(got, []string{"Write the kit README", "Plan the offsite"}) {
+	if got := alice.titles("?view=upcoming&tz=Asia/Tokyo"); !slices.Equal(got, []string{"Write the README", "Plan the offsite"}) {
 		t.Errorf("upcoming in Tokyo %q", got)
 	}
 	c := call[counts](alice, http.StatusOK, "GET", "/api/tasks/counts", nil)
@@ -106,7 +106,7 @@ func TestTheTaskList(t *testing.T) {
 	// Edits: an absent member stays, an empty one clears; an overdue task
 	// moved to a later date is to do again.
 	edited := call[task](alice, http.StatusOK, "PATCH", "/api/tasks/"+readme.ID, map[string]any{"notes": "Mention the Studio.", "priority": 0, "due": ""})
-	if edited.Title != "Write the kit README" || edited.Notes != "Mention the Studio." || edited.Priority != 0 || edited.Due != nil {
+	if edited.Title != "Write the README" || edited.Notes != "Mention the Studio." || edited.Priority != 0 || edited.Due != nil {
 		t.Fatalf("edited %+v", edited)
 	}
 	rescheduled := call[task](alice, http.StatusOK, "PATCH", "/api/tasks/"+domain.ID, map[string]any{"due": at(48 * time.Hour)})
@@ -136,7 +136,7 @@ func TestTheTaskList(t *testing.T) {
 	if c := call[counts](alice, http.StatusOK, "GET", "/api/tasks/counts", nil); c.CompletedThisWeek != 1 || c.Inbox != 3 {
 		t.Errorf("counts after completing %+v", c)
 	}
-	if got := alice.titles(""); len(got) != 4 || got[3] != "Write the kit README" {
+	if got := alice.titles(""); len(got) != 4 || got[3] != "Write the README" {
 		t.Errorf("the whole list keeps a done task, last: %q", got)
 	}
 
@@ -149,10 +149,10 @@ func TestTheTaskList(t *testing.T) {
 	h.settle("the auto-archive timer", 5*time.Second, func() bool {
 		return call[task](alice, http.StatusOK, "GET", "/api/tasks/"+readme.ID, nil).Status == "archived"
 	})
-	if got := alice.titles("?view=completed"); !slices.Equal(got, []string{"Write the kit README"}) {
+	if got := alice.titles("?view=completed"); !slices.Equal(got, []string{"Write the README"}) {
 		t.Errorf("completed %q", got)
 	}
-	if got := alice.titles(""); slices.Contains(got, "Write the kit README") {
+	if got := alice.titles(""); slices.Contains(got, "Write the README") {
 		t.Errorf("the whole list shows an archived task: %q", got)
 	}
 

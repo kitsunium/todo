@@ -13,23 +13,23 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/app/mail"
 	"github.com/kitsunium/todo/internal/wire"
 )
 
 // Service owns every mail the product sends.
-var Service = kit.NewService("notify", "Every mail the product sends: the outbox, one design, the transactional mails and the notifications.\n\nfr: Tous les mails qu’envoie le produit : l’outbox, un seul design, les mails transactionnels et les notifications.")
+var Service = app.NewService("notify", "Every mail the product sends: the outbox, one design, the transactional mails and the notifications.\n\nfr: Tous les mails qu’envoie le produit : l’outbox, un seul design, les mails transactionnels et les notifications.")
 
 // Mail is the product's outbound mail. Every message waits in its durable
-// outbox until the transport accepts it: SMTP when KIT_SMTP_URL is set, and
+// outbox until the transport accepts it: SMTP when TODO_SMTP_URL is set, and
 // otherwise the capture transport, whose messages the Studio's mailbox shows.
 //
 // fr: Mail est le courrier sortant du produit. Chaque message attend dans son
 // outbox durable jusqu’à ce que le transport l’accepte : SMTP quand
-// KIT_SMTP_URL est défini, sinon le transport de capture, dont la boîte mail du
+// TODO_SMTP_URL est défini, sinon le transport de capture, dont la boîte mail du
 // Studio montre les messages.
-var Mail = Service.Mailer("mail", kit.From("Todo", "hello@todo.localhost"))
+var Mail = Service.Mailer("mail", app.From("Todo", "hello@todo.localhost"))
 
 // SendMail sends one of identity's transactional mails — the verification,
 // the password reset, the "you already have an account" — on its behalf: a
@@ -59,8 +59,8 @@ type SendInput struct {
 	// Locale is the language the recipient reads: fr or en.
 	Locale wire.Locale `json:"locale" validate:"required,oneof=fr|en"`
 	// Data is what the template needs: the one-time token of its link. It is
-	// a secret, redacted wherever kit shows a payload.
-	Data map[string]string `json:"data,omitempty" kit:"secret"`
+	// a secret, redacted wherever the framework shows a payload.
+	Data map[string]string `json:"data,omitempty" app:"secret"`
 }
 
 // SendOutput identifies the queued mail.
@@ -87,7 +87,7 @@ func Send(ctx context.Context, in SendInput) (SendOutput, error) {
 	case TemplateAccountExists:
 		m = AccountExists(in.Locale, in.Name)
 	default:
-		return SendOutput{}, kit.Invalid("unknown template")
+		return SendOutput{}, app.Invalid("unknown template")
 	}
 	id, err := Deliver(ctx, Recipient{Name: in.Name, Email: in.To}, m)
 	return SendOutput{ID: id}, err
@@ -126,7 +126,7 @@ func Deliver(ctx context.Context, to Recipient, m Message) (string, error) {
 // configuration.
 var baseURL = Service.Setting("base-url", defaultBaseURL)
 
-// defaultBaseURL is where kit dev serves the product.
+// defaultBaseURL is where the product serves in dev.
 const defaultBaseURL = "http://localhost:4000"
 
 // BaseURL is where users reach the product, without a trailing slash — the

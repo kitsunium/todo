@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/framework/model"
 )
 
@@ -139,11 +139,11 @@ func (h *harness) analyzed() *model.Graph {
 // explains — declared by construction, or found in the code.
 //
 // What the running product says of itself is checked everywhere. What only
-// the source says is kit's static analysis: checked when kit is here, and
-// skipped, by name, when it is not.
+// the source says is the static analysis: checked when the analyzer is here,
+// and skipped, by name, when it is not.
 func TestTheDiagramMatchesTheCode(t *testing.T) {
-	source := kitSource()
-	var analysis kit.AnalyzeFunc
+	source := staticSource()
+	var analysis app.AnalyzeFunc
 	if source != nil {
 		analysis = source.analyze
 	}
@@ -183,7 +183,7 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 	}
 
 	// The daemon's own loops: the reaper written by hand; the reminders run
-	// by kit, whose wakes are data.
+	// by the framework, whose wakes are data.
 	if reaper := g.Node("identity/loop/session-reaper"); reaper == nil || reaper.Loop == nil || reaper.Loop.Style != model.LoopGoroutine {
 		t.Errorf("the session reaper: %+v", reaper)
 	}
@@ -242,7 +242,7 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 	}
 
 	if source == nil {
-		t.Skip(withoutKit + "what only the source says: the same nodes both ways, every edge explained, each node's documentation and handler range, who fires each transition, the reaper's select, the mailer's senders in the code")
+		t.Skip(withoutAnalyzer + "what only the source says: the same nodes both ways, every edge explained, each node's documentation and handler range, who fires each transition, the reaper's select, the mailer's senders in the code")
 	}
 	static := source.graph(t)
 
@@ -320,41 +320,37 @@ func TestTheDiagramMatchesTheCode(t *testing.T) {
 	}
 }
 
-// The static half of the diagram is kit's. The analyzer that reads the
-// source is the platform's, and the todo links none of it: the framework
-// links no analyzer (SDK ADR 0147 §1), and a product imports nothing from the
-// platform (the platform's ADR 0010, D2). The tests run the kit tool instead,
-// as a process, and give the product what it read through the framework's own
-// hook, kit.Analyzer — as the product's graph had it when it linked the
-// analyzer.
+// The static half of the diagram is the analyzer's. The analyzer that reads
+// the source is a tool of its own, and the todo links none of it: the
+// framework links no analyzer, and the product imports nothing but the SDK.
+// The tests run the analyzer instead, as a process, and give the product what
+// it read through the framework's own hook, app.Analyzer — as the product's
+// graph had it when it linked the analyzer.
 
-// withoutKit says which half of the diagram suite did not run, and why.
-const withoutKit = "kit's static analysis reads the source, and there is no kit here — put kit on PATH, or set KIT to its binary — to check "
+// withoutAnalyzer says which half of the diagram suite did not run, and why.
+const withoutAnalyzer = "the static analysis reads the source, and there is no analyzer here — set GRAPH_ANALYZER to its binary — to check "
 
-// kitSource is kit's analysis of the todo's source, by the kit binary $KIT
-// names, else by kit on PATH; nil when there is neither.
-func kitSource() *sourceAnalysis {
-	bin := os.Getenv("KIT")
+// staticSource is the analysis of the todo's source by the binary
+// $GRAPH_ANALYZER names; nil when it names none.
+func staticSource() *sourceAnalysis {
+	bin := os.Getenv("GRAPH_ANALYZER")
 	if bin == "" {
-		var err error
-		if bin, err = exec.LookPath("kit"); err != nil {
-			return nil
-		}
+		return nil
 	}
 	return &sourceAnalysis{bin: bin}
 }
 
-// sourceAnalysis runs `kit graph -static -format json` on the product's
-// module: the graph kit's analyzer reads from the source alone.
+// sourceAnalysis runs `$GRAPH_ANALYZER graph -static -format json` on the
+// product's module: the graph the analyzer reads from the source alone.
 type sourceAnalysis struct {
 	bin string
 	mu  sync.Mutex
-	raw []byte // the graph kit printed last
-	err error  // why kit's last run gave none
+	raw []byte // the graph the analyzer printed last
+	err error  // why its last run gave none
 }
 
-// analyze is the product's kit.AnalyzeFunc: kit run on the module rooted at
-// dir.
+// analyze is the product's app.AnalyzeFunc: the analyzer run on the module
+// rooted at dir.
 func (s *sourceAnalysis) analyze(ctx context.Context, dir string, modules []string) (*model.Graph, error) {
 	raw, g, err := s.run(ctx, dir, modules)
 	s.mu.Lock()
@@ -363,12 +359,12 @@ func (s *sourceAnalysis) analyze(ctx context.Context, dir string, modules []stri
 	return g, err
 }
 
-// run runs kit, and reads what it printed.
+// run runs the analyzer, and reads what it printed.
 func (s *sourceAnalysis) run(ctx context.Context, dir string, modules []string) ([]byte, *model.Graph, error) {
 	if len(modules) > 0 {
-		// kit graph -static reads one module: the nodes of a mounted one
+		// graph -static reads one module: the nodes of a mounted one
 		// would be missing, and the diagram would lie.
-		return nil, nil, fmt.Errorf("kit graph -static reads the product's module alone, and the app mounts %v", modules)
+		return nil, nil, fmt.Errorf("graph -static reads the product's module alone, and the app mounts %v", modules)
 	}
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, s.bin, "graph", "-static", "-format", "json", dir)
@@ -383,9 +379,9 @@ func (s *sourceAnalysis) run(ctx context.Context, dir string, modules []string) 
 	return stdout.Bytes(), g, nil
 }
 
-// graph is the graph kit printed last, decoded afresh — the product merged
-// its own copy into the graph it runs —, or the test's end when kit gave
-// none.
+// graph is the graph the analyzer printed last, decoded afresh — the product
+// merged its own copy into the graph it runs —, or the test's end when it
+// gave none.
 func (s *sourceAnalysis) graph(t *testing.T) *model.Graph {
 	t.Helper()
 	s.mu.Lock()
@@ -395,7 +391,7 @@ func (s *sourceAnalysis) graph(t *testing.T) *model.Graph {
 		t.Fatal(err)
 	}
 	if raw == nil {
-		t.Fatal("kit has not analyzed the source")
+		t.Fatal("the analyzer has not read the source")
 	}
 	g, err := decodeGraph(raw)
 	if err != nil {
@@ -404,15 +400,15 @@ func (s *sourceAnalysis) graph(t *testing.T) *model.Graph {
 	return g
 }
 
-// decodeGraph reads the graph kit printed, which must be in the model the
+// decodeGraph reads the graph the analyzer printed, which must be in the model the
 // framework go.mod requires speaks.
 func decodeGraph(raw []byte) (*model.Graph, error) {
 	var g model.Graph
 	if err := json.Unmarshal(raw, &g); err != nil {
-		return nil, fmt.Errorf("kit's graph: %w", err)
+		return nil, fmt.Errorf("the analyzer's graph: %w", err)
 	}
 	if g.Version != model.Version {
-		return nil, fmt.Errorf("kit's graph is model version %d and the framework reads version %d: use a kit built on the framework go.mod requires", g.Version, model.Version)
+		return nil, fmt.Errorf("the analyzer's graph is model version %d and the framework reads version %d: use an analyzer built on the framework go.mod requires", g.Version, model.Version)
 	}
 	return &g, nil
 }

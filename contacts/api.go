@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kitsunium/sdk/framework/kit"
+	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/identity"
 	"github.com/kitsunium/todo/internal/wire"
 )
@@ -19,12 +19,12 @@ import (
 // les liens dont il fait partie : le lien de quelqu’un d’autre n’existe pas
 // pour lui.
 var (
-	_ = Service.Endpoint("GET /api/contacts", List, kit.Auth())
-	_ = Service.Endpoint("POST /api/contacts", Add, kit.Auth(), kit.RateLimitPerClient(2, 5))
-	_ = Service.Endpoint("POST /api/contacts/{id}/accept", Accept, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("POST /api/contacts/{id}/decline", Decline, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, kit.Auth(), kit.RateLimitPerClient(10, 20))
-	_ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, kit.Auth(), kit.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("GET /api/contacts", List, app.Auth())
+	_ = Service.Endpoint("POST /api/contacts", Add, app.Auth(), app.RateLimitPerClient(2, 5))
+	_ = Service.Endpoint("POST /api/contacts/{id}/accept", Accept, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/contacts/{id}/decline", Decline, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, app.Auth(), app.RateLimitPerClient(10, 20))
+	_ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, app.Auth(), app.RateLimitPerClient(10, 20))
 
 	// AreContacts tells another service whether two users are contacts:
 	// tasks shares only with contacts, groups invites only contacts. A query
@@ -69,9 +69,9 @@ type ListOutput struct {
 
 // me is the signed-in user.
 func me(ctx context.Context) (string, error) {
-	uid, ok := kit.UserID(ctx)
+	uid, ok := app.UserID(ctx)
 	if !ok {
-		return "", kit.Unauthenticated("sign in first")
+		return "", app.Unauthenticated("sign in first")
 	}
 	return string(uid), nil
 }
@@ -83,7 +83,7 @@ func me(ctx context.Context) (string, error) {
 // fr: List renvoie les contacts de l’utilisateur, par nom ; les demandes qui
 // l’attendent et celles qu’il a envoyées, les plus récentes d’abord ; et ses
 // invitations qui attendent encore un compte.
-func List(ctx context.Context, _ kit.Empty) (ListOutput, error) {
+func List(ctx context.Context, _ app.Empty) (ListOutput, error) {
 	uid, err := me(ctx)
 	if err != nil {
 		return ListOutput{}, err
@@ -197,15 +197,15 @@ func Add(ctx context.Context, in AddInput) (AddOutput, error) {
 	}
 	for _, i := range sent {
 		if i.InviterID == uid && i.Status == Invited {
-			return AddOutput{}, kit.Conflict("you already invited this address")
+			return AddOutput{}, app.Conflict("you already invited this address")
 		}
 	}
-	inv := Invite{ID: kit.NewID("invite"), InviterID: uid, Email: email, Status: Invited, CreatedAt: wire.Now(ctx)}
+	inv := Invite{ID: app.NewID("invite"), InviterID: uid, Email: email, Status: Invited, CreatedAt: wire.Now(ctx)}
 	if err := Invites.Insert(ctx, inv); err != nil {
 		return AddOutput{}, err
 	}
 	if err := Events.Publish(ctx, Event{
-		ID: kit.NewID("event"), Kind: KindInvited, InviteID: inv.ID, ActorID: uid, Email: email, At: inv.CreatedAt,
+		ID: app.NewID("event"), Kind: KindInvited, InviteID: inv.ID, ActorID: uid, Email: email, At: inv.CreatedAt,
 	}); err != nil {
 		return AddOutput{}, err
 	}
@@ -224,15 +224,15 @@ type ContactOutput struct {
 }
 
 // errNoLink answers for a link that does not exist, or not for the caller.
-func errNoLink() error { return kit.NotFound("no such contact or request") }
+func errNoLink() error { return app.NotFound("no such contact or request") }
 
 // errAnswered answers for a request that is not waiting any more.
-func errAnswered() error { return kit.Conflict("this request is not waiting for an answer any more") }
+func errAnswered() error { return app.Conflict("this request is not waiting for an answer any more") }
 
 // linkOf returns the link with the given ID, if uid is part of it.
 func linkOf(ctx context.Context, id, uid string) (Link, error) {
 	l, err := Links.Lookup(ctx, "id", id)
-	if wire.Is(err, kit.WireNotFound) || (err == nil && l.RequesterID != uid && l.AddresseeID != uid) {
+	if wire.Is(err, app.WireNotFound) || (err == nil && l.RequesterID != uid && l.AddresseeID != uid) {
 		return Link{}, errNoLink()
 	}
 	return l, err
@@ -251,13 +251,13 @@ func Accept(ctx context.Context, in ByID) (ContactOutput, error) {
 		return ContactOutput{}, err
 	}
 	if l.AddresseeID != uid {
-		return ContactOutput{}, kit.Forbidden("only the person asked can accept a request")
+		return ContactOutput{}, app.Forbidden("only the person asked can accept a request")
 	}
 	if l.Status != Pending {
 		return ContactOutput{}, errAnswered()
 	}
 	l, err = Requests.Fire(ctx, l.Pair, "accept")
-	if wire.Is(err, kit.WireConflict) {
+	if wire.Is(err, app.WireConflict) {
 		return ContactOutput{}, errAnswered()
 	}
 	if err != nil {
@@ -275,57 +275,57 @@ func Accept(ctx context.Context, in ByID) (ContactOutput, error) {
 //
 // fr: Decline refuse une demande. Seul le destinataire refuse ; le demandeur
 // n’en est pas averti.
-func Decline(ctx context.Context, in ByID) (kit.Empty, error) {
+func Decline(ctx context.Context, in ByID) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	l, err := linkOf(ctx, in.ID, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if l.AddresseeID != uid {
-		return kit.Empty{}, kit.Forbidden("only the person asked can decline a request")
+		return app.Empty{}, app.Forbidden("only the person asked can decline a request")
 	}
 	if l.Status != Pending {
-		return kit.Empty{}, errAnswered()
+		return app.Empty{}, errAnswered()
 	}
-	if _, err := Requests.Fire(ctx, l.Pair, "decline"); wire.Is(err, kit.WireConflict) {
-		return kit.Empty{}, errAnswered()
+	if _, err := Requests.Fire(ctx, l.Pair, "decline"); wire.Is(err, app.WireConflict) {
+		return app.Empty{}, errAnswered()
 	} else if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	return kit.Empty{}, nil
+	return app.Empty{}, nil
 }
 
 // Cancel withdraws a request, or an invitation by email, the user sent.
 //
 // fr: Cancel retire une demande, ou une invitation par mail, que l’utilisateur
 // a envoyée.
-func Cancel(ctx context.Context, in ByID) (kit.Empty, error) {
+func Cancel(ctx context.Context, in ByID) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if strings.HasPrefix(in.ID, "invite_") {
-		return kit.Empty{}, withdrawInvite(ctx, in.ID, uid)
+		return app.Empty{}, withdrawInvite(ctx, in.ID, uid)
 	}
 	l, err := linkOf(ctx, in.ID, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if l.RequesterID != uid {
-		return kit.Empty{}, kit.Forbidden("only the person who asked can cancel a request")
+		return app.Empty{}, app.Forbidden("only the person who asked can cancel a request")
 	}
 	if l.Status != Pending {
-		return kit.Empty{}, errAnswered()
+		return app.Empty{}, errAnswered()
 	}
-	if _, err := Requests.Fire(ctx, l.Pair, "cancel"); wire.Is(err, kit.WireConflict) {
-		return kit.Empty{}, errAnswered()
+	if _, err := Requests.Fire(ctx, l.Pair, "cancel"); wire.Is(err, app.WireConflict) {
+		return app.Empty{}, errAnswered()
 	} else if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	return kit.Empty{}, nil
+	return app.Empty{}, nil
 }
 
 // Remove ends a contact — either side may — or deletes a request or an
@@ -333,34 +333,34 @@ func Cancel(ctx context.Context, in ByID) (kit.Empty, error) {
 //
 // fr: Remove met fin à un contact — l’un comme l’autre le peut — ou supprime
 // une demande ou une invitation dont l’utilisateur fait partie.
-func Remove(ctx context.Context, in ByID) (kit.Empty, error) {
+func Remove(ctx context.Context, in ByID) (app.Empty, error) {
 	uid, err := me(ctx)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
 	if strings.HasPrefix(in.ID, "invite_") {
-		return kit.Empty{}, withdrawInvite(ctx, in.ID, uid)
+		return app.Empty{}, withdrawInvite(ctx, in.ID, uid)
 	}
 	l, err := linkOf(ctx, in.ID, uid)
 	if err != nil {
-		return kit.Empty{}, err
+		return app.Empty{}, err
 	}
-	if err := Links.Delete(ctx, l.Pair); err != nil && !wire.Is(err, kit.WireNotFound) {
-		return kit.Empty{}, err
+	if err := Links.Delete(ctx, l.Pair); err != nil && !wire.Is(err, app.WireNotFound) {
+		return app.Empty{}, err
 	}
-	return kit.Empty{}, nil
+	return app.Empty{}, nil
 }
 
 // withdrawInvite deletes an invitation by email the user sent.
 func withdrawInvite(ctx context.Context, id, uid string) error {
 	i, err := Invites.Get(ctx, id)
-	if wire.Is(err, kit.WireNotFound) || (err == nil && i.InviterID != uid) {
+	if wire.Is(err, app.WireNotFound) || (err == nil && i.InviterID != uid) {
 		return errNoLink()
 	}
 	if err != nil {
 		return err
 	}
-	if err := Invites.Delete(ctx, id); err != nil && !wire.Is(err, kit.WireNotFound) {
+	if err := Invites.Delete(ctx, id); err != nil && !wire.Is(err, app.WireNotFound) {
 		return err
 	}
 	return nil
