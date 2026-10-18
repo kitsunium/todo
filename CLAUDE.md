@@ -5,7 +5,7 @@ A product of the SDK's framework, and its end-to-end test: a task list for peopl
 contacts, groups, shared tasks, mail. Read `README.md` for what it does.
 
 It is written on the SDK's framework and imports the SDK alone: one module,
-`github.com/kitsunium/sdk` v0.44.0 and its `pkg/v1/<family>` modules,
+`github.com/kitsunium/sdk` v0.44.2 and its `pkg/v1/<family>` modules,
 published, no `replace` — its `framework/*` packages (`app` and its
 subsystems, `model`) and its `pkg/v1/*` packages. `go list -m all` names the
 todo and the SDK's modules, nothing else. The platform's dev tool runs the
