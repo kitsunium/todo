@@ -101,3 +101,21 @@ func givenAddTaskRefusesAnAssigneeOutsideTheGroup(t *testing.T) (AddTask, AddTas
 	// Dee is a contact of Ada, which counts for a personal task and not for a group's.
 	return NewAddTask(fixedClock(epoch), crew(), newMemTasks(), &memJournal{}), AddTaskInput{Owner: ada, Title: "a task", GroupID: core, AssigneeID: dee}
 }
+
+// givenAddTaskTellsItsAssigneeOfATaskAssigned builds AddTask for "tells its assignee of a task assigned": the use case, its input, and
+// what its output must be.
+func givenAddTaskTellsItsAssigneeOfATaskAssigned(t *testing.T) (AddTask, AddTaskInput, func(*testing.T, AddTaskOutput)) {
+	t.Helper()
+	journal := &memJournal{}
+	uc := NewAddTask(fixedClock(epoch), crew(), newMemTasks(), journal)
+	return uc, AddTaskInput{Owner: cy, Title: "plan the sprint", GroupID: core, AssigneeID: bob}, func(t *testing.T, out AddTaskOutput) {
+		t.Helper()
+		if len(journal.told) != 1 || journal.told[0] != "assigned to "+bob {
+			t.Errorf("who was told: %q, want Bob alone", journal.told)
+		}
+		mine, err := uc.Execute(t.Context(), AddTaskInput{Owner: cy, Title: "mine to do", GroupID: core, AssigneeID: cy})
+		if err != nil || mine.Task.AssigneeID != cy || len(journal.told) != 1 {
+			t.Errorf("a task one assigns to oneself: %+v (%v), told %q: want nobody told", mine.Task, err, journal.told)
+		}
+	}
+}

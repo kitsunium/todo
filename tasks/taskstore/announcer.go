@@ -35,6 +35,14 @@ func (a *Announcer) record(ctx context.Context, kind string, t task.Task) (err e
 	})
 }
 
+// tell is Announcer.Tell's body: what happened to the task is published for
+// one member alone.
+func (a *Announcer) tell(ctx context.Context, kind string, t task.Task, to string) (err error) {
+	return EventsTopic.Publish(ctx, Event{
+		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Audience: []string{to}, Title: t.Title, At: t.UpdatedAt,
+	})
+}
+
 // audienceOf is everyone who sees a task: its owner, the members it is shared
 // with, its assignee, and the members of its group, the groups' query "members"
 // naming them; each once, the owner first.

@@ -75,7 +75,7 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `GET /api/tasks` | lists the tasks the caller sees, theirs, shared with them, assigned to them and on their groups' lists, not archived, the most urgent first; `?state=open\|done\|archived` lists one state; `?view=inbox\|today\|upcoming\|shared\|assigned\|completed\|group` lists a view (a view ignores `state`), `?group=<id>` narrows to a group (the `group` view needs it, a group the caller is not in is a 404), `?tz=<IANA zone>` says when the day ends (UTC by default) |
 | `GET /api/tasks/counts` | what the sidebar counts for the caller: `inbox`, `today`, `upcoming`, `shared`, `assigned`, `overdue`, `completedThisWeek` and the open tasks of each of their `groups`; `?tz=<IANA zone>` |
 | `GET /api/tasks/{id}` | one task the caller sees |
-| `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assigneeId` (its owner, a member it is shared with or a member of its group; empty clears it), `due`, each only when sent |
+| `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assigneeId` (its owner, a member it is shared with or a member of its group; empty clears it), `groupId` (its owner moves it to another of their groups, or to none), `due`, each only when sent |
 | `DELETE /api/tasks/{id}` | deletes a task, for its owner, or for an owner or an admin of its group |
 | `POST /api/tasks/{id}/share` | shares a task with a contact: `userId`, for its owner |
 | `DELETE /api/tasks/{id}/share/{userId}` | ends the sharing with a member, for the owner or that member |

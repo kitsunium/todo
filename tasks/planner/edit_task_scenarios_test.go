@@ -42,10 +42,14 @@ func givenEditTaskAssignsAMemberOfTheGroup(t *testing.T) (EditTask, EditTaskInpu
 	t.Helper()
 	who := bob
 	in := EditTaskInput{User: cy, ID: "task_a", AssigneeID: &who}
-	return NewEditTask(newMemTasks(grouped("task_a")), crew(), fixedClock(epoch), &memJournal{}), in, func(t *testing.T, out EditTaskOutput) {
+	journal := &memJournal{}
+	return NewEditTask(newMemTasks(grouped("task_a")), crew(), fixedClock(epoch), journal), in, func(t *testing.T, out EditTaskOutput) {
 		t.Helper()
 		if out.Task.AssigneeID != bob || out.Task.GroupID != core || out.Task.OwnerID != ada {
 			t.Errorf("the task Cy assigned to Bob: %+v", out.Task)
+		}
+		if len(journal.told) != 1 || journal.told[0] != "assigned to "+bob {
+			t.Errorf("who was told of the assignment: %q, want Bob alone", journal.told)
 		}
 	}
 }
@@ -104,4 +108,64 @@ func givenEditTaskRefusesAContactTheTaskIsNotSharedWith(t *testing.T) (EditTask,
 	// sees nothing of it: only Ada, its owner, lets someone else see it.
 	who := dee
 	return NewEditTask(newMemTasks(shared("task_a")), crew(), fixedClock(epoch), &memJournal{}), EditTaskInput{User: bob, ID: "task_a", AssigneeID: &who}
+}
+
+// givenEditTaskMovesATaskToAnotherGroupOfItsOwner builds EditTask for "moves a task to another group of its owner": the use case, its input, and
+// what its output must be.
+func givenEditTaskMovesATaskToAnotherGroupOfItsOwner(t *testing.T) (EditTask, EditTaskInput, func(*testing.T, EditTaskOutput)) {
+	t.Helper()
+	groups := crew()
+	groups["group_side"] = map[string]string{ada: roleOwner, dee: "member"}
+	moved := grouped("task_a")
+	moved.AssigneeID = ada // its owner, who is in both groups
+	side, journal := "group_side", &memJournal{}
+	uc := NewEditTask(newMemTasks(moved), groups, fixedClock(epoch), journal)
+	return uc, EditTaskInput{User: ada, ID: "task_a", GroupID: &side}, func(t *testing.T, out EditTaskOutput) {
+		t.Helper()
+		if out.Task.GroupID != side || out.Task.AssigneeID != ada {
+			t.Errorf("the task moved: %+v, want it on the other group, still its owner's to do", out.Task)
+		}
+		none := ""
+		back, err := uc.Execute(t.Context(), EditTaskInput{User: ada, ID: "task_a", GroupID: &none})
+		if err != nil || back.Task.GroupID != "" {
+			t.Errorf("moved to no group: %+v (%v)", back.Task, err)
+		}
+		if len(journal.told) != 0 {
+			t.Errorf("nobody is newly assigned, and %q was told", journal.told)
+		}
+	}
+}
+
+// givenEditTaskClearsAnAssigneeWhoIsNotInTheNewGroup builds EditTask for "clears an assignee who is not in the new group": the use case, its input, and
+// what its output must be.
+func givenEditTaskClearsAnAssigneeWhoIsNotInTheNewGroup(t *testing.T) (EditTask, EditTaskInput, func(*testing.T, EditTaskOutput)) {
+	t.Helper()
+	groups := crew()
+	groups["group_side"] = map[string]string{ada: roleOwner}
+	moved := grouped("task_a")
+	moved.AssigneeID = cy // in the first group, not in the other
+	side := "group_side"
+	uc := NewEditTask(newMemTasks(moved), groups, fixedClock(epoch), &memJournal{})
+	return uc, EditTaskInput{User: ada, ID: "task_a", GroupID: &side}, func(t *testing.T, out EditTaskOutput) {
+		t.Helper()
+		if out.Task.GroupID != side || out.Task.AssigneeID != "" {
+			t.Errorf("the task moved: %+v, want it on the other group and unassigned", out.Task)
+		}
+	}
+}
+
+// givenEditTaskRefusesAMemberWhoMovesTheTask builds EditTask for "refuses a member who moves the task": the use case and the input it
+// refuses with task.ErrNotOwner.
+func givenEditTaskRefusesAMemberWhoMovesTheTask(t *testing.T) (EditTask, EditTaskInput) {
+	t.Helper()
+	none := ""
+	return NewEditTask(newMemTasks(grouped("task_a")), crew(), fixedClock(epoch), &memJournal{}), EditTaskInput{User: bob, ID: "task_a", GroupID: &none}
+}
+
+// givenEditTaskRefusesAGroupItsOwnerIsNotIn builds EditTask for "refuses a group its owner is not in": the use case and the input it
+// refuses with task.ErrNotMember.
+func givenEditTaskRefusesAGroupItsOwnerIsNotIn(t *testing.T) (EditTask, EditTaskInput) {
+	t.Helper()
+	other := "group_other"
+	return NewEditTask(newMemTasks(open("task_a")), crew(), fixedClock(epoch), &memJournal{}), EditTaskInput{User: ada, ID: "task_a", GroupID: &other}
 }

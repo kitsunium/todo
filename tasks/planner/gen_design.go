@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
+// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -38,6 +38,8 @@ type GroupsV1 interface {
 // JournalV1 is told what happened to a task, for whoever keeps a feed of it.
 type JournalV1 interface {
 	Record(ctx context.Context, kind string, t task.Task) error
+	// Tell says what happened to a task to one member alone.
+	Tell(ctx context.Context, kind string, t task.Task, to string) error
 }
 
 // TaskStoreV1 keeps the tasks.
@@ -244,7 +246,8 @@ var _ DueSoon = (*DueSoonHandler)(nil)
 
 // EditTask changes what a task says, its title, notes, priority, assignee or
 // due date, each only when given, for a member who sees it; an empty assignee
-// clears it.
+// clears it. Its owner alone moves it to another group they are in, or to
+// none, and an assignee who is not in the new group is cleared.
 type EditTask interface {
 	Execute(ctx context.Context, in EditTaskInput) (EditTaskOutput, error)
 }
@@ -257,6 +260,7 @@ type EditTaskInput struct {
 	Notes      *string
 	Priority   *string
 	AssigneeID *string
+	GroupID    *string
 	Due        *time.Time
 }
 

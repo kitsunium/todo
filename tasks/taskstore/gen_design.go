@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
+// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
 
 // Package taskstore — The tasks in the framework's store, the archiving of
 // what was done long ago, their events on a topic, and the framework's clock.
@@ -70,6 +70,11 @@ func NewAnnouncer() *Announcer {
 // Record is tasks/port/Journal@v1's.
 func (a *Announcer) Record(ctx context.Context, kind string, t task.Task) error {
 	return a.record(ctx, kind, t)
+}
+
+// Tell is tasks/port/Journal@v1's.
+func (a *Announcer) Tell(ctx context.Context, kind string, t task.Task, to string) error {
+	return a.tell(ctx, kind, t, to)
 }
 
 var _ planner.JournalV1 = (*Announcer)(nil)

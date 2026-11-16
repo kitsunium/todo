@@ -4,7 +4,7 @@
 
 const $ = (id) => document.getElementById(id);
 const priorities = { high: "haute", normal: "normale", low: "basse" };
-const kinds = { added: "ajoutée", complete: "faite", reopen: "rouverte", archive: "archivée", restore: "restaurée" };
+const kinds = { added: "ajoutée", complete: "faite", reopen: "rouverte", archive: "archivée", restore: "restaurée", edited: "modifiée", shared: "partagée", deleted: "supprimée", assigned: "vous est assignée" };
 const people = { "contact-requested": "vous demande en contact", "contact-accepted": "a accepté votre demande de contact" };
 const moves = {
   open: [["complete", "Fait"]],

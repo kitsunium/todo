@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
+// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
 
 package planner
 
@@ -16,6 +16,16 @@ import (
 // TestAddTaskAddsAnOpenTask is AddTask's scenario "adds an open task" (success).
 func TestAddTaskAddsAnOpenTask(t *testing.T) {
 	uc, in, then := givenAddTaskAddsAnOpenTask(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("AddTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestAddTaskTellsItsAssigneeOfATaskAssigned is AddTask's scenario "tells its assignee of a task assigned" (success).
+func TestAddTaskTellsItsAssigneeOfATaskAssigned(t *testing.T) {
+	uc, in, then := givenAddTaskTellsItsAssigneeOfATaskAssigned(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("AddTask: %v, want a success", err)
@@ -172,6 +182,44 @@ func TestEditTaskChangesOnlyWhatIsGiven(t *testing.T) {
 		t.Fatalf("EditTask: %v, want a success", err)
 	}
 	then(t, out)
+}
+
+// TestEditTaskMovesATaskToAnotherGroupOfItsOwner is EditTask's scenario "moves a task to another group of its owner" (success).
+func TestEditTaskMovesATaskToAnotherGroupOfItsOwner(t *testing.T) {
+	uc, in, then := givenEditTaskMovesATaskToAnotherGroupOfItsOwner(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("EditTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestEditTaskClearsAnAssigneeWhoIsNotInTheNewGroup is EditTask's scenario "clears an assignee who is not in the new group" (success).
+func TestEditTaskClearsAnAssigneeWhoIsNotInTheNewGroup(t *testing.T) {
+	uc, in, then := givenEditTaskClearsAnAssigneeWhoIsNotInTheNewGroup(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("EditTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestEditTaskRefusesAMemberWhoMovesTheTask is EditTask's scenario "refuses a member who moves the task" (refusal).
+func TestEditTaskRefusesAMemberWhoMovesTheTask(t *testing.T) {
+	uc, in := givenEditTaskRefusesAMemberWhoMovesTheTask(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotOwner) {
+		t.Fatalf("EditTask: %v, want task.ErrNotOwner", err)
+	}
+}
+
+// TestEditTaskRefusesAGroupItsOwnerIsNotIn is EditTask's scenario "refuses a group its owner is not in" (refusal).
+func TestEditTaskRefusesAGroupItsOwnerIsNotIn(t *testing.T) {
+	uc, in := givenEditTaskRefusesAGroupItsOwnerIsNotIn(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotMember) {
+		t.Fatalf("EditTask: %v, want task.ErrNotMember", err)
+	}
 }
 
 // TestEditTaskAssignsAMemberOfTheGroup is EditTask's scenario "assigns a member of the group" (success).
@@ -542,6 +590,11 @@ type recordedplannerJournalV1 struct {
 func (x recordedplannerJournalV1) Record(ctx context.Context, kind string, t task.Task) error {
 	*x.calls = append(*x.calls, "tasks/port/Journal@v1.Record")
 	return x.next.Record(ctx, kind, t)
+}
+
+func (x recordedplannerJournalV1) Tell(ctx context.Context, kind string, t task.Task, to string) error {
+	*x.calls = append(*x.calls, "tasks/port/Journal@v1.Tell")
+	return x.next.Tell(ctx, kind, t, to)
 }
 
 // RecordPlannerTaskStoreV1 records the calls to next, then makes them.

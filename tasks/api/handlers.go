@@ -99,7 +99,7 @@ func edit(ctx context.Context, in EditRequest) (out task.Task, err error) {
 		return task.Task{}, err
 	}
 	res, err := wired.editTask.Execute(ctx, planner.EditTaskInput{
-		User: me, ID: in.ID, Title: in.Title, Notes: in.Notes, Priority: in.Priority, AssigneeID: in.AssigneeID, Due: in.Due,
+		User: me, ID: in.ID, Title: in.Title, Notes: in.Notes, Priority: in.Priority, AssigneeID: in.AssigneeID, GroupID: in.GroupID, Due: in.Due,
 	})
 	if err != nil {
 		return task.Task{}, refusal(err)

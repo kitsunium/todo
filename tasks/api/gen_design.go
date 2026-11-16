@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
+// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
 
 // Package api — The HTTP API of a member's tasks, and the census the rest of
 // the product asks.
@@ -57,6 +57,7 @@ type EditRequest struct {
 	Notes      *string    `json:"notes" app:"public"`
 	Priority   *string    `json:"priority" app:"public"`
 	AssigneeID *string    `json:"assigneeId" app:"personal"`
+	GroupID    *string    `json:"groupId" app:"public"`
 	Due        *time.Time `json:"due" app:"public"`
 }
 

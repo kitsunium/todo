@@ -1096,6 +1096,27 @@ func TestAGroupSharesAList(t *testing.T) {
 	if counts.CompletedThisWeek != 1 || counts.Groups[g.ID] != 1 {
 		t.Errorf("Cy's counts: %+v, want one finished this week and one open on the group", counts)
 	}
+	// Only its owner moves a task off the group's list, or onto another of
+	// their groups; who it was assigned to there stops doing it.
+	cy.call(http.StatusForbidden, "PATCH", "/api/tasks/"+second.ID, map[string]any{"groupId": ""}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/tasks/"+second.ID, map[string]any{"groupId": "group_nobody"}, nil)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+second.ID, map[string]any{"assigneeId": cy.id}, &edited)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+second.ID, map[string]any{"groupId": ""}, &edited)
+	if edited.GroupID != "" || edited.AssigneeID != "" {
+		t.Errorf("the task moved off the group: %+v, want it on no group and unassigned", edited)
+	}
+	cy.call(http.StatusNotFound, "GET", "/api/tasks/"+second.ID, nil, nil)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+second.ID, map[string]any{"groupId": g.ID}, &edited)
+	cy.call(http.StatusOK, "GET", "/api/tasks/"+second.ID, nil, nil)
+	// A member someone else assigns a task to is told so.
+	p.settle("the assignment in Cy's feed", 50*time.Millisecond, func() bool {
+		var feed struct {
+			Entries []struct{ Kind, TaskID string }
+		}
+		cy.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+		return slices.ContainsFunc(feed.Entries, func(e struct{ Kind, TaskID string }) bool { return e.Kind == "assigned" && e.TaskID == second.ID })
+	})
+
 	var gone groupTask
 	cy.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Tidy the board", "groupId": g.ID}, &gone)
 	bob.call(http.StatusOK, "DELETE", "/api/tasks/"+gone.ID, nil, nil) // an admin deletes a member's task

@@ -120,6 +120,7 @@ domains:
             description: JournalV1 is told what happened to a task, for whoever keeps a feed of it.
             methods:
               - {name: Record, params: [{name: kind, type: string}, {name: t, type: task.Task}]}
+              - {name: Tell, description: "Tell says what happened to a task to one member alone.", params: [{name: kind, type: string}, {name: t, type: task.Task}, {name: to, type: string}]}
         usecases:
           - name: AddTask
             description: AddTask adds an open task to its owner's list, or to the list of a group the owner belongs to, assigned or not.
@@ -134,9 +135,10 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotMember, task.ErrNotAssignable]
-            calls: [tasks/port/Clock@v1.Now, tasks/port/Groups@v1.RoleOf, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/Clock@v1.Now, tasks/port/Groups@v1.RoleOf, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record, tasks/port/Journal@v1.Tell]
             scenarios:
               - {name: adds an open task, kind: success}
+              - {name: tells its assignee of a task assigned, kind: success}
               - {name: adds a task to a group list, kind: success}
               - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
               - {name: refuses a long title, kind: refusal, error: task.ErrTitleTooLong}
@@ -217,7 +219,7 @@ domains:
               - {name: refuses a task the member does not see, kind: refusal, error: task.ErrNotFound}
               - {name: refuses a group task to who left the group, kind: refusal, error: task.ErrNotFound}
           - name: EditTask
-            description: EditTask changes what a task says, its title, notes, priority, assignee or due date, each only when given, for a member who sees it; an empty assignee clears it.
+            description: EditTask changes what a task says, its title, notes, priority, assignee or due date, each only when given, for a member who sees it; an empty assignee clears it. Its owner alone moves it to another group they are in, or to none, and an assignee who is not in the new group is cleared.
             input:
               - {name: User, type: string}
               - {name: ID, type: string}
@@ -225,13 +227,18 @@ domains:
               - {name: Notes, type: "*string"}
               - {name: Priority, type: "*string"}
               - {name: AssigneeID, type: "*string"}
+              - {name: GroupID, type: "*string"}
               - {name: Due, type: "*time.Time"}
             output:
               - {name: Task, type: task.Task}
-            errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotAssignable]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Record]
+            errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotAssignable, task.ErrNotOwner, task.ErrNotMember]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Record, tasks/port/Journal@v1.Tell]
             scenarios:
               - {name: changes only what is given, kind: success}
+              - {name: moves a task to another group of its owner, kind: success}
+              - {name: clears an assignee who is not in the new group, kind: success}
+              - {name: refuses a member who moves the task, kind: refusal, error: task.ErrNotOwner}
+              - {name: refuses a group its owner is not in, kind: refusal, error: task.ErrNotMember}
               - {name: assigns a member of the group, kind: success}
               - {name: assigns a member the task is shared with, kind: success}
               - {name: refuses a contact the task is not shared with, kind: refusal, error: task.ErrNotAssignable}
@@ -468,6 +475,7 @@ domains:
               - {name: Notes, type: "*string", tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: "*string", tag: 'json:"priority" app:"public"'}
               - {name: AssigneeID, type: "*string", tag: 'json:"assigneeId" app:"personal"'}
+              - {name: GroupID, type: "*string", tag: 'json:"groupId" app:"public"'}
               - {name: Due, type: "*time.Time", tag: 'json:"due" app:"public"'}
           - name: ShareRequest
             description: The member a task is shared with.

@@ -67,9 +67,18 @@ func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTask
 	if err := h.journal.Record(ctx, kindAdded, t); err != nil {
 		return AddTaskOutput{}, err
 	}
+	if t.AssigneeID != "" && t.AssigneeID != in.Owner {
+		if err := h.journal.Tell(ctx, kindAssigned, t, t.AssigneeID); err != nil {
+			return AddTaskOutput{}, err
+		}
+	}
 	return AddTaskOutput{Task: t}, nil
 }
 
 // kindAdded is what the journal is told of a task just added; a move is
 // told by its lifecycle event.
 const kindAdded = "added"
+
+// kindAssigned is what a member is told of a task someone else assigned to
+// them.
+const kindAssigned = "assigned"

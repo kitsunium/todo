@@ -134,10 +134,16 @@ func (c fixedClock) Now(context.Context) (time.Time, error) { return time.Time(c
 // memJournal is JournalV1 that remembers what it was told.
 type memJournal struct {
 	kinds []string
+	told  []string // what one member alone was told, "kind to member"
 }
 
 func (j *memJournal) Record(_ context.Context, kind string, _ task.Task) error {
 	j.kinds = append(j.kinds, kind)
+	return nil
+}
+
+func (j *memJournal) Tell(_ context.Context, kind string, _ task.Task, to string) error {
+	j.told = append(j.told, kind+" to "+to)
 	return nil
 }
 
