@@ -18,8 +18,8 @@ func (h *MoveTaskHandler) execute(ctx context.Context, in *MoveTaskInput) (MoveT
 	if err != nil {
 		return MoveTaskOutput{}, err
 	}
-	if t.OwnerID != in.Owner {
-		return MoveTaskOutput{}, task.ErrNotFound // another member's task: as if there were none
+	if !t.SeenBy(in.Owner) {
+		return MoveTaskOutput{}, task.ErrNotFound // a task they do not see: as if there were none
 	}
 	now, err := h.clock.Now(ctx)
 	if err != nil {

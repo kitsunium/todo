@@ -11,7 +11,7 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
-// execute is ListTasks's body: the owner's tasks of the state asked for, or
+// execute is ListTasks's body: the tasks the member sees, of the state asked for, or
 // every one that is not archived, the most urgent first.
 func (h *ListTasksHandler) execute(ctx context.Context, in *ListTasksInput) (ListTasksOutput, error) {
 	all, err := h.taskStore.List(ctx)
@@ -20,7 +20,7 @@ func (h *ListTasksHandler) execute(ctx context.Context, in *ListTasksInput) (Lis
 	}
 	out := make([]task.Task, 0, len(all))
 	for _, t := range all {
-		if t.OwnerID != in.Owner {
+		if !t.SeenBy(in.Owner) {
 			continue
 		}
 		if in.State == "" && t.State != task.LifecycleArchived || in.State != "" && string(t.State) == in.State {

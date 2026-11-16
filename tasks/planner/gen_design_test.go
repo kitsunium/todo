@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
 package planner
 
@@ -60,6 +60,25 @@ func TestCountTasksCountsEveryState(t *testing.T) {
 	then(t, out)
 }
 
+// TestDeleteTaskDeletesATaskOfTheOwner is DeleteTask's scenario "deletes a task of the owner" (success).
+func TestDeleteTaskDeletesATaskOfTheOwner(t *testing.T) {
+	uc, in, then := givenDeleteTaskDeletesATaskOfTheOwner(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("DeleteTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestDeleteTaskRefusesAMemberItIsSharedWith is DeleteTask's scenario "refuses a member it is shared with" (refusal).
+func TestDeleteTaskRefusesAMemberItIsSharedWith(t *testing.T) {
+	uc, in := givenDeleteTaskRefusesAMemberItIsSharedWith(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotOwner) {
+		t.Fatalf("DeleteTask: %v, want task.ErrNotOwner", err)
+	}
+}
+
 // TestDueSoonListsTheOpenTasksDueSoon is DueSoon's scenario "lists the open tasks due soon" (success).
 func TestDueSoonListsTheOpenTasksDueSoon(t *testing.T) {
 	uc, in, then := givenDueSoonListsTheOpenTasksDueSoon(t)
@@ -68,6 +87,44 @@ func TestDueSoonListsTheOpenTasksDueSoon(t *testing.T) {
 		t.Fatalf("DueSoon: %v, want a success", err)
 	}
 	then(t, out)
+}
+
+// TestEditTaskChangesOnlyWhatIsGiven is EditTask's scenario "changes only what is given" (success).
+func TestEditTaskChangesOnlyWhatIsGiven(t *testing.T) {
+	uc, in, then := givenEditTaskChangesOnlyWhatIsGiven(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("EditTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestEditTaskRefusesAnEmptyTitle is EditTask's scenario "refuses an empty title" (refusal).
+func TestEditTaskRefusesAnEmptyTitle(t *testing.T) {
+	uc, in := givenEditTaskRefusesAnEmptyTitle(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrEmptyTitle) {
+		t.Fatalf("EditTask: %v, want task.ErrEmptyTitle", err)
+	}
+}
+
+// TestGetTaskReadsATaskSharedWithTheMember is GetTask's scenario "reads a task shared with the member" (success).
+func TestGetTaskReadsATaskSharedWithTheMember(t *testing.T) {
+	uc, in, then := givenGetTaskReadsATaskSharedWithTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("GetTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestGetTaskRefusesATaskTheMemberDoesNotSee is GetTask's scenario "refuses a task the member does not see" (refusal).
+func TestGetTaskRefusesATaskTheMemberDoesNotSee(t *testing.T) {
+	uc, in := givenGetTaskRefusesATaskTheMemberDoesNotSee(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("GetTask: %v, want task.ErrNotFound", err)
+	}
 }
 
 // TestListTasksListsTheMostUrgentFirst is ListTasks's scenario "lists the most urgent first" (success).
@@ -108,12 +165,69 @@ func TestMoveTaskRefusesTheTaskOfAnotherMember(t *testing.T) {
 	}
 }
 
+// TestMoveTaskMovesATaskSharedWithTheMember is MoveTask's scenario "moves a task shared with the member" (success).
+func TestMoveTaskMovesATaskSharedWithTheMember(t *testing.T) {
+	uc, in, then := givenMoveTaskMovesATaskSharedWithTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("MoveTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
 // TestMoveTaskRefusesToArchiveAnOpenTask is MoveTask's scenario "refuses to archive an open task" (refusal).
 func TestMoveTaskRefusesToArchiveAnOpenTask(t *testing.T) {
 	uc, in := givenMoveTaskRefusesToArchiveAnOpenTask(t)
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, task.ErrNotAllowed) {
 		t.Fatalf("MoveTask: %v, want task.ErrNotAllowed", err)
+	}
+}
+
+// TestShareTaskSharesWithAContact is ShareTask's scenario "shares with a contact" (success).
+func TestShareTaskSharesWithAContact(t *testing.T) {
+	uc, in, then := givenShareTaskSharesWithAContact(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ShareTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestShareTaskRefusesWhoIsNoContact is ShareTask's scenario "refuses who is no contact" (refusal).
+func TestShareTaskRefusesWhoIsNoContact(t *testing.T) {
+	uc, in := givenShareTaskRefusesWhoIsNoContact(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotContact) {
+		t.Fatalf("ShareTask: %v, want task.ErrNotContact", err)
+	}
+}
+
+// TestShareTaskRefusesWhoIsNotTheOwner is ShareTask's scenario "refuses who is not the owner" (refusal).
+func TestShareTaskRefusesWhoIsNotTheOwner(t *testing.T) {
+	uc, in := givenShareTaskRefusesWhoIsNotTheOwner(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotOwner) {
+		t.Fatalf("ShareTask: %v, want task.ErrNotOwner", err)
+	}
+}
+
+// TestUnshareTaskLetsAMemberLeaveATask is UnshareTask's scenario "lets a member leave a task" (success).
+func TestUnshareTaskLetsAMemberLeaveATask(t *testing.T) {
+	uc, in, then := givenUnshareTaskLetsAMemberLeaveATask(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("UnshareTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestUnshareTaskRefusesAMemberWhoRemovesAnother is UnshareTask's scenario "refuses a member who removes another" (refusal).
+func TestUnshareTaskRefusesAMemberWhoRemovesAnother(t *testing.T) {
+	uc, in := givenUnshareTaskRefusesAMemberWhoRemovesAnother(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotOwner) {
+		t.Fatalf("UnshareTask: %v, want task.ErrNotOwner", err)
 	}
 }
 
@@ -161,6 +275,11 @@ func (r sequenceRecorder) RecordPlannerTaskStoreV1(next TaskStoreV1) TaskStoreV1
 type recordedplannerTaskStoreV1 struct {
 	next  TaskStoreV1
 	calls *[]string
+}
+
+func (x recordedplannerTaskStoreV1) Delete(ctx context.Context, id string) error {
+	*x.calls = append(*x.calls, "tasks/port/TaskStore@v1.Delete")
+	return x.next.Delete(ctx, id)
 }
 
 func (x recordedplannerTaskStoreV1) Get(ctx context.Context, id string) (task.Task, error) {

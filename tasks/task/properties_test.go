@@ -65,3 +65,29 @@ func propertyParsePriorityKnownOrRefused(t *testing.T, seed uint64) {
 		}
 	}
 }
+
+// propertyTaskSeenByOwnerAndSharedOnly holds tasks/Task.SeenBy: a member
+// sees a task exactly when they own it or it is shared with them, and
+// nobody is never one of them.
+func propertyTaskSeenByOwnerAndSharedOnly(t *testing.T, seed uint64) {
+	t.Helper()
+	r := rand.New(rand.NewPCG(seed, seed))
+	who := func() string { return "user_" + string(rune('a'+r.IntN(6))) }
+	for range 2000 {
+		tk := Task{OwnerID: who()}
+		for range r.IntN(4) {
+			tk.SharedWith = append(tk.SharedWith, who())
+		}
+		u := who()
+		want := u == tk.OwnerID
+		for _, s := range tk.SharedWith {
+			want = want || s == u
+		}
+		if got := tk.SeenBy(u); got != want {
+			t.Fatalf("%s sees the task of %s shared with %q: %v, want %v", u, tk.OwnerID, tk.SharedWith, got, want)
+		}
+		if tk.SeenBy("") {
+			t.Fatalf("nobody sees the task of %s", tk.OwnerID)
+		}
+	}
+}

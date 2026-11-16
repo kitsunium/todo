@@ -5,6 +5,7 @@
 package planner
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -27,7 +28,7 @@ func givenAddTaskAddsAnOpenTask(t *testing.T) (AddTask, AddTaskInput, func(*test
 		if !got.CreatedAt.Equal(epoch) || !got.UpdatedAt.Equal(epoch) || !got.Due.Equal(due) || !got.DoneAt.IsZero() {
 			t.Errorf("its dates: %+v", got)
 		}
-		if kept, err := store.Get(t.Context(), got.ID); err != nil || kept != got {
+		if kept, err := store.Get(t.Context(), got.ID); err != nil || !reflect.DeepEqual(kept, got) {
 			t.Errorf("the store keeps %+v (%v), want %+v", kept, err, got)
 		}
 		if len(journal.kinds) != 1 || journal.kinds[0] != "added" {

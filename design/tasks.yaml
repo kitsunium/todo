@@ -15,7 +15,8 @@ domains:
             description: Something to do, for someone, by a date.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
-              - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"', description: "OwnerID is the member whose task it is: who added it, and the only one who sees it."}
+              - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"', description: "OwnerID is the member whose task it is: who added it, shares it and deletes it."}
+              - {name: SharedWith, type: "[]string", tag: 'json:"sharedWith" app:"public"', description: "SharedWith are the members the owner shares the task with: they see it, edit it and move it."}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: Priority, tag: 'json:"priority" app:"public"'}
@@ -26,6 +27,11 @@ domains:
               - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
               - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"', description: "DoneAt is when the task was last completed; the zero time while it is open."}
             methods:
+              - name: SeenBy
+                description: SeenBy reports whether a member sees the task, its owner or one it is shared with.
+                params: [{name: user, type: string}]
+                results: [{type: bool}]
+                properties: [OwnerAndSharedOnly]
               - name: Overdue
                 description: Overdue reports whether the task is still open after its due date.
                 params: [{name: now, type: time.Time}]
@@ -52,6 +58,8 @@ domains:
           - {name: ErrNotFound, serial: 3, message: no such task}
           - {name: ErrUnknownPriority, serial: 4, message: "a priority is low, normal or high"}
           - {name: ErrNotAllowed, serial: 5, message: the task cannot make this move from the state it is in}
+          - {name: ErrNotContact, serial: 6, message: a task is shared with a contact of its owner}
+          - {name: ErrNotOwner, serial: 7, message: only its owner does this to a task}
         workflows:
           - name: Lifecycle
             entity: Task
@@ -78,6 +86,13 @@ domains:
               - {name: Save, params: [{name: t, type: task.Task}]}
               - {name: Get, params: [{name: id, type: string}], results: [{type: task.Task}]}
               - {name: List, results: [{type: "[]task.Task"}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+          - name: Circle
+            direction: out
+            version: 1
+            description: CircleV1 says who is a contact of whom.
+            methods:
+              - {name: AreContacts, params: [{name: one, type: string}, {name: other, type: string}], results: [{type: bool}]}
           - name: Clock
             direction: out
             version: 1
@@ -110,7 +125,7 @@ domains:
               - {name: refuses a long title, kind: refusal, error: task.ErrTitleTooLong}
               - {name: refuses an unknown priority, kind: refusal, error: task.ErrUnknownPriority}
           - name: MoveTask
-            description: MoveTask moves a task of its owner through its lifecycle by one event (complete, reopen, archive, restore); another member's task is not found.
+            description: MoveTask moves a task through its lifecycle by one event (complete, reopen, archive, restore), for a member who sees it; a task they do not see is not found.
             input:
               - {name: Owner, type: string}
               - {name: ID, type: string}
@@ -123,9 +138,10 @@ domains:
               - {name: completes an open task, kind: success}
               - {name: refuses an unknown task, kind: refusal, error: task.ErrNotFound}
               - {name: refuses the task of another member, kind: refusal, error: task.ErrNotFound}
+              - {name: moves a task shared with the member, kind: success}
               - {name: refuses to archive an open task, kind: refusal, error: task.ErrNotAllowed}
           - name: ListTasks
-            description: ListTasks lists a member's tasks of a state, or every one not archived, the most urgent first.
+            description: ListTasks lists the tasks a member sees, theirs and those shared with them, of a state, or every one not archived, the most urgent first.
             input:
               - {name: Owner, type: string}
               - {name: State, type: string}
@@ -134,6 +150,72 @@ domains:
             calls: [tasks/port/TaskStore@v1.List]
             scenarios:
               - {name: lists the most urgent first, kind: success}
+          - name: GetTask
+            description: GetTask reads one task, for a member who sees it.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            output:
+              - {name: Task, type: task.Task}
+            errors: [task.ErrNotFound]
+            calls: [tasks/port/TaskStore@v1.Get]
+            scenarios:
+              - {name: reads a task shared with the member, kind: success}
+              - {name: refuses a task the member does not see, kind: refusal, error: task.ErrNotFound}
+          - name: EditTask
+            description: EditTask changes what a task says, its title, notes, priority, assignee or due date, each only when given, for a member who sees it.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Title, type: "*string"}
+              - {name: Notes, type: "*string"}
+              - {name: Priority, type: "*string"}
+              - {name: Assignee, type: "*string"}
+              - {name: Due, type: "*time.Time"}
+            output:
+              - {name: Task, type: task.Task}
+            errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            scenarios:
+              - {name: changes only what is given, kind: success}
+              - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
+          - name: DeleteTask
+            description: DeleteTask deletes a task, for its owner alone.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            errors: [task.ErrNotFound, task.ErrNotOwner]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/TaskStore@v1.Delete, tasks/port/Journal@v1.Record]
+            scenarios:
+              - {name: deletes a task of the owner, kind: success}
+              - {name: refuses a member it is shared with, kind: refusal, error: task.ErrNotOwner}
+          - name: ShareTask
+            description: ShareTask shares a task with a contact of its owner, who then sees it.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: With, type: string}
+            output:
+              - {name: Task, type: task.Task}
+            errors: [task.ErrNotFound, task.ErrNotOwner, task.ErrNotContact]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            scenarios:
+              - {name: shares with a contact, kind: success}
+              - {name: refuses who is no contact, kind: refusal, error: task.ErrNotContact}
+              - {name: refuses who is not the owner, kind: refusal, error: task.ErrNotOwner}
+          - name: UnshareTask
+            description: UnshareTask ends the sharing of a task with a member, for its owner, or for that member who leaves it.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: With, type: string}
+            output:
+              - {name: Task, type: task.Task}
+            errors: [task.ErrNotFound, task.ErrNotOwner]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save]
+            scenarios:
+              - {name: lets a member leave a task, kind: success}
+              - {name: refuses a member who removes another, kind: refusal, error: task.ErrNotOwner}
           - name: CountTasks
             description: CountTasks counts the tasks per state, and the open ones past their due date.
             output:
@@ -173,7 +255,7 @@ domains:
       - name: taskstore
         role: adapter
         code: 64.1.3
-        uses: [planner, task]
+        uses: [planner, task, contactsapi]
         description: The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, and the framework's clock.
         entities:
           - name: Record
@@ -181,6 +263,7 @@ domains:
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"'}
+              - {name: SharedWith, type: "[]string", tag: 'json:"sharedWith" app:"public"'}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
@@ -211,6 +294,7 @@ domains:
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"'}
+              - {name: Audience, type: "[]string", tag: 'json:"audience" app:"public"', description: "Audience are the members the event is told to: the task's owner and those it is shared with."}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
@@ -226,6 +310,9 @@ domains:
           - name: Tasks
             description: Tasks is TaskStore@v1 on the store "tasks".
             implements: [tasks/port/TaskStore@v1]
+          - name: Friends
+            description: Friends is Circle@v1 on the contacts' query "are-contacts".
+            implements: [tasks/port/Circle@v1]
           - name: Announcer
             description: Announcer is Journal@v1 on the topic "events".
             implements: [tasks/port/Journal@v1]
@@ -260,6 +347,25 @@ domains:
             description: The task a route names.
             fields:
               - {name: ID, type: string, tag: 'path:"id"'}
+          - name: EditRequest
+            description: What a member changes of a task, each field only when it is sent.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: Title, type: "*string", tag: 'json:"title" app:"public"'}
+              - {name: Notes, type: "*string", tag: 'json:"notes" app:"public"'}
+              - {name: Priority, type: "*string", tag: 'json:"priority" app:"public"'}
+              - {name: Assignee, type: "*string", tag: 'json:"assignee" app:"personal"'}
+              - {name: Due, type: "*time.Time", tag: 'json:"due" app:"public"'}
+          - name: ShareRequest
+            description: The member a task is shared with.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+          - name: UnshareRequest
+            description: The member a task is no longer shared with.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: UserID, type: string, tag: 'path:"userId"'}
           - name: ListRequest
             description: Which tasks to list.
             fields:
@@ -281,6 +387,11 @@ domains:
         endpoints:
           - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
           - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
+          - {route: "GET /api/tasks/{id}", request: ByID, response: task.Task, handler: Get, auth: required, uses: [tasks/usecase/GetTask], calls: [tasks/usecase/GetTask]}
+          - {route: "PATCH /api/tasks/{id}", request: EditRequest, response: task.Task, handler: Edit, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/EditTask], calls: [tasks/usecase/EditTask]}
+          - {route: "DELETE /api/tasks/{id}", request: ByID, response: NoInput, handler: Delete, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/DeleteTask], calls: [tasks/usecase/DeleteTask]}
+          - {route: "POST /api/tasks/{id}/share", request: ShareRequest, response: task.Task, handler: Share, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/ShareTask], calls: [tasks/usecase/ShareTask]}
+          - {route: "DELETE /api/tasks/{id}/share/{userId}", request: UnshareRequest, response: task.Task, handler: Unshare, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/UnshareTask], calls: [tasks/usecase/UnshareTask]}
           - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
           - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
           - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}

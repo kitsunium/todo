@@ -15,7 +15,8 @@ moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
 is counted every thirty seconds. Two members become contacts by a
 request one sends to the other's address and the other accepts; a request
-nobody answers expires after fourteen days. The server serves a small web app at `/`,
+nobody answers expires after fourteen days. A member shares a task with a
+contact, who then sees it, edits it and moves it, and may leave it. The server serves a small web app at `/`,
 in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
@@ -58,7 +59,12 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `POST /api/contacts/{id}/accept` `decline` `cancel` | answers a request: its addressee accepts or declines, its requester cancels |
 | `DELETE /api/contacts/{id}` | ends a contact, for either member |
 | `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `assignee`, `due` (RFC 3339) |
-| `GET /api/tasks` | lists the caller's tasks not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
+| `GET /api/tasks` | lists the tasks the caller sees, theirs and those shared with them, not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
+| `GET /api/tasks/{id}` | one task the caller sees |
+| `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assignee`, `due`, each only when sent |
+| `DELETE /api/tasks/{id}` | deletes a task, for its owner |
+| `POST /api/tasks/{id}/share` | shares a task with a contact: `userId`, for its owner |
+| `DELETE /api/tasks/{id}/share/{userId}` | ends the sharing with a member, for the owner or that member |
 | `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |
 | `GET /api/activity` | the caller's feed, newest first; `?limit=N` |
 | `GET /api/stats` | the latest sample of the task list and the recent history |
@@ -66,8 +72,9 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 Every route but those a stranger needs — signing up, the links, signing
 in — and `/api/stats` asks for a member: the
 session cookie, or `Authorization: Bearer <token>`; without one it answers
-401. A member sees their own tasks and feed, and another member's
-task is answered as if it did not exist.
+401. A member sees their own tasks, those shared with them and their feed;
+a task they do not see is answered as if it did not exist, and what only
+its owner does is a 403 for a member it is shared with.
 
 Every route that writes is limited per client — the member, or the address
 of a stranger: two calls a second with a burst of five for signing up,

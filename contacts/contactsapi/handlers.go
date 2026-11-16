@@ -79,6 +79,12 @@ func answer(ctx context.Context, id string, event link.RequestsEvent) (link.Link
 	return res.Link, nil
 }
 
+// check is the query "are-contacts"'s body.
+func check(ctx context.Context, in Pair) (out Verdict, err error) {
+	res, err := wired.areContacts.Execute(ctx, circle.AreContactsInput{A: in.One, B: in.Other})
+	return Verdict{Yes: res.Yes}, err
+}
+
 // caller is the member the request comes from; every route asks for one.
 func caller(ctx context.Context) (string, error) {
 	uid, ok := app.UserID(ctx)

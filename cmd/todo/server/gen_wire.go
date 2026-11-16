@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -61,11 +61,18 @@ func Wire(ctx context.Context, build Build) {
 	requestContact := circle.NewRequestContact(directory, links, linkstoreWallClock, announcer)
 	answerRequest := circle.NewAnswerRequest(links, linkstoreWallClock, directory, announcer)
 	removeContact := circle.NewRemoveContact(links)
+	areContacts := circle.NewAreContacts(links)
 	appClock := taskstore.NewAppClock()
 	tasks := taskstore.NewTasks()
 	taskstoreAnnouncer := taskstore.NewAnnouncer()
 	addTask := planner.NewAddTask(appClock, tasks, taskstoreAnnouncer)
 	listTasks := planner.NewListTasks(tasks)
+	getTask := planner.NewGetTask(tasks)
+	editTask := planner.NewEditTask(tasks, appClock, taskstoreAnnouncer)
+	deleteTask := planner.NewDeleteTask(tasks, taskstoreAnnouncer)
+	friends := taskstore.NewFriends()
+	shareTask := planner.NewShareTask(tasks, friends, appClock, taskstoreAnnouncer)
+	unshareTask := planner.NewUnshareTask(tasks, appClock)
 	moveTask := planner.NewMoveTask(tasks, appClock, taskstoreAnnouncer)
 	countTasks := planner.NewCountTasks(appClock, tasks)
 	dueSoon := planner.NewDueSoon(appClock, tasks)
@@ -76,9 +83,9 @@ func Wire(ctx context.Context, build Build) {
 	vault.Wire()
 	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, authenticate)
 	linkstore.Wire()
-	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact)
+	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact, areContacts)
 	taskstore.Wire()
-	api.Wire(addTask, listTasks, moveTask, countTasks)
+	api.Wire(addTask, listTasks, getTask, editTask, deleteTask, shareTask, unshareTask, moveTask, countTasks)
 	feed.Wire()
 	post.Wire()
 	outbox.Wire()

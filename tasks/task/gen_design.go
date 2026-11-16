@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
 // Package task — The task, its priority and its lifecycle.
 //
@@ -23,8 +23,12 @@ var (
 	ErrEmptyTitle = errs.New(errs.Pack(64, 1, 1, 1), "EMPTY_TITLE", "a task needs a title", "tasks/error/ErrEmptyTitle")
 	// ErrNotAllowed is "the task cannot make this move from the state it is in".
 	ErrNotAllowed = errs.New(errs.Pack(64, 1, 1, 5), "NOT_ALLOWED", "the task cannot make this move from the state it is in", "tasks/error/ErrNotAllowed")
+	// ErrNotContact is "a task is shared with a contact of its owner".
+	ErrNotContact = errs.New(errs.Pack(64, 1, 1, 6), "NOT_CONTACT", "a task is shared with a contact of its owner", "tasks/error/ErrNotContact")
 	// ErrNotFound is "no such task".
 	ErrNotFound = errs.New(errs.Pack(64, 1, 1, 3), "NOT_FOUND", "no such task", "tasks/error/ErrNotFound")
+	// ErrNotOwner is "only its owner does this to a task".
+	ErrNotOwner = errs.New(errs.Pack(64, 1, 1, 7), "NOT_OWNER", "only its owner does this to a task", "tasks/error/ErrNotOwner")
 	// ErrTitleTooLong is "a title is 120 characters at most".
 	ErrTitleTooLong = errs.New(errs.Pack(64, 1, 1, 2), "TITLE_TOO_LONG", "a title is 120 characters at most", "tasks/error/ErrTitleTooLong")
 	// ErrUnknownPriority is "a priority is low, normal or high".
@@ -45,12 +49,15 @@ const (
 // Task — Something to do, for someone, by a date.
 type Task struct {
 	ID string `json:"id" app:"public"`
-	// OwnerID is the member whose task it is: who added it, and the only one who
-	// sees it.
-	OwnerID  string   `json:"ownerId" app:"public"`
-	Title    string   `json:"title" app:"public"`
-	Notes    string   `json:"notes" app:"public"`
-	Priority Priority `json:"priority" app:"public"`
+	// OwnerID is the member whose task it is: who added it, shares it and deletes
+	// it.
+	OwnerID string `json:"ownerId" app:"public"`
+	// SharedWith are the members the owner shares the task with: they see it, edit
+	// it and move it.
+	SharedWith []string `json:"sharedWith" app:"public"`
+	Title      string   `json:"title" app:"public"`
+	Notes      string   `json:"notes" app:"public"`
+	Priority   Priority `json:"priority" app:"public"`
 	// Assignee is who does the task, as the team names them; an address gets the
 	// reminders.
 	Assignee string `json:"assignee" app:"personal"`
@@ -66,6 +73,12 @@ type Task struct {
 // Overdue reports whether the task is still open after its due date.
 func (tx *Task) Overdue(now time.Time) bool {
 	return tx.overdue(now)
+}
+
+// SeenBy reports whether a member sees the task, its owner or one it is shared
+// with.
+func (tx *Task) SeenBy(user string) bool {
+	return tx.seenBy(user)
 }
 
 // Priority — How urgent a task is.

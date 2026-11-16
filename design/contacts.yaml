@@ -227,7 +227,7 @@ domains:
         role: presentation
         code: 64.8.4
         uses: [circle, link]
-        description: The HTTP API of a member's contacts.
+        description: The HTTP API of a member's contacts, and the question the rest of the product asks of them.
         values:
           - name: AddRequest
             description: The address of the member asked.
@@ -239,12 +239,23 @@ domains:
               - {name: ID, type: string, tag: 'path:"id"'}
           - name: NoInput
             description: A request, or an answer, that says nothing.
+          - name: Pair
+            description: Two members.
+            fields:
+              - {name: One, type: string, tag: 'json:"one" app:"public"'}
+              - {name: Other, type: string, tag: 'json:"other" app:"public"'}
+          - name: Verdict
+            description: Whether two members are contacts.
+            fields:
+              - {name: Yes, type: bool, tag: 'json:"yes" app:"public"'}
           - name: Listing
             description: A member's contacts, and the requests waiting.
             fields:
               - {name: Contacts, type: "[]circle.Contact", tag: 'json:"contacts"'}
               - {name: Incoming, type: "[]circle.Contact", tag: 'json:"incoming"'}
               - {name: Outgoing, type: "[]circle.Contact", tag: 'json:"outgoing"'}
+        queries:
+          - {name: are-contacts, input: Pair, output: Verdict, handler: Check, description: "Whether two members are contacts, for the components that share with a contact.", uses: [contacts/usecase/AreContacts], calls: [contacts/usecase/AreContacts]}
         endpoints:
           - {route: "GET /api/contacts", request: NoInput, response: Listing, handler: List, auth: required, uses: [contacts/usecase/ListContacts], calls: [contacts/usecase/ListContacts]}
           - {route: "POST /api/contacts", request: AddRequest, response: link.Link, handler: Add, rateLimit: {perSecond: 2, burst: 5, per: client}, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}

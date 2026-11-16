@@ -63,6 +63,72 @@ func restore(ctx context.Context, in ByID) (out task.Task, err error) {
 	return move(ctx, in.ID, task.LifecycleOnRestore)
 }
 
+// get is GET /api/tasks/{id}'s body; what it uses is in wired.
+func get(ctx context.Context, in ByID) (out task.Task, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	res, err := wired.getTask.Execute(ctx, planner.GetTaskInput{User: me, ID: in.ID})
+	if err != nil {
+		return task.Task{}, refusal(err)
+	}
+	return res.Task, nil
+}
+
+// edit is PATCH /api/tasks/{id}'s body; what it uses is in wired.
+func edit(ctx context.Context, in EditRequest) (out task.Task, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	res, err := wired.editTask.Execute(ctx, planner.EditTaskInput{
+		User: me, ID: in.ID, Title: in.Title, Notes: in.Notes, Priority: in.Priority, Assignee: in.Assignee, Due: in.Due,
+	})
+	if err != nil {
+		return task.Task{}, refusal(err)
+	}
+	return res.Task, nil
+}
+
+// deleteBody is DELETE /api/tasks/{id}'s body; what it uses is in wired.
+func deleteBody(ctx context.Context, in ByID) (out NoInput, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return NoInput{}, err
+	}
+	if _, err := wired.deleteTask.Execute(ctx, planner.DeleteTaskInput{User: me, ID: in.ID}); err != nil {
+		return NoInput{}, refusal(err)
+	}
+	return NoInput{}, nil
+}
+
+// share is POST /api/tasks/{id}/share's body; what it uses is in wired.
+func share(ctx context.Context, in ShareRequest) (out task.Task, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	res, err := wired.shareTask.Execute(ctx, planner.ShareTaskInput{User: me, ID: in.ID, With: in.UserID})
+	if err != nil {
+		return task.Task{}, refusal(err)
+	}
+	return res.Task, nil
+}
+
+// unshare is DELETE /api/tasks/{id}/share/{userId}'s body; what it uses is in wired.
+func unshare(ctx context.Context, in UnshareRequest) (out task.Task, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	res, err := wired.unshareTask.Execute(ctx, planner.UnshareTaskInput{User: me, ID: in.ID, With: in.UserID})
+	if err != nil {
+		return task.Task{}, refusal(err)
+	}
+	return res.Task, nil
+}
+
 // count is the query "census"'s body: every member's tasks counted, through
 // their use case.
 func count(ctx context.Context, in NoInput) (out Census, err error) {
@@ -98,7 +164,8 @@ func caller(ctx context.Context) (string, error) {
 }
 
 // refusal is a use case's error as the API answers it: 404 for a task that
-// does not exist, 409 for a move its state does not allow, 400 with the
+// does not exist or that the caller does not see, 403 for what only its
+// owner does, 409 for sharing with who is no contact, 409 for a move its state does not allow, 400 with the
 // field at fault for a task that cannot be added; anything else is the
 // framework's to answer.
 func refusal(err error) error {
@@ -110,6 +177,10 @@ func refusal(err error) error {
 	switch {
 	case errors.Is(err, task.ErrNotFound):
 		return app.NotFound("no such task")
+	case errors.Is(err, task.ErrNotOwner):
+		return app.Forbidden("only its owner does this to a task")
+	case errors.Is(err, task.ErrNotContact):
+		return app.Conflict("a task is shared with a contact of its owner")
 	case errors.Is(err, task.ErrNotAllowed):
 		return app.Conflict("the task cannot make this move from the state it is in")
 	case errors.Is(err, task.ErrEmptyTitle):

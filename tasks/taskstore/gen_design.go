@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
 // Package taskstore — The tasks in the framework's store, the archiving of
 // what was done long ago, their events on a topic, and the framework's clock.
@@ -24,17 +24,18 @@ var errNotImplemented = errs.New(errs.Pack(64, 1, 3, 255), "NOT_IMPLEMENTED", "n
 
 // Record — A task as the store keeps it, field for field.
 type Record struct {
-	ID        string     `json:"id" app:"public"`
-	OwnerID   string     `json:"ownerId" app:"public"`
-	Title     string     `json:"title" app:"public"`
-	Notes     string     `json:"notes" app:"public"`
-	Priority  string     `json:"priority" app:"public"`
-	Assignee  string     `json:"assignee" app:"personal,subject"`
-	Due       time.Time  `json:"due" app:"public"`
-	State     ShelfState `json:"state" app:"public"`
-	CreatedAt time.Time  `json:"createdAt" app:"public"`
-	UpdatedAt time.Time  `json:"updatedAt" app:"public"`
-	DoneAt    time.Time  `json:"doneAt" app:"public"`
+	ID         string     `json:"id" app:"public"`
+	OwnerID    string     `json:"ownerId" app:"public"`
+	SharedWith []string   `json:"sharedWith" app:"public"`
+	Title      string     `json:"title" app:"public"`
+	Notes      string     `json:"notes" app:"public"`
+	Priority   string     `json:"priority" app:"public"`
+	Assignee   string     `json:"assignee" app:"personal,subject"`
+	Due        time.Time  `json:"due" app:"public"`
+	State      ShelfState `json:"state" app:"public"`
+	CreatedAt  time.Time  `json:"createdAt" app:"public"`
+	UpdatedAt  time.Time  `json:"updatedAt" app:"public"`
+	DoneAt     time.Time  `json:"doneAt" app:"public"`
 }
 
 // Event — What happened to a task, as the topic carries it to whoever
@@ -44,9 +45,12 @@ type Event struct {
 	// writes by it.
 	ID string `json:"id" app:"public"`
 	// Kind is added, or the lifecycle event that moved the task.
-	Kind     string    `json:"kind" app:"public"`
-	TaskID   string    `json:"taskId" app:"public"`
-	OwnerID  string    `json:"ownerId" app:"public"`
+	Kind    string `json:"kind" app:"public"`
+	TaskID  string `json:"taskId" app:"public"`
+	OwnerID string `json:"ownerId" app:"public"`
+	// Audience are the members the event is told to: the task's owner and those it
+	// is shared with.
+	Audience []string  `json:"audience" app:"public"`
 	Title    string    `json:"title" app:"public"`
 	Assignee string    `json:"assignee" app:"personal"`
 	At       time.Time `json:"at" app:"public"`
@@ -86,6 +90,23 @@ func (a *AppClock) Now(ctx context.Context) (time.Time, error) {
 
 var _ planner.ClockV1 = (*AppClock)(nil)
 
+// Friends is Circle@v1 on the contacts' query "are-contacts".
+type Friends struct {
+	friends // its own state, hand-written
+}
+
+// NewFriends builds Friends: its body is the hand-written newFriends.
+func NewFriends() *Friends {
+	return newFriends()
+}
+
+// AreContacts is tasks/port/Circle@v1's.
+func (a *Friends) AreContacts(ctx context.Context, one string, other string) (bool, error) {
+	return a.areContacts(ctx, one, other)
+}
+
+var _ planner.CircleV1 = (*Friends)(nil)
+
 // Tasks is TaskStore@v1 on the store "tasks".
 type Tasks struct {
 	tasks // its own state, hand-written
@@ -94,6 +115,11 @@ type Tasks struct {
 // NewTasks builds Tasks: its body is the hand-written newTasks.
 func NewTasks() *Tasks {
 	return newTasks()
+}
+
+// Delete is tasks/port/TaskStore@v1's.
+func (self *Tasks) Delete(ctx context.Context, id string) error {
+	return self.deleteBody(ctx, id)
 }
 
 // Get is tasks/port/TaskStore@v1's.

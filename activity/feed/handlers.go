@@ -46,10 +46,20 @@ func recent(ctx context.Context, in PageRequest) (out Page, err error) {
 // the next.
 var writing sync.Mutex
 
-// record is the subscription "tasks"'s body: one entry a message, in the
-// feed of the task's owner.
+// record is the subscription "tasks"'s body: one entry a message and a
+// member it is told to, the task's owner and those it is shared with.
 func record(ctx context.Context, msg taskstore.Event) error {
-	return write(ctx, Entry{ID: msg.ID, UserID: msg.OwnerID, Kind: msg.Kind, TaskID: msg.TaskID, Title: msg.Title, Assignee: msg.Assignee, At: msg.At})
+	audience := msg.Audience
+	if len(audience) == 0 {
+		audience = []string{msg.OwnerID}
+	}
+	for _, user := range audience {
+		e := Entry{ID: msg.ID + "." + user, UserID: user, Kind: msg.Kind, TaskID: msg.TaskID, Title: msg.Title, Assignee: msg.Assignee, At: msg.At}
+		if err := write(ctx, e); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // recordContact is the subscription "contacts"'s body: one entry a message,
@@ -58,8 +68,9 @@ func recordContact(ctx context.Context, msg linkstore.Event) error {
 	return write(ctx, Entry{ID: msg.ID, UserID: msg.UserID, Kind: msg.Kind, Title: msg.ActorName, At: msg.At})
 }
 
-// write keeps an entry, keyed by its event's id, so a message delivered
-// twice writes nothing the second time. The entry is numbered after the
+// write keeps an entry, keyed by its event's id (and its reader, when an
+// event has several), so a message delivered twice writes nothing the
+// second time. The entry is numbered after the
 // newest one, and the number is what orders the feed: two entries written
 // in the same millisecond have the same date, and an id says nothing of
 // which came first. The member's oldest entries beyond Keep are then

@@ -607,3 +607,64 @@ func TestAnAddressIsProvenAndAPasswordReset(t *testing.T) {
 	ada.call(http.StatusOK, "GET", "/api/auth/me", nil, nil)
 	elsewhere.call(http.StatusUnauthorized, "GET", "/api/auth/me", nil, nil)
 }
+
+// A task is shared with a contact of its owner, who then sees it, edits it
+// and moves it, and is told of it in their feed; only the owner shares and
+// deletes; the member it is shared with may leave it.
+func TestATaskIsSharedWithAContact(t *testing.T) {
+	p := start(t)
+	ada, bob, cy := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com")
+	var l struct{ ID string }
+	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "bob@example.com"}, &l)
+	bob.call(http.StatusOK, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil)
+
+	type shared struct {
+		ID, Title, Priority, State, OwnerID string
+		SharedWith                          []string
+	}
+	var tk shared
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Plan the launch"}, &tk)
+	bob.call(http.StatusNotFound, "GET", "/api/tasks/"+tk.ID, nil, nil)
+	ada.call(http.StatusConflict, "POST", "/api/tasks/"+tk.ID+"/share", map[string]any{"userId": cy.id}, nil) // no contact of hers
+	ada.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/share", map[string]any{"userId": bob.id}, &tk)
+	if len(tk.SharedWith) != 1 || tk.SharedWith[0] != bob.id {
+		t.Fatalf("the task shared: %+v", tk)
+	}
+
+	var list struct{ Tasks []shared }
+	bob.call(http.StatusOK, "GET", "/api/tasks", nil, &list)
+	if len(list.Tasks) != 1 || list.Tasks[0].ID != tk.ID || list.Tasks[0].OwnerID != ada.id {
+		t.Fatalf("Bob's list: %+v, want Ada's task", list.Tasks)
+	}
+	bob.call(http.StatusOK, "PATCH", "/api/tasks/"+tk.ID, map[string]any{"priority": "high"}, &tk)
+	if tk.Priority != "high" || tk.Title != "Plan the launch" {
+		t.Errorf("the task Bob edited: %+v, want the priority alone changed", tk)
+	}
+	bob.call(http.StatusBadRequest, "PATCH", "/api/tasks/"+tk.ID, map[string]any{"title": " "}, nil)
+	bob.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/complete", nil, &tk)
+	bob.call(http.StatusForbidden, "POST", "/api/tasks/"+tk.ID+"/share", map[string]any{"userId": cy.id}, nil)
+	bob.call(http.StatusForbidden, "DELETE", "/api/tasks/"+tk.ID, nil, nil)
+	cy.call(http.StatusNotFound, "DELETE", "/api/tasks/"+tk.ID, nil, nil)
+
+	var feed struct {
+		Entries []struct{ Kind, TaskID string }
+	}
+	p.settle("the sharing, the edit and the move in Bob's feed", 50*time.Millisecond, func() bool {
+		bob.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+		return len(feed.Entries) >= 4 // accepted contact aside: shared, edited, complete
+	})
+	var kinds []string
+	for _, e := range feed.Entries {
+		if e.TaskID == tk.ID {
+			kinds = append(kinds, e.Kind)
+		}
+	}
+	if !slices.Equal(kinds, []string{"complete", "edited", "shared"}) {
+		t.Errorf("what Bob's feed tells of the task, newest first: %q", kinds)
+	}
+
+	bob.call(http.StatusOK, "DELETE", "/api/tasks/"+tk.ID+"/share/"+bob.id, nil, nil) // he leaves it
+	bob.call(http.StatusNotFound, "GET", "/api/tasks/"+tk.ID, nil, nil)
+	ada.call(http.StatusOK, "DELETE", "/api/tasks/"+tk.ID, nil, nil)
+	ada.call(http.StatusNotFound, "GET", "/api/tasks/"+tk.ID, nil, nil)
+}

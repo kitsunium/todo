@@ -19,6 +19,7 @@ func onShelfTransition(ctx context.Context, c app.Change[Record, ShelfState]) er
 	}
 	return EventsTopic.Publish(ctx, Event{
 		ID: app.NewID("event"), Kind: "archive", TaskID: c.Entity.ID, OwnerID: c.Entity.OwnerID,
-		Title: c.Entity.Title, Assignee: c.Entity.Assignee, At: app.Now(ctx).UTC(),
+		Audience: append([]string{c.Entity.OwnerID}, c.Entity.SharedWith...),
+		Title:    c.Entity.Title, Assignee: c.Entity.Assignee, At: app.Now(ctx).UTC(),
 	})
 }

@@ -1,7 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
-// Package contactsapi — The HTTP API of a member's contacts.
+// Package contactsapi — The HTTP API of a member's contacts, and the
+// question the rest of the product asks of them.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -41,8 +42,19 @@ type Listing struct {
 type NoInput struct {
 }
 
+// Pair — Two members.
+type Pair struct {
+	One   string `json:"one" app:"public"`
+	Other string `json:"other" app:"public"`
+}
+
+// Verdict — Whether two members are contacts.
+type Verdict struct {
+	Yes bool `json:"yes" app:"public"`
+}
+
 // Service is contactsapi's framework service: what it declares, drawn and run.
-var Service = app.NewService("contactsapi", "The HTTP API of a member's contacts.")
+var Service = app.NewService("contactsapi", "The HTTP API of a member's contacts, and the question the rest of the product asks of them.")
 
 var _ = Service.Endpoint("GET /api/contacts", List, app.Auth())
 
@@ -86,6 +98,15 @@ func Remove(ctx context.Context, in ByID) (NoInput, error) {
 	return remove(ctx, in)
 }
 
+// AreContactsQuery — Whether two members are contacts, for the components
+// that share with a contact.
+var AreContactsQuery = Service.Query("are-contacts", Check)
+
+// Check handles the query "are-contacts": its body is the hand-written check.
+func Check(ctx context.Context, in Pair) (Verdict, error) {
+	return check(ctx, in)
+}
+
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
@@ -93,13 +114,15 @@ var wired struct {
 	requestContact circle.RequestContact
 	answerRequest  circle.AnswerRequest
 	removeContact  circle.RemoveContact
+	areContacts    circle.AreContacts
 }
 
 // Wire gives the handlers what they use: the role that mounts contactsapi calls it
 // before its App runs.
-func Wire(listContacts circle.ListContacts, requestContact circle.RequestContact, answerRequest circle.AnswerRequest, removeContact circle.RemoveContact) {
+func Wire(listContacts circle.ListContacts, requestContact circle.RequestContact, answerRequest circle.AnswerRequest, removeContact circle.RemoveContact, areContacts circle.AreContacts) {
 	wired.listContacts = listContacts
 	wired.requestContact = requestContact
 	wired.answerRequest = answerRequest
 	wired.removeContact = removeContact
+	wired.areContacts = areContacts
 }

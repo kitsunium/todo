@@ -11,10 +11,11 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
-// ada owns every task a test makes; bob owns none.
+// ada owns every task a test makes; bob and cy own none.
 const (
 	ada = "user_ada"
 	bob = "user_bob"
+	cy  = "user_cy"
 )
 
 // epoch is the instant every test starts at.
@@ -50,6 +51,25 @@ func (m *memTasks) Get(_ context.Context, id string) (task.Task, error) {
 		return task.Task{}, task.ErrNotFound
 	}
 	return t, nil
+}
+
+func (m *memTasks) Delete(_ context.Context, id string) error {
+	delete(m.byID, id)
+	return nil
+}
+
+// contacts is CircleV1 over the pairs it holds, "one|other".
+type contacts map[string]bool
+
+func (c contacts) AreContacts(_ context.Context, one, other string) (bool, error) {
+	return c[one+"|"+other] || c[other+"|"+one], nil
+}
+
+// shared is an open task of Ada's shared with Bob.
+func shared(id string) task.Task {
+	t := open(id)
+	t.SharedWith = []string{bob}
+	return t
 }
 
 func (m *memTasks) List(context.Context) ([]task.Task, error) {

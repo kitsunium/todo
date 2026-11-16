@@ -57,10 +57,20 @@ func (a *Tasks) save(ctx context.Context, t task.Task) (err error) {
 	return TasksStore.Put(ctx, toRecord(t))
 }
 
+// deleteBody is Tasks.Delete's body: a task already gone is deleted.
+func (a *Tasks) deleteBody(ctx context.Context, id string) (err error) {
+	err = TasksStore.Delete(ctx, id)
+	var refused *app.Error
+	if errors.As(err, &refused) && refused.Code == app.WireNotFound {
+		return nil
+	}
+	return err
+}
+
 // toRecord is a task as the store keeps it.
 func toRecord(t task.Task) Record {
 	return Record{
-		ID: t.ID, OwnerID: t.OwnerID, Title: t.Title, Notes: t.Notes, Priority: string(t.Priority), Assignee: t.Assignee,
+		ID: t.ID, OwnerID: t.OwnerID, SharedWith: t.SharedWith, Title: t.Title, Notes: t.Notes, Priority: string(t.Priority), Assignee: t.Assignee,
 		Due: t.Due, State: ShelfState(t.State), CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, DoneAt: t.DoneAt,
 	}
 }
@@ -68,7 +78,7 @@ func toRecord(t task.Task) Record {
 // fromRecord is the task a record keeps.
 func fromRecord(r Record) task.Task {
 	return task.Task{
-		ID: r.ID, OwnerID: r.OwnerID, Title: r.Title, Notes: r.Notes, Priority: task.Priority(r.Priority), Assignee: r.Assignee,
+		ID: r.ID, OwnerID: r.OwnerID, SharedWith: r.SharedWith, Title: r.Title, Notes: r.Notes, Priority: task.Priority(r.Priority), Assignee: r.Assignee,
 		Due: r.Due, State: task.LifecycleState(r.State), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, DoneAt: r.DoneAt,
 	}
 }

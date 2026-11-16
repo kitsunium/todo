@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -19,6 +19,11 @@ import (
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 1, 2, 255), "NOT_IMPLEMENTED", "not implemented yet", "planner: a hand-written body is still a skeleton")
 
+// CircleV1 says who is a contact of whom.
+type CircleV1 interface {
+	AreContacts(ctx context.Context, one string, other string) (bool, error)
+}
+
 // ClockV1 tells the time.
 type ClockV1 interface {
 	Now(ctx context.Context) (time.Time, error)
@@ -31,6 +36,7 @@ type JournalV1 interface {
 
 // TaskStoreV1 keeps the tasks.
 type TaskStoreV1 interface {
+	Delete(ctx context.Context, id string) error
 	Get(ctx context.Context, id string) (task.Task, error)
 	List(ctx context.Context) ([]task.Task, error)
 	NewID(ctx context.Context) (string, error)
@@ -111,6 +117,39 @@ func (h *CountTasksHandler) Execute(ctx context.Context, in CountTasksInput) (Co
 
 var _ CountTasks = (*CountTasksHandler)(nil)
 
+// DeleteTask deletes a task, for its owner alone.
+type DeleteTask interface {
+	Execute(ctx context.Context, in DeleteTaskInput) (DeleteTaskOutput, error)
+}
+
+// DeleteTaskInput is DeleteTask's input: a field added breaks no caller.
+type DeleteTaskInput struct {
+	User string
+	ID   string
+}
+
+// DeleteTaskOutput is DeleteTask's output.
+type DeleteTaskOutput struct {
+}
+
+// DeleteTaskHandler runs DeleteTask: its body is the hand-written execute.
+type DeleteTaskHandler struct {
+	taskStore TaskStoreV1
+	journal   JournalV1
+}
+
+// NewDeleteTask builds DeleteTask on what it calls.
+func NewDeleteTask(taskStore TaskStoreV1, journal JournalV1) *DeleteTaskHandler {
+	return &DeleteTaskHandler{taskStore: taskStore, journal: journal}
+}
+
+// Execute runs DeleteTask.
+func (h *DeleteTaskHandler) Execute(ctx context.Context, in DeleteTaskInput) (DeleteTaskOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ DeleteTask = (*DeleteTaskHandler)(nil)
+
 // DueSoon lists the open tasks due within a delay, the soonest first.
 type DueSoon interface {
 	Execute(ctx context.Context, in DueSoonInput) (DueSoonOutput, error)
@@ -144,8 +183,82 @@ func (h *DueSoonHandler) Execute(ctx context.Context, in DueSoonInput) (DueSoonO
 
 var _ DueSoon = (*DueSoonHandler)(nil)
 
-// ListTasks lists a member's tasks of a state, or every one not archived, the
-// most urgent first.
+// EditTask changes what a task says, its title, notes, priority, assignee or
+// due date, each only when given, for a member who sees it.
+type EditTask interface {
+	Execute(ctx context.Context, in EditTaskInput) (EditTaskOutput, error)
+}
+
+// EditTaskInput is EditTask's input: a field added breaks no caller.
+type EditTaskInput struct {
+	User     string
+	ID       string
+	Title    *string
+	Notes    *string
+	Priority *string
+	Assignee *string
+	Due      *time.Time
+}
+
+// EditTaskOutput is EditTask's output.
+type EditTaskOutput struct {
+	Task task.Task
+}
+
+// EditTaskHandler runs EditTask: its body is the hand-written execute.
+type EditTaskHandler struct {
+	taskStore TaskStoreV1
+	clock     ClockV1
+	journal   JournalV1
+}
+
+// NewEditTask builds EditTask on what it calls.
+func NewEditTask(taskStore TaskStoreV1, clock ClockV1, journal JournalV1) *EditTaskHandler {
+	return &EditTaskHandler{taskStore: taskStore, clock: clock, journal: journal}
+}
+
+// Execute runs EditTask.
+func (h *EditTaskHandler) Execute(ctx context.Context, in EditTaskInput) (EditTaskOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ EditTask = (*EditTaskHandler)(nil)
+
+// GetTask reads one task, for a member who sees it.
+type GetTask interface {
+	Execute(ctx context.Context, in GetTaskInput) (GetTaskOutput, error)
+}
+
+// GetTaskInput is GetTask's input: a field added breaks no caller.
+type GetTaskInput struct {
+	User string
+	ID   string
+}
+
+// GetTaskOutput is GetTask's output.
+type GetTaskOutput struct {
+	Task task.Task
+}
+
+// GetTaskHandler runs GetTask: its body is the hand-written execute.
+type GetTaskHandler struct {
+	taskStore TaskStoreV1
+}
+
+// NewGetTask builds GetTask on what it calls.
+func NewGetTask(taskStore TaskStoreV1) *GetTaskHandler {
+	return &GetTaskHandler{taskStore: taskStore}
+}
+
+// Execute runs GetTask.
+func (h *GetTaskHandler) Execute(ctx context.Context, in GetTaskInput) (GetTaskOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ GetTask = (*GetTaskHandler)(nil)
+
+// ListTasks lists the tasks a member sees, theirs and those shared with them,
+// of a state, or every one not archived, the most urgent first.
 type ListTasks interface {
 	Execute(ctx context.Context, in ListTasksInput) (ListTasksOutput, error)
 }
@@ -178,8 +291,9 @@ func (h *ListTasksHandler) Execute(ctx context.Context, in ListTasksInput) (List
 
 var _ ListTasks = (*ListTasksHandler)(nil)
 
-// MoveTask moves a task of its owner through its lifecycle by one event
-// (complete, reopen, archive, restore); another member's task is not found.
+// MoveTask moves a task through its lifecycle by one event (complete, reopen,
+// archive, restore), for a member who sees it; a task they do not see is not
+// found.
 type MoveTask interface {
 	Execute(ctx context.Context, in MoveTaskInput) (MoveTaskOutput, error)
 }
@@ -214,3 +328,76 @@ func (h *MoveTaskHandler) Execute(ctx context.Context, in MoveTaskInput) (MoveTa
 }
 
 var _ MoveTask = (*MoveTaskHandler)(nil)
+
+// ShareTask shares a task with a contact of its owner, who then sees it.
+type ShareTask interface {
+	Execute(ctx context.Context, in ShareTaskInput) (ShareTaskOutput, error)
+}
+
+// ShareTaskInput is ShareTask's input: a field added breaks no caller.
+type ShareTaskInput struct {
+	User string
+	ID   string
+	With string
+}
+
+// ShareTaskOutput is ShareTask's output.
+type ShareTaskOutput struct {
+	Task task.Task
+}
+
+// ShareTaskHandler runs ShareTask: its body is the hand-written execute.
+type ShareTaskHandler struct {
+	taskStore TaskStoreV1
+	circle    CircleV1
+	clock     ClockV1
+	journal   JournalV1
+}
+
+// NewShareTask builds ShareTask on what it calls.
+func NewShareTask(taskStore TaskStoreV1, circle CircleV1, clock ClockV1, journal JournalV1) *ShareTaskHandler {
+	return &ShareTaskHandler{taskStore: taskStore, circle: circle, clock: clock, journal: journal}
+}
+
+// Execute runs ShareTask.
+func (h *ShareTaskHandler) Execute(ctx context.Context, in ShareTaskInput) (ShareTaskOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ShareTask = (*ShareTaskHandler)(nil)
+
+// UnshareTask ends the sharing of a task with a member, for its owner, or for
+// that member who leaves it.
+type UnshareTask interface {
+	Execute(ctx context.Context, in UnshareTaskInput) (UnshareTaskOutput, error)
+}
+
+// UnshareTaskInput is UnshareTask's input: a field added breaks no caller.
+type UnshareTaskInput struct {
+	User string
+	ID   string
+	With string
+}
+
+// UnshareTaskOutput is UnshareTask's output.
+type UnshareTaskOutput struct {
+	Task task.Task
+}
+
+// UnshareTaskHandler runs UnshareTask: its body is the hand-written execute.
+type UnshareTaskHandler struct {
+	taskStore TaskStoreV1
+	clock     ClockV1
+}
+
+// NewUnshareTask builds UnshareTask on what it calls.
+func NewUnshareTask(taskStore TaskStoreV1, clock ClockV1) *UnshareTaskHandler {
+	return &UnshareTaskHandler{taskStore: taskStore, clock: clock}
+}
+
+// Execute runs UnshareTask.
+func (h *UnshareTaskHandler) Execute(ctx context.Context, in UnshareTaskInput) (UnshareTaskOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ UnshareTask = (*UnshareTaskHandler)(nil)

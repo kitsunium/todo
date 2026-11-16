@@ -21,10 +21,10 @@ func newAnnouncer() *Announcer {
 }
 
 // record is Announcer.Record's body: what happened to the task is published
-// on the topic "events", with an id of its own and the date the task was
-// last written. Whoever listens hears of it later, at least once.
+// on the topic "events", with an id of its own, the date the task was last
+// written and the members to tell: its owner and those it is shared with. Whoever listens hears of it later, at least once.
 func (a *Announcer) record(ctx context.Context, kind string, t task.Task) (err error) {
 	return EventsTopic.Publish(ctx, Event{
-		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Title: t.Title, Assignee: t.Assignee, At: t.UpdatedAt,
+		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Audience: append([]string{t.OwnerID}, t.SharedWith...), Title: t.Title, Assignee: t.Assignee, At: t.UpdatedAt,
 	})
 }

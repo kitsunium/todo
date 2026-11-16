@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
+// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
 
 // Package api — The HTTP API of a member's tasks, and the census the rest of
 // the product asks.
@@ -43,6 +43,17 @@ type Census struct {
 	Overdue int            `json:"overdue" app:"public"`
 }
 
+// EditRequest — What a member changes of a task, each field only when it is
+// sent.
+type EditRequest struct {
+	ID       string     `path:"id"`
+	Title    *string    `json:"title" app:"public"`
+	Notes    *string    `json:"notes" app:"public"`
+	Priority *string    `json:"priority" app:"public"`
+	Assignee *string    `json:"assignee" app:"personal"`
+	Due      *time.Time `json:"due" app:"public"`
+}
+
 // ListRequest — Which tasks to list.
 type ListRequest struct {
 	State string `query:"state"`
@@ -52,9 +63,21 @@ type ListRequest struct {
 type NoInput struct {
 }
 
+// ShareRequest — The member a task is shared with.
+type ShareRequest struct {
+	ID     string `path:"id"`
+	UserID string `json:"userId" app:"public"`
+}
+
 // TaskList — The tasks asked for.
 type TaskList struct {
 	Tasks []task.Task `json:"tasks"`
+}
+
+// UnshareRequest — The member a task is no longer shared with.
+type UnshareRequest struct {
+	ID     string `path:"id"`
+	UserID string `path:"userId"`
 }
 
 // Service is api's framework service: what it declares, drawn and run.
@@ -72,6 +95,41 @@ var _ = Service.Endpoint("GET /api/tasks", List, app.Auth())
 // List serves GET /api/tasks: its body is the hand-written list.
 func List(ctx context.Context, in ListRequest) (TaskList, error) {
 	return list(ctx, in)
+}
+
+var _ = Service.Endpoint("GET /api/tasks/{id}", Get, app.Auth())
+
+// Get serves GET /api/tasks/{id}: its body is the hand-written get.
+func Get(ctx context.Context, in ByID) (task.Task, error) {
+	return get(ctx, in)
+}
+
+var _ = Service.Endpoint("PATCH /api/tasks/{id}", Edit, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Edit serves PATCH /api/tasks/{id}: its body is the hand-written edit.
+func Edit(ctx context.Context, in EditRequest) (task.Task, error) {
+	return edit(ctx, in)
+}
+
+var _ = Service.Endpoint("DELETE /api/tasks/{id}", Delete, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Delete serves DELETE /api/tasks/{id}: its body is the hand-written deleteBody.
+func Delete(ctx context.Context, in ByID) (NoInput, error) {
+	return deleteBody(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/tasks/{id}/share", Share, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Share serves POST /api/tasks/{id}/share: its body is the hand-written share.
+func Share(ctx context.Context, in ShareRequest) (task.Task, error) {
+	return share(ctx, in)
+}
+
+var _ = Service.Endpoint("DELETE /api/tasks/{id}/share/{userId}", Unshare, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Unshare serves DELETE /api/tasks/{id}/share/{userId}: its body is the hand-written unshare.
+func Unshare(ctx context.Context, in UnshareRequest) (task.Task, error) {
+	return unshare(ctx, in)
 }
 
 var _ = Service.Endpoint("POST /api/tasks/{id}/complete", Complete, app.Auth(), app.RateLimitPerClient(10, 20))
@@ -114,17 +172,27 @@ func Count(ctx context.Context, in NoInput) (Census, error) {
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
-	addTask    planner.AddTask
-	listTasks  planner.ListTasks
-	moveTask   planner.MoveTask
-	countTasks planner.CountTasks
+	addTask     planner.AddTask
+	listTasks   planner.ListTasks
+	getTask     planner.GetTask
+	editTask    planner.EditTask
+	deleteTask  planner.DeleteTask
+	shareTask   planner.ShareTask
+	unshareTask planner.UnshareTask
+	moveTask    planner.MoveTask
+	countTasks  planner.CountTasks
 }
 
 // Wire gives the handlers what they use: the role that mounts api calls it
 // before its App runs.
-func Wire(addTask planner.AddTask, listTasks planner.ListTasks, moveTask planner.MoveTask, countTasks planner.CountTasks) {
+func Wire(addTask planner.AddTask, listTasks planner.ListTasks, getTask planner.GetTask, editTask planner.EditTask, deleteTask planner.DeleteTask, shareTask planner.ShareTask, unshareTask planner.UnshareTask, moveTask planner.MoveTask, countTasks planner.CountTasks) {
 	wired.addTask = addTask
 	wired.listTasks = listTasks
+	wired.getTask = getTask
+	wired.editTask = editTask
+	wired.deleteTask = deleteTask
+	wired.shareTask = shareTask
+	wired.unshareTask = unshareTask
 	wired.moveTask = moveTask
 	wired.countTasks = countTasks
 }
