@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
+// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
 
 // Package linkstore — The links in the framework's store, their events on a
 // topic, the directory asked of the identity, and the framework's clock.
@@ -24,13 +24,13 @@ var errNotImplemented = errs.New(errs.Pack(64, 8, 3, 255), "NOT_IMPLEMENTED", "n
 
 // Record — A link as the store keeps it, field for field.
 type Record struct {
-	ID          string    `json:"id" app:"public"`
-	Pair        string    `json:"pair" app:"public"`
-	RequesterID string    `json:"requesterId" app:"public"`
-	AddresseeID string    `json:"addresseeId" app:"public"`
-	State       string    `json:"state" app:"public"`
-	CreatedAt   time.Time `json:"createdAt" app:"public"`
-	UpdatedAt   time.Time `json:"updatedAt" app:"public"`
+	ID          string       `json:"id" app:"public"`
+	Pair        string       `json:"pair" app:"public"`
+	RequesterID string       `json:"requesterId" app:"public"`
+	AddresseeID string       `json:"addresseeId" app:"public"`
+	State       WaitingState `json:"state" app:"public"`
+	CreatedAt   time.Time    `json:"createdAt" app:"public"`
+	UpdatedAt   time.Time    `json:"updatedAt" app:"public"`
 }
 
 // Event — What happened to a link, as the topic carries it to whoever
@@ -147,6 +147,33 @@ func (a *WallClock) Now(ctx context.Context) (time.Time, error) {
 }
 
 var _ circle.ClockV1 = (*WallClock)(nil)
+
+// WaitingState is a state of Waiting.
+type WaitingState string
+
+// The states of Waiting.
+const (
+	WaitingPending   WaitingState = "pending"
+	WaitingAccepted  WaitingState = "accepted"
+	WaitingDeclined  WaitingState = "declined"
+	WaitingCancelled WaitingState = "cancelled"
+	WaitingExpired   WaitingState = "expired"
+)
+
+// WaitingInitial is the state a Record starts in.
+const WaitingInitial = WaitingPending
+
+// The events of Waiting, as WaitingWorkflow.Fire takes them.
+const (
+	WaitingOnExpire = "expire"
+)
+
+// WaitingWorkflow — What time does to a link kept, a request nobody answered
+// expires after fourteen days; its answers are the use cases', which write the
+// state they decided.
+var WaitingWorkflow = Service.Workflow("waiting", LinksStore, func(e *Record) *WaitingState { return &e.State }).
+	Initial(WaitingPending).
+	After(WaitingOnExpire, time.Duration(1209600000000000) /* 336h */, WaitingPending, WaitingExpired)
 
 // Service is linkstore's framework service: what it declares, drawn and run.
 var Service = app.NewService("linkstore", "The links in the framework's store, their events on a topic, the directory asked of the identity, and the framework's clock.")

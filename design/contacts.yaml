@@ -41,8 +41,8 @@ domains:
         workflows:
           - name: Requests
             entity: Link
-            description: A request is pending until its addressee accepts or declines it, or its requester cancels it.
-            states: [pending, accepted, declined, cancelled]
+            description: A request is pending until its addressee accepts or declines it, or its requester cancels it; one nobody answered for fourteen days has expired.
+            states: [pending, accepted, declined, cancelled, expired]
             initial: pending
             transitions:
               - {event: accept, from: [pending], to: accepted}
@@ -172,7 +172,7 @@ domains:
               - {name: Pair, type: string, tag: 'json:"pair" app:"public"'}
               - {name: RequesterID, type: string, tag: 'json:"requesterId" app:"public"'}
               - {name: AddresseeID, type: string, tag: 'json:"addresseeId" app:"public"'}
-              - {name: State, type: string, tag: 'json:"state" app:"public"'}
+              - {name: State, type: WaitingState, tag: 'json:"state" app:"public"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
         values:
@@ -186,6 +186,16 @@ domains:
               - {name: ActorID, type: string, tag: 'json:"actorId" app:"public"'}
               - {name: ActorName, type: string, tag: 'json:"actorName" app:"personal"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        workflows:
+          - name: Waiting
+            entity: Record
+            store: links
+            field: State
+            description: What time does to a link kept, a request nobody answered expires after fourteen days; its answers are the use cases', which write the state they decided.
+            states: [pending, accepted, declined, cancelled, expired]
+            initial: pending
+            transitions:
+              - {event: expire, from: [pending], to: expired, delay: 336h}
         topics:
           - {name: events, message: Event, description: "What happened to the links: a request received, a request accepted, delivered at least once."}
         stores:

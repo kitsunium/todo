@@ -24,12 +24,12 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session`, the setting `verify-addresses` |
 | `contacts/link` | link (domain) | `Link`, `PairOf`, the `Requests` workflow, the errors |
 | `contacts/circle` | circle (application) | the use cases `RequestContact` `AnswerRequest` `RemoveContact` `ListContacts` `AreContacts`, the ports `Links` `People` `Notices` `Clock` |
-| `contacts/linkstore` | linkstore (adapter) | the store `links`, the topic `events`, `Links`, `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
+| `contacts/linkstore` | linkstore (adapter) | the store `links`, its workflow `Waiting` (a request expires after fourteen days), the topic `events`, `Links`, `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
 | `contacts/contactsapi` | contactsapi (presentation) | the routes of `/api/contacts` |
 | `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
-| `tasks/planner` | planner (application) | the use cases `AddTask` `MoveTask` `ListTasks` `ArchiveDone` `CountTasks` `DueSoon`, the ports `TaskStore` `Clock` `Journal`; `lifecycle.go` is what they share |
-| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes) and `AppClock` |
-| `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census`, the job `archive-done`, the setting `archive-after` |
+| `tasks/planner` | planner (application) | the use cases `AddTask` `MoveTask` `ListTasks` `CountTasks` `DueSoon`, the ports `TaskStore` `Clock` `Journal`; `lifecycle.go` is what they share |
+| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, its workflow `Shelf` (a done task is archived after `archive-after`), the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes) and `AppClock` |
+| `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census` |
 | `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks` and `contacts` to their events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
 | `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through, `Carrier` (the reminders' `Mailer`, its SMTP connection declared in the design) |
@@ -82,6 +82,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 - **A component's data is its own**: another component reaches it through
   a query the owner declares (`vault.MemberQuery.Ask`,
   `api.CensusQuery.Ask`), a topic it publishes or a port, never its store.
+- **What time does to a record is a workflow on its store** (`Shelf`,
+  `Waiting`): the framework fires the timed transition, whoever wrote the
+  state. What a member does stays the domain's pure workflow, in a use
+  case. The two name the same states: add one to both.
 - **A subscription is delivered at least once, and later**: it keys what
   it writes by the event's own id and writes nothing the second time
   (`feed.record`). A test that reads what a subscription wrote moves the

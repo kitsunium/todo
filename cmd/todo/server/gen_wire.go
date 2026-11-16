@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
+// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -67,7 +67,6 @@ func Wire(ctx context.Context, build Build) {
 	addTask := planner.NewAddTask(appClock, tasks, taskstoreAnnouncer)
 	listTasks := planner.NewListTasks(tasks)
 	moveTask := planner.NewMoveTask(tasks, appClock, taskstoreAnnouncer)
-	archiveDone := planner.NewArchiveDone(appClock, tasks, taskstoreAnnouncer)
 	countTasks := planner.NewCountTasks(appClock, tasks)
 	dueSoon := planner.NewDueSoon(appClock, tasks)
 	ledger := outbox.NewLedger()
@@ -79,7 +78,7 @@ func Wire(ctx context.Context, build Build) {
 	linkstore.Wire()
 	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact)
 	taskstore.Wire()
-	api.Wire(addTask, listTasks, moveTask, archiveDone, api.ArchiveAfterSetting, countTasks)
+	api.Wire(addTask, listTasks, moveTask, countTasks)
 	feed.Wire()
 	post.Wire()
 	outbox.Wire()

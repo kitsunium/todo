@@ -26,6 +26,7 @@ import (
 	_ "github.com/kitsunium/sdk/framework/app/queue"
 	_ "github.com/kitsunium/sdk/framework/app/server"
 	_ "github.com/kitsunium/sdk/framework/app/store"
+	_ "github.com/kitsunium/sdk/framework/app/workflow"
 )
 
 // epoch is the instant the product's clock starts at.
@@ -325,6 +326,16 @@ func TestTheJobsRunOnTheClock(t *testing.T) {
 	if list.Tasks[0].ID != other.ID {
 		t.Errorf("archived %+v, want the task done a day ago", list.Tasks)
 	}
+	var feed struct {
+		Entries []struct{ Kind, TaskID string }
+	}
+	p.settle("the archiving in the feed", 50*time.Millisecond, func() bool {
+		ada.call(http.StatusOK, "GET", "/api/activity?limit=1", nil, &feed)
+		return len(feed.Entries) == 1 && feed.Entries[0].Kind == "archive"
+	})
+	if feed.Entries[0].TaskID != other.ID {
+		t.Errorf("the feed tells the archiving of %s, want %s", feed.Entries[0].TaskID, other.ID)
+	}
 }
 
 // An account signs in with its password, by a bearer token or the session
@@ -508,6 +519,16 @@ func TestMembersBecomeContacts(t *testing.T) {
 		t.Errorf("Ada still has %+v after Bob ended the contact", mine.Contacts)
 	}
 	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "bob@example.com"}, nil) // and may ask again
+
+	// A request nobody answers for fourteen days expires, and may be sent anew.
+	p.settle("the request expired", 24*time.Hour, func() bool {
+		ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+		return len(mine.Outgoing) == 0
+	})
+	if got := p.clk.Now().Sub(epoch); got < 14*24*time.Hour || got > 16*24*time.Hour {
+		t.Errorf("the request expired after %s, want fourteen days", got)
+	}
+	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "bob@example.com"}, nil)
 }
 
 // Signing in is limited per client: a burst of five, then two a second on

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
+// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -75,40 +75,6 @@ func (h *AddTaskHandler) Execute(ctx context.Context, in AddTaskInput) (AddTaskO
 }
 
 var _ AddTask = (*AddTaskHandler)(nil)
-
-// ArchiveDone archives the tasks done for longer than a delay.
-type ArchiveDone interface {
-	Execute(ctx context.Context, in ArchiveDoneInput) (ArchiveDoneOutput, error)
-}
-
-// ArchiveDoneInput is ArchiveDone's input: a field added breaks no caller.
-type ArchiveDoneInput struct {
-	After time.Duration
-}
-
-// ArchiveDoneOutput is ArchiveDone's output.
-type ArchiveDoneOutput struct {
-	Archived int
-}
-
-// ArchiveDoneHandler runs ArchiveDone: its body is the hand-written execute.
-type ArchiveDoneHandler struct {
-	clock     ClockV1
-	taskStore TaskStoreV1
-	journal   JournalV1
-}
-
-// NewArchiveDone builds ArchiveDone on what it calls.
-func NewArchiveDone(clock ClockV1, taskStore TaskStoreV1, journal JournalV1) *ArchiveDoneHandler {
-	return &ArchiveDoneHandler{clock: clock, taskStore: taskStore, journal: journal}
-}
-
-// Execute runs ArchiveDone.
-func (h *ArchiveDoneHandler) Execute(ctx context.Context, in ArchiveDoneInput) (ArchiveDoneOutput, error) {
-	return h.execute(ctx, &in)
-}
-
-var _ ArchiveDone = (*ArchiveDoneHandler)(nil)
 
 // CountTasks counts the tasks per state, and the open ones past their due
 // date.

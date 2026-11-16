@@ -63,18 +63,6 @@ func restore(ctx context.Context, in ByID) (out task.Task, err error) {
 	return move(ctx, in.ID, task.LifecycleOnRestore)
 }
 
-// sweep is the job "archive-done"'s body: an error is the run's failure.
-func sweep(ctx context.Context) error {
-	res, err := wired.archiveDone.Execute(ctx, planner.ArchiveDoneInput{After: wired.archiveAfterSetting.Get()})
-	if err != nil {
-		return err
-	}
-	if res.Archived > 0 {
-		logger.Info(ctx, app.Log(ctx), "done tasks archived", logger.Int("tasks", res.Archived))
-	}
-	return nil
-}
-
 // count is the query "census"'s body: every member's tasks counted, through
 // their use case.
 func count(ctx context.Context, in NoInput) (out Census, err error) {

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
+// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
 
 // Package link — The link between two members, and the request that makes
 // it.
@@ -67,6 +67,7 @@ const (
 	RequestsAccepted  RequestsState = "accepted"
 	RequestsDeclined  RequestsState = "declined"
 	RequestsCancelled RequestsState = "cancelled"
+	RequestsExpired   RequestsState = "expired"
 )
 
 // RequestsInitial is the state a Link starts in.
@@ -90,7 +91,8 @@ var (
 )
 
 // Requests — A request is pending until its addressee accepts or declines
-// it, or its requester cancels it.
+// it, or its requester cancels it; one nobody answered for fourteen days has
+// expired.
 type Requests struct {
 	requests // its own state, hand-written
 }

@@ -61,7 +61,7 @@ func (a *Tasks) save(ctx context.Context, t task.Task) (err error) {
 func toRecord(t task.Task) Record {
 	return Record{
 		ID: t.ID, OwnerID: t.OwnerID, Title: t.Title, Notes: t.Notes, Priority: string(t.Priority), Assignee: t.Assignee,
-		Due: t.Due, State: string(t.State), CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, DoneAt: t.DoneAt,
+		Due: t.Due, State: ShelfState(t.State), CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, DoneAt: t.DoneAt,
 	}
 }
 

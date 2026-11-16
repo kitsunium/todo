@@ -1,8 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
+// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
 
-// Package api — The HTTP API of a member's tasks, the census the rest of the
-// product asks, and the job that archives what was done long ago.
+// Package api — The HTTP API of a member's tasks, and the census the rest of
+// the product asks.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -58,11 +58,7 @@ type TaskList struct {
 }
 
 // Service is api's framework service: what it declares, drawn and run.
-var Service = app.NewService("api", "The HTTP API of a member's tasks, the census the rest of the product asks, and the job that archives what was done long ago.")
-
-// ArchiveAfterSetting — How long a done task stays listed before it is
-// archived.
-var ArchiveAfterSetting = Service.Setting[time.Duration]("archive-after", 24*time.Hour)
+var Service = app.NewService("api", "The HTTP API of a member's tasks, and the census the rest of the product asks.")
 
 var _ = Service.Endpoint("POST /api/tasks", Add, app.Auth(), app.RateLimitPerClient(10, 20))
 
@@ -106,13 +102,6 @@ func Restore(ctx context.Context, in ByID) (task.Task, error) {
 	return restore(ctx, in)
 }
 
-var _ = Service.Every("archive-done", time.Minute, Sweep)
-
-// Sweep — Archives the tasks done for longer than archive-after.
-func Sweep(ctx context.Context) error {
-	return sweep(ctx)
-}
-
 // CensusQuery — The census: how many tasks there are per state, for the
 // components that watch the list.
 var CensusQuery = Service.Query("census", Count)
@@ -125,21 +114,17 @@ func Count(ctx context.Context, in NoInput) (Census, error) {
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
-	addTask             planner.AddTask
-	listTasks           planner.ListTasks
-	moveTask            planner.MoveTask
-	archiveDone         planner.ArchiveDone
-	archiveAfterSetting *app.Setting[time.Duration]
-	countTasks          planner.CountTasks
+	addTask    planner.AddTask
+	listTasks  planner.ListTasks
+	moveTask   planner.MoveTask
+	countTasks planner.CountTasks
 }
 
 // Wire gives the handlers what they use: the role that mounts api calls it
 // before its App runs.
-func Wire(addTask planner.AddTask, listTasks planner.ListTasks, moveTask planner.MoveTask, archiveDone planner.ArchiveDone, archiveAfterSetting *app.Setting[time.Duration], countTasks planner.CountTasks) {
+func Wire(addTask planner.AddTask, listTasks planner.ListTasks, moveTask planner.MoveTask, countTasks planner.CountTasks) {
 	wired.addTask = addTask
 	wired.listTasks = listTasks
 	wired.moveTask = moveTask
-	wired.archiveDone = archiveDone
-	wired.archiveAfterSetting = archiveAfterSetting
 	wired.countTasks = countTasks
 }

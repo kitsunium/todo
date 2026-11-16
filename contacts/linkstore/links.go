@@ -73,7 +73,7 @@ func (a *Links) of(ctx context.Context, user string) (r0 []link.Link, err error)
 func (a *Links) save(ctx context.Context, l link.Link) (err error) {
 	return LinksStore.Put(ctx, Record{
 		ID: l.ID, Pair: l.Pair, RequesterID: l.RequesterID, AddresseeID: l.AddresseeID,
-		State: string(l.State), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
+		State: WaitingState(l.State), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
 	})
 }
 

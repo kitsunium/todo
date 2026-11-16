@@ -1,8 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
+// design:digest sha256:20b78385bcc831b04256ba24aa92ec0b4aec39dda784dd51beea005fcb21ccec
 
-// Package taskstore — The tasks in the framework's store, their events on a
-// topic, and the framework's clock.
+// Package taskstore — The tasks in the framework's store, the archiving of
+// what was done long ago, their events on a topic, and the framework's clock.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -24,17 +24,17 @@ var errNotImplemented = errs.New(errs.Pack(64, 1, 3, 255), "NOT_IMPLEMENTED", "n
 
 // Record — A task as the store keeps it, field for field.
 type Record struct {
-	ID        string    `json:"id" app:"public"`
-	OwnerID   string    `json:"ownerId" app:"public"`
-	Title     string    `json:"title" app:"public"`
-	Notes     string    `json:"notes" app:"public"`
-	Priority  string    `json:"priority" app:"public"`
-	Assignee  string    `json:"assignee" app:"personal,subject"`
-	Due       time.Time `json:"due" app:"public"`
-	State     string    `json:"state" app:"public"`
-	CreatedAt time.Time `json:"createdAt" app:"public"`
-	UpdatedAt time.Time `json:"updatedAt" app:"public"`
-	DoneAt    time.Time `json:"doneAt" app:"public"`
+	ID        string     `json:"id" app:"public"`
+	OwnerID   string     `json:"ownerId" app:"public"`
+	Title     string     `json:"title" app:"public"`
+	Notes     string     `json:"notes" app:"public"`
+	Priority  string     `json:"priority" app:"public"`
+	Assignee  string     `json:"assignee" app:"personal,subject"`
+	Due       time.Time  `json:"due" app:"public"`
+	State     ShelfState `json:"state" app:"public"`
+	CreatedAt time.Time  `json:"createdAt" app:"public"`
+	UpdatedAt time.Time  `json:"updatedAt" app:"public"`
+	DoneAt    time.Time  `json:"doneAt" app:"public"`
 }
 
 // Event — What happened to a task, as the topic carries it to whoever
@@ -118,8 +118,38 @@ func (self *Tasks) Save(ctx context.Context, t task.Task) error {
 
 var _ planner.TaskStoreV1 = (*Tasks)(nil)
 
+// ShelfState is a state of Shelf.
+type ShelfState string
+
+// The states of Shelf.
+const (
+	ShelfOpen     ShelfState = "open"
+	ShelfDone     ShelfState = "done"
+	ShelfArchived ShelfState = "archived"
+)
+
+// ShelfInitial is the state a Record starts in.
+const ShelfInitial = ShelfOpen
+
+// The events of Shelf, as ShelfWorkflow.Fire takes them.
+const (
+	ShelfOnAutoArchive = "autoArchive"
+)
+
+// ShelfWorkflow — What time does to a task kept, a done one is archived once
+// archive-after has passed; its moves by a member are the use cases', which
+// write the state they decided.
+var ShelfWorkflow = Service.Workflow("shelf", TasksStore, func(e *Record) *ShelfState { return &e.State }).
+	Initial(ShelfOpen).
+	After(ShelfOnAutoArchive, ArchiveAfterSetting, ShelfDone, ShelfArchived).
+	OnTransition(onShelfTransition)
+
 // Service is taskstore's framework service: what it declares, drawn and run.
-var Service = app.NewService("taskstore", "The tasks in the framework's store, their events on a topic, and the framework's clock.")
+var Service = app.NewService("taskstore", "The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, and the framework's clock.")
+
+// ArchiveAfterSetting — How long a done task stays listed before it is
+// archived.
+var ArchiveAfterSetting = Service.Setting[time.Duration]("archive-after", 24*time.Hour)
 
 // TasksStore — Every task, keyed by its id; who it is assigned to is erased
 // a year after it was last written.

@@ -134,15 +134,6 @@ domains:
             calls: [tasks/port/TaskStore@v1.List]
             scenarios:
               - {name: lists the most urgent first, kind: success}
-          - name: ArchiveDone
-            description: ArchiveDone archives the tasks done for longer than a delay.
-            input:
-              - {name: After, type: time.Duration}
-            output:
-              - {name: Archived, type: int}
-            calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
-            scenarios:
-              - {name: archives what was done long ago, kind: success}
           - name: CountTasks
             description: CountTasks counts the tasks per state, and the open ones past their due date.
             output:
@@ -183,7 +174,7 @@ domains:
         role: adapter
         code: 64.1.3
         uses: [planner, task]
-        description: The tasks in the framework's store, their events on a topic, and the framework's clock.
+        description: The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, and the framework's clock.
         entities:
           - name: Record
             description: A task as the store keeps it, field for field.
@@ -195,10 +186,23 @@ domains:
               - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
               - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal,subject"'}
               - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
-              - {name: State, type: string, tag: 'json:"state" app:"public"'}
+              - {name: State, type: ShelfState, tag: 'json:"state" app:"public"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
               - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"'}
+        settings:
+          - {name: archive-after, type: duration, default: 24h, description: How long a done task stays listed before it is archived.}
+        workflows:
+          - name: Shelf
+            entity: Record
+            store: tasks
+            field: State
+            description: What time does to a task kept, a done one is archived once archive-after has passed; its moves by a member are the use cases', which write the state they decided.
+            states: [open, done, archived]
+            initial: open
+            transitions:
+              - {event: autoArchive, from: [done], to: archived, delay: "setting:archive-after"}
+            onTransition: true
         values:
           - name: Event
             description: What happened to a task, as the topic carries it to whoever listens.
@@ -242,7 +246,7 @@ domains:
         role: presentation
         code: 64.1.4
         uses: [planner, task]
-        description: The HTTP API of a member's tasks, the census the rest of the product asks, and the job that archives what was done long ago.
+        description: The HTTP API of a member's tasks, and the census the rest of the product asks.
         values:
           - name: AddRequest
             description: What a member sends to add a task.
@@ -272,8 +276,6 @@ domains:
             description: The tasks asked for.
             fields:
               - {name: Tasks, type: "[]task.Task", tag: 'json:"tasks"'}
-        settings:
-          - {name: archive-after, type: duration, default: 24h, description: How long a done task stays listed before it is archived.}
         queries:
           - {name: census, input: NoInput, output: Census, handler: Count, description: "The census: how many tasks there are per state, for the components that watch the list.", uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
         endpoints:
@@ -283,8 +285,6 @@ domains:
           - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
           - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
           - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-        jobs:
-          - {name: archive-done, every: 1m, handler: Sweep, description: Archives the tasks done for longer than archive-after., uses: [tasks/usecase/ArchiveDone, "setting:archive-after"], calls: [tasks/usecase/ArchiveDone]}
         internals:
           functions:
             - name: move

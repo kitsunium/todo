@@ -18,8 +18,8 @@ const (
 
 // execute is RequestContact's body: the member the address belongs to is
 // asked, unless they are the asker, already a contact, or a request between
-// the two is waiting. A link that was declined or cancelled is replaced: a
-// pair has one link at most. The addressee is then told who asks.
+// the two is waiting. A link that was declined, cancelled or left to expire
+// is replaced: a pair has one link at most. The addressee is then told who asks.
 func (h *RequestContactHandler) execute(ctx context.Context, in *RequestContactInput) (RequestContactOutput, error) {
 	to, found, err := h.people.ByEmail(ctx, in.Email)
 	if err != nil {

@@ -14,7 +14,8 @@ them through their lifecycle: open, done, archived. Every move is published on a
 moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
 is counted every thirty seconds. Two members become contacts by a
-request one sends to the other's address and the other accepts. The server serves a small web app at `/`,
+request one sends to the other's address and the other accepts; a request
+nobody answers expires after fourteen days. The server serves a small web app at `/`,
 in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
