@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:620afbb2962f72a1a0c57e91267127ee1982802bbd70150e8fa1d8268bc9f808
+// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -18,6 +18,7 @@ import (
 	"github.com/kitsunium/todo/identity/authapi"
 	"github.com/kitsunium/todo/identity/vault"
 	"github.com/kitsunium/todo/notify/outbox"
+	"github.com/kitsunium/todo/notify/post"
 	"github.com/kitsunium/todo/notify/reminders"
 	"github.com/kitsunium/todo/notify/watch"
 	"github.com/kitsunium/todo/stats/census"
@@ -27,8 +28,8 @@ import (
 	"github.com/kitsunium/todo/web/site"
 )
 
-// App is role server: the framework App of vault, authapi, linkstore, contactsapi, taskstore, api, feed, outbox, watch, census, site, profile server.
-var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, taskstore.Service, api.Service, feed.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer))
+// App is role server: the framework App of vault, authapi, linkstore, contactsapi, taskstore, api, feed, post, outbox, watch, census, site, profile server.
+var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, taskstore.Service, api.Service, feed.Service, post.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer))
 
 // Build is what the binary's build says: its variables, set by -ldflags -X.
 type Build struct {
@@ -64,8 +65,8 @@ func Wire(ctx context.Context, build Build) {
 	dueSoon := planner.NewDueSoon(appClock, tasks)
 	ledger := outbox.NewLedger()
 	members := outbox.NewMembers()
-	relay := outbox.NewRelay(outbox.SmtpAddrSetting, outbox.MailFromSetting)
-	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, relay)
+	carrier := post.NewCarrier()
+	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, carrier)
 	vault.Wire()
 	authapi.Wire(signUp, signIn, signOut, authenticate)
 	linkstore.Wire()
@@ -73,6 +74,7 @@ func Wire(ctx context.Context, build Build) {
 	taskstore.Wire()
 	api.Wire(addTask, listTasks, moveTask, archiveDone, api.ArchiveAfterSetting, countTasks)
 	feed.Wire()
+	post.Wire()
 	outbox.Wire()
 	watch.Wire(remindDue, watch.RemindWithinSetting)
 	census.Wire()

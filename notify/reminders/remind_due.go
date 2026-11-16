@@ -53,9 +53,8 @@ func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (Rem
 func reminder(t task.Task, to string) Mail {
 	title := strings.Join(strings.Fields(t.Title), " ")
 	return Mail{
-		UserID:  t.OwnerID,
 		To:      to,
-		Subject: "Due soon: " + title,
-		Body:    "\"" + title + "\" is due on " + t.Due.UTC().Format("Monday 2 January 2006 at 15:04 UTC") + ".\n",
+		Subject: "Bientôt à échéance : " + title,
+		Body:    "Bonjour,\n\nVotre tâche « " + title + " » arrive à échéance le " + t.Due.UTC().Format("02/01/2006 à 15:04") + " UTC.\n",
 	}
 }

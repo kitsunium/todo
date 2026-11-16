@@ -28,7 +28,7 @@ deployment:
     - {name: mail-relay, description: The SMTP relay of the deployment; none is named in dev.}
   links:
     - {name: load-to-api, description: "The load calls the server's HTTP API.", connection: api, between: [workstation, host]}
-    - {name: mail, description: The server hands each reminder to the relay., connection: smtp-submission, between: [host, mail-relay]}
+    - {name: mail, description: The server hands each mail to the relay., connection: smtp-submission, between: [host, mail-relay]}
 evidence:
   - name: owner-2026-11-16
     kind: decision
@@ -45,7 +45,7 @@ binaries:
       - name: server
         profile: server
         description: Serves the HTTP API, keeps the stores, archives what was done long ago, samples the vital signs and sends the reminders.
-        mounts: [vault, authapi, linkstore, contactsapi, taskstore, api, feed, outbox, watch, census, site]
+        mounts: [vault, authapi, linkstore, contactsapi, taskstore, api, feed, post, outbox, watch, census, site]
       - name: load
         command: load
         profile: cli

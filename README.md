@@ -30,7 +30,7 @@ module of its own.
 | `design/contacts.yaml` | contacts | the link between two members and its request, five use cases and their four ports, the store and the topic behind them, the HTTP API, the sequence `request-contact` |
 | `design/tasks.yaml` | tasks | the task and its lifecycle, six use cases and their three ports, the store behind them, the HTTP API, the sequence `complete-task` |
 | `design/activity.yaml` | activity | the feed, written from what the use cases record |
-| `design/notify.yaml` | notify | the reminders, the outbox and its SMTP connection, the sequence `remind-due` |
+| `design/notify.yaml` | notify | the reminders, the mailer with its outbox and its SMTP connection, the command every mail goes through, the sequence `remind-due` |
 | `design/stats.yaml` | stats | the vital signs, sampled by a job |
 | `design/web.yaml` | web | the web app's static files |
 | `design/load.yaml` | load | a load driven against a running server over its HTTP API |
@@ -54,12 +54,11 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `GET /api/tasks` | lists the caller's tasks not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
 | `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |
 | `GET /api/activity` | the caller's feed, newest first; `?limit=N` |
-| `GET /api/outbox` | the mails sent on the caller's behalf, newest first |
 | `GET /api/stats` | the latest sample of the task list and the recent history |
 
 Every route but the first two and `/api/stats` asks for a member: the
 session cookie, or `Authorization: Bearer <token>`; without one it answers
-401. A member sees their own tasks, feed and mails, and another member's
+401. A member sees their own tasks and feed, and another member's
 task is answered as if it did not exist.
 
 Every route that writes is limited per client — the member, or the address
@@ -89,12 +88,11 @@ interface, so a deployment names its address. Its data lives in
 |---|---|---|
 | `SERVER_ARCHIVE_AFTER` | `24h` | how long a done task stays listed before it is archived |
 | `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's owner is reminded |
-| `SERVER_SMTP_ADDR` | empty | the SMTP relay's host and port (587, STARTTLS when the relay offers it); empty, the mails are kept in the outbox and not relayed |
-| `SERVER_MAIL_FROM` | `todo@localhost` | the address the mails come from |
+| `SERVER_SMTP_URL` | unset | where the mailer delivers: `smtp://user:pass@host:587?tls=starttls`; unset, the mails are captured for the dev tool and not delivered |
 
 What the stores keep of a person has an end: a task's assignee is erased a
 year after the task was last written, a feed entry is deleted after ninety
-days, a mail after thirty, an account untouched for three years is erased,
+days, an account untouched for three years is erased,
 and a session is deleted a day after it expired. A password is kept
 stretched (PBKDF2-SHA256), a session's secret as its SHA-256.
 

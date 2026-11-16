@@ -6,18 +6,22 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kitsunium/sdk/framework/app"
+	"github.com/kitsunium/sdk/framework/model"
 	"github.com/kitsunium/sdk/pkg/v1/clock"
 	loadrole "github.com/kitsunium/todo/cmd/todo/load"
 	"github.com/kitsunium/todo/cmd/todo/server"
+	"github.com/kitsunium/todo/notify/post"
 
 	// What the binary's main links for this role: the HTTP engine and the
 	// subsystems its components declare. A test program links them itself.
 	_ "github.com/kitsunium/sdk/framework/app/jobs"
+	_ "github.com/kitsunium/sdk/framework/app/mail"
 	_ "github.com/kitsunium/sdk/framework/app/queue"
 	_ "github.com/kitsunium/sdk/framework/app/server"
 	_ "github.com/kitsunium/sdk/framework/app/store"
@@ -29,9 +33,10 @@ var epoch = time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
 // product is the server role, whole, for one test: in memory, on a free
 // loopback port, on a manual clock at epoch.
 type product struct {
-	t   *testing.T
-	url string
-	clk *clock.ManualClock
+	t      *testing.T
+	url    string
+	clk    *clock.ManualClock
+	before int // the mails captured before this test's product started
 }
 
 // start wires the role as the binary does and runs its App until the test
@@ -51,7 +56,7 @@ func start(t *testing.T) *product {
 			t.Error(err)
 		}
 	})
-	return &product{t: t, url: a.URL(), clk: clk}
+	return &product{t: t, url: a.URL(), clk: clk, before: len(post.MailMailer.Captured())}
 }
 
 // member is one caller of the API: a stranger while token is empty, a
@@ -137,6 +142,20 @@ func (m *member) retry(retries, status int, method, path string, in, out any) ht
 		}
 	}
 	return resp.Header
+}
+
+// mails are the mails the product sent to addr since this test started whose
+// subject or text holds want, oldest first: with no relay named, the mailer
+// captures what it would deliver.
+func (p *product) mails(addr, want string) []model.MailMessage {
+	var out []model.MailMessage
+	for _, m := range post.MailMailer.Captured()[p.before:] {
+		text := strings.Join(strings.Fields(m.Subject+" "+m.Text), " ") // the text part is wrapped
+		if slices.ContainsFunc(m.To, func(to string) bool { return strings.Contains(to, addr) }) && strings.Contains(text, want) {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // settle moves the product's clock forward by step until cond holds: the
@@ -266,22 +285,12 @@ func TestTheJobsRunOnTheClock(t *testing.T) {
 		t.Errorf("the sample: %+v", *l)
 	}
 
-	var outbox struct {
-		Mails []struct {
-			To      string `json:"to"`
-			Subject string `json:"subject"`
-			Relayed bool   `json:"relayed"`
-		} `json:"mails"`
-	}
-	p.settle("the reminder", 10*time.Second, func() bool {
-		ada.call(http.StatusOK, "GET", "/api/outbox", nil, &outbox)
-		return len(outbox.Mails) > 0
-	})
+	reminders := func() []model.MailMessage { return p.mails("ada@example.com", "Bientôt à échéance") }
+	p.settle("the reminder", 10*time.Second, func() bool { return len(reminders()) > 0 })
 	p.clk.Advance(5 * time.Minute) // more runs of the job: the task is reminded of once
 	time.Sleep(20 * time.Millisecond)
-	ada.call(http.StatusOK, "GET", "/api/outbox", nil, &outbox)
-	if len(outbox.Mails) != 1 || outbox.Mails[0].To != "ada@example.com" || outbox.Mails[0].Subject != "Due soon: Ship the release" || outbox.Mails[0].Relayed {
-		t.Errorf("the outbox: %+v, want the one reminder, kept and not relayed", outbox.Mails)
+	if got := reminders(); len(got) != 1 || got[0].Subject != "Bientôt à échéance : Ship the release" {
+		t.Errorf("the reminders: %+v, want the one", got)
 	}
 
 	var list struct {

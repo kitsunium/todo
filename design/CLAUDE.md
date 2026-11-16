@@ -17,7 +17,7 @@
 - A description in a flow mapping (`{name: …, description: …}`) that holds a
   comma or a colon is quoted.
 - A connection is declared on the adapter that opens the socket, with its
-  default port: `Relay` dials the mail relay on 587, `Client` dials the
+  default port: `Carrier` dials the mail relay on 587, `Client` dials the
   server on 4000. The server's own listening socket is the framework's, no
   adapter's, so the design declares none for it.
 - `product.yaml` holds the deployment: the node `host` runs the server

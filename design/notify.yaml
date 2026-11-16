@@ -14,10 +14,9 @@ domains:
           - name: Mail
             description: A mail, as plain text.
             fields:
-              - {name: UserID, type: string, tag: 'json:"userId" app:"public"', description: "UserID is the member on whose behalf the mail is sent: the task's owner."}
               - {name: To, type: string, tag: 'json:"to" app:"personal"'}
               - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
-              - {name: Body, type: string, tag: 'json:"body" app:"public"'}
+              - {name: Body, type: string, tag: 'json:"body" app:"personal"'}
         ports:
           - name: Mailer
             direction: out
@@ -55,65 +54,59 @@ domains:
               description: "reminder is the mail a task due soon is reminded of with."
               params: [{name: t, type: "task.Task"}, {name: to, type: "string"}]
               results: [{type: "Mail"}]
+      - name: post
+        role: adapter
+        code: 64.3.4
+        uses: [reminders]
+        description: The product's mailer, its durable outbox and its transport, and the command every component that writes to a member sends through.
+        values:
+          - name: Letter
+            description: A mail to one member, as plain text.
+            fields:
+              - {name: To, type: string, tag: 'json:"to" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"', description: "Name is the recipient's, beside the address; it may be empty."}
+              - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
+              - {name: Body, type: string, tag: 'json:"body" app:"personal"'}
+          - name: Posted
+            description: A mail the outbox took.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+        mailers:
+          - {name: mail, from: {name: Todo, address: hello@todo.localhost}}
+        commands:
+          - {name: send, input: Letter, output: Posted, handler: Send, description: "Puts a mail in the outbox: the one path every mail of the product takes."}
+        adapters:
+          - name: Carrier
+            description: Carrier is Mailer@v1 on the mailer "mail".
+            implements: [notify/port/Mailer@v1]
+            connections:
+              - {name: smtp-submission, description: "The server hands each mail to the deployment's SMTP relay.", transport: tcp, side: dials, port: 587, to: "system:mail-relay", security: starttls, frames: [Mail]}
+        internals:
+          functions:
+            - name: post
+              description: "post puts a letter in the mailer's outbox, which delivers it, tries again when the relay refuses it, and only captures it when the deployment names no relay."
+              params: [{name: ctx, type: "context.Context"}, {name: l, type: "Letter"}]
+              results: [{type: "Posted"}, {type: "error"}]
       - name: outbox
         role: adapter
         code: 64.3.2
         uses: [reminders, vault]
-        description: The mails sent, kept, handed to the SMTP relay when one is named, their HTTP read, and the log of the reminders.
+        description: The log of the reminders, and the directory they ask.
         entities:
-          - name: Sent
-            description: A mail the product sent.
-            fields:
-              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
-              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
-              - {name: To, type: string, tag: 'json:"to" app:"personal,subject"'}
-              - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
-              - {name: Body, type: string, tag: 'json:"body" app:"public"'}
-              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
-              - {name: Relayed, type: bool, tag: 'json:"relayed" app:"public"', description: "Relayed says the mail was handed to the relay; false when the deployment names none."}
           - name: Reminded
-            description: A task its assignee was reminded of.
+            description: A task its owner was reminded of.
             fields:
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
-        values:
-          - name: Mails
-            description: The mails sent on a member's behalf, newest first.
-            fields:
-              - {name: Mails, type: "[]Sent", tag: 'json:"mails"'}
-          - name: NoInput
-            description: A request that says nothing.
-        settings:
-          - {name: smtp-addr, type: string, default: "", description: "The SMTP relay's host and port; empty, the mails are kept and not relayed."}
-          - {name: mail-from, type: string, default: "todo@localhost", description: The address the mails come from.}
         stores:
-          - name: outbox
-            entity: Sent
-            key: ID
-            description: "Every mail sent, keyed by its id; a mail is deleted thirty days after it was sent."
-            deleteAfter: {delay: 720h, since: At}
           - {name: reminded, entity: Reminded, key: TaskID, description: The tasks already reminded of.}
         adapters:
-          - name: Relay
-            description: Relay is Mailer@v1; it keeps the mail in the store "outbox" and hands it to the relay smtp-addr names.
-            implements: [notify/port/Mailer@v1]
-            uses: ["setting:smtp-addr", "setting:mail-from"]
-            connections:
-              - {name: smtp-submission, description: "The server hands each reminder to the deployment's SMTP relay.", transport: tcp, side: dials, port: 587, to: "system:mail-relay", security: starttls, frames: [Mail]}
           - name: Members
             description: Members is Directory@v1 on the identity's query "member".
             implements: [notify/port/Directory@v1]
           - name: Ledger
             description: Ledger is ReminderLog@v1 on the store "reminded".
             implements: [notify/port/ReminderLog@v1]
-        endpoints:
-          - {route: "GET /api/outbox", request: NoInput, response: Mails, handler: Kept, auth: required}
-        internals:
-          functions:
-            - name: message
-              description: "message is the mail as SMTP carries it: its headers, each one line whatever the mail holds, then its plain-text body."
-              params: [{name: from, type: "string"}, {name: m, type: "reminders.Mail"}]
-              results: [{type: "[]byte"}]
       - name: watch
         role: presentation
         code: 64.3.3

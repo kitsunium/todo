@@ -32,7 +32,8 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census`, the job `archive-done`, the setting `archive-after` |
 | `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks` and `contacts` to their events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
-| `notify/outbox` | outbox (adapter) | the stores `outbox` and `reminded`, `Relay` (SMTP, its connection declared in the design), `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger`, `GET /api/outbox` |
+| `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through, `Carrier` (the reminders' `Mailer`, its SMTP connection declared in the design) |
+| `notify/outbox` | outbox (adapter) | the store `reminded`, `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
 | `stats/census` | census (presentation) | the store `snapshots`, the job `sample`, `GET /api/stats` |
 | `web/site` | site (presentation) | the web app: `dist/index.html`, `app.css`, `app.js`, embedded and served at `/` |
@@ -89,6 +90,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 - **Ask "is there one?" with `Filter`, not `Get`**: a missing key is a
   failed read (`Ledger.Seen`). `Tasks.Get` reads the key because a task
   that does not exist is the caller's error, answered 404.
+- **Every mail goes through `post`**, in French, as plain text, its
+  subject one line: a component that writes to a member dispatches
+  `post.SendCommand` or goes through `Carrier`, never a transport of its
+  own. A test reads what was sent with `post.MailMailer.Captured()`.
 - **Logs name a task by its id**, never an assignee: `Assignee`, a mail's
   `To` are tagged `app:"personal"`, and `app:"personal,subject"` in the
   entity a store keeps. A store that keeps personal data says for how long

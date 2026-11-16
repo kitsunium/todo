@@ -1,6 +1,6 @@
 # Generated from the design: the digest the generated files come from.
 apiVersion: design/v1
-digest: sha256:620afbb2962f72a1a0c57e91267127ee1982802bbd70150e8fa1d8268bc9f808
+digest: sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
 files:
   - activity/feed/gen_design.go
   - cmd/todo/gen_main.go
@@ -23,6 +23,7 @@ files:
   - load/httpapi/gen_design.go
   - load/loadcli/gen_design.go
   - notify/outbox/gen_design.go
+  - notify/post/gen_design.go
   - notify/reminders/gen_design.go
   - notify/reminders/gen_design_test.go
   - notify/watch/gen_design.go

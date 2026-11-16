@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:620afbb2962f72a1a0c57e91267127ee1982802bbd70150e8fa1d8268bc9f808
+// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
 
 // Command todo — The todo, as one executable, its server and the load it can
 // drive against one.
@@ -13,6 +13,7 @@ import (
 
 	"github.com/kitsunium/sdk/framework/app"
 	_ "github.com/kitsunium/sdk/framework/app/jobs"
+	_ "github.com/kitsunium/sdk/framework/app/mail"
 	_ "github.com/kitsunium/sdk/framework/app/queue"
 	_ "github.com/kitsunium/sdk/framework/app/server"
 	_ "github.com/kitsunium/sdk/framework/app/store"
