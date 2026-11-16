@@ -207,6 +207,12 @@ domains:
           - name: WallClock
             description: WallClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
             implements: [identity/port/Clock@v1]
+        internals:
+          functions:
+            - name: accountOf
+              description: "accountOf is the account a record keeps."
+              params: [{name: r, type: "AccountRecord"}]
+              results: [{type: "account.Account"}]
       - name: authapi
         role: presentation
         code: 64.6.4
@@ -262,6 +268,19 @@ domains:
           - {route: "POST /api/auth/login", request: SignInRequest, response: SignedIn, handler: SignIn, uses: [identity/usecase/SignIn], calls: [identity/usecase/SignIn]}
           - {route: "POST /api/auth/logout", request: NoInput, response: NoInput, handler: SignOut, auth: required, uses: [identity/usecase/SignOut], calls: [identity/usecase/SignOut]}
           - {route: "GET /api/auth/me", request: NoInput, response: Profile, handler: Me, auth: required}
+        internals:
+          functions:
+            - name: setCookie
+              description: "setCookie gives the browser the session's secret."
+              params: [{name: ctx, type: "context.Context"}, {name: secret, type: "string"}]
+            - name: profileOf
+              description: "profileOf is an account as the API answers it."
+              params: [{name: a, type: "account.Account"}]
+              results: [{type: "Profile"}]
+            - name: refusal
+              description: "refusal is a use case's error as the API answers it, with the codes a client branches on: 400 with the field at fault, 409 for an address already taken, 401 invalid_credentials, 403 account_locked."
+              params: [{name: err, type: "error"}]
+              results: [{type: "error"}]
     sequences:
       - name: sign-in
         description: A member signs in; a session is opened.

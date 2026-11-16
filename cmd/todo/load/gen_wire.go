@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:6d83e3d5800ec2321096deeccd3c573f533b4ecf81275cccebf1ad5e2b7143c2
+// design:digest sha256:b8c6fb4903e1368054d808d160797f66a4b4f241102b577f4a124db5ec43a883
 
 // Package load — Drives a load against a running server over its HTTP API,
 // then exits.

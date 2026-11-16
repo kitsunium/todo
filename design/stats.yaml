@@ -36,3 +36,9 @@ domains:
           - {name: sample, every: 30s, handler: Sample, description: Counts the tasks and keeps the count., uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
         endpoints:
           - {route: "GET /api/stats", request: NoInput, response: Report, handler: Current}
+        internals:
+          functions:
+            - name: oldestFirst
+              description: "oldestFirst is every sample kept, the oldest first."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "[]Snapshot"}, {type: "error"}]

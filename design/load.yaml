@@ -51,6 +51,20 @@ domains:
             uses: ["setting:target"]
             connections:
               - {name: api, description: "The load calls the server's HTTP API, on loopback by default.", transport: tcp, side: dials, port: 4000, to: "role:todo/server", security: none}
+        internals:
+          types:
+            - name: statusError
+              methods:
+                - name: Error
+                  receiver: pointer
+                  results: [{type: "string"}]
+            - name: Client
+              methods:
+                - name: call
+                  receiver: pointer
+                  description: "call sends one request to the server target names and decodes its answer into out; an answer that is not a 2xx is a statusError."
+                  params: [{name: ctx, type: "context.Context"}, {name: method, type: "string"}, {name: path, type: "string"}, {name: in, type: "any"}, {name: out, type: "any"}]
+                  results: [{type: "error"}]
       - name: loadcli
         role: presentation
         code: 64.5.3

@@ -43,6 +43,12 @@ domains:
             scenarios:
               - {name: mails each task due soon once, kind: success}
               - {name: skips a task assigned to no address, kind: success}
+        internals:
+          functions:
+            - name: reminder
+              description: "reminder is the mail a task due soon is reminded of with."
+              params: [{name: t, type: "task.Task"}]
+              results: [{type: "Mail"}]
       - name: outbox
         role: adapter
         code: 64.3.2
@@ -93,6 +99,12 @@ domains:
             implements: [notify/port/ReminderLog@v1]
         endpoints:
           - {route: "GET /api/outbox", request: NoInput, response: Mails, handler: Kept, auth: required}
+        internals:
+          functions:
+            - name: message
+              description: "message is the mail as SMTP carries it: its headers, each one line whatever the mail holds, then its plain-text body."
+              params: [{name: from, type: "string"}, {name: m, type: "reminders.Mail"}]
+              results: [{type: "[]byte"}]
       - name: watch
         role: presentation
         code: 64.3.3

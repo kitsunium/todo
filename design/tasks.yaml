@@ -161,6 +161,24 @@ domains:
             calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List]
             scenarios:
               - {name: lists the open tasks due soon, kind: success}
+        internals:
+          functions:
+            - name: move
+              description: "move fires event on t at now and stamps what the move changes: the state, UpdatedAt, and DoneAt, set when the task is completed and cleared when it opens again."
+              params: [{name: ctx, type: "context.Context"}, {name: t, type: "*task.Task"}, {name: event, type: "task.LifecycleEvent"}, {name: now, type: "time.Time"}]
+              results: [{type: "error"}]
+            - name: rank
+              description: "rank orders the priorities, the most urgent first."
+              params: [{name: p, type: "task.Priority"}]
+              results: [{type: "int"}]
+            - name: byUrgency
+              description: "byUrgency orders two tasks: the higher priority first, then the sooner due date (a task with none last), then the older one."
+              params: [{name: a, type: "task.Task"}, {name: b, type: "task.Task"}]
+              results: [{type: "int"}]
+            - name: byDue
+              description: "byDue orders two tasks by due date, one with none last."
+              params: [{name: a, type: "task.Task"}, {name: b, type: "task.Task"}]
+              results: [{type: "int"}]
       - name: taskstore
         role: adapter
         code: 64.1.3
@@ -210,6 +228,16 @@ domains:
           - name: AppClock
             description: AppClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
             implements: [tasks/port/Clock@v1]
+        internals:
+          functions:
+            - name: toRecord
+              description: "toRecord is a task as the store keeps it."
+              params: [{name: t, type: "task.Task"}]
+              results: [{type: "Record"}]
+            - name: fromRecord
+              description: "fromRecord is the task a record keeps."
+              params: [{name: r, type: "Record"}]
+              results: [{type: "task.Task"}]
       - name: api
         role: presentation
         code: 64.1.4
@@ -247,6 +275,20 @@ domains:
           - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
         jobs:
           - {name: archive-done, every: 1m, handler: Sweep, description: Archives the tasks done for longer than archive-after., uses: [tasks/usecase/ArchiveDone, "setting:archive-after"], calls: [tasks/usecase/ArchiveDone]}
+        internals:
+          functions:
+            - name: move
+              description: "move runs MoveTask for one of the four routes that move a task."
+              params: [{name: ctx, type: "context.Context"}, {name: id, type: "string"}, {name: event, type: "task.LifecycleEvent"}]
+              results: [{type: "task.Task"}, {type: "error"}]
+            - name: caller
+              description: "caller is the member the request comes from."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: refusal
+              description: "refusal is a use case's error as the API answers it: 404 for a task that does not exist, 409 for a move its state does not allow, 400 with the field at fault for a task that cannot be added; anything else is the framework's to answer."
+              params: [{name: err, type: "error"}]
+              results: [{type: "error"}]
     sequences:
       - name: complete-task
         description: A member completes a task; the feed is told.

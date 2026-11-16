@@ -43,3 +43,9 @@ domains:
           - {name: tasks, topic: tasks/topic/events, handler: Record}
         endpoints:
           - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent, auth: required}
+        internals:
+          functions:
+            - name: newestFirst
+              description: "newestFirst is every entry, the newest first."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "[]Entry"}, {type: "error"}]

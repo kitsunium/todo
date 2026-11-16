@@ -48,8 +48,11 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   design gains later gets no skeleton in a file that exists — write its twin
   there, with the name its shell calls. A body that still answers
   `errNotImplemented` is a stub.
-- **Nothing exported outside the design.** A helper is unexported, in its
-  component. A component imports the components its `uses` names, and
+- **Nothing exported outside the design, and nothing unexported either.**
+  A helper is unexported, in its component, and declared among the
+  component's `internals` in the design: the dev tool derives that block
+  from the code, then the check holds the code to it. A role's package
+  (`cmd/todo/server`) holds no function of its own but its tests. A component imports the components its `uses` names, and
   nothing else of the module.
 - **A use case and an adapter call what their `calls` draw.** A call to a
   port or a use case the design does not draw fails the check: add the link
