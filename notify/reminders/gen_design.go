@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 // Package reminders — Who is reminded of what, and what that needs.
 //
@@ -28,6 +28,11 @@ type Mail struct {
 	Body    string `json:"body" app:"public"`
 }
 
+// DirectoryV1 gives the address a member is written to.
+type DirectoryV1 interface {
+	Address(ctx context.Context, userID string) (string, bool, error)
+}
+
 // MailerV1 sends a mail.
 type MailerV1 interface {
 	Send(ctx context.Context, m Mail) error
@@ -39,8 +44,8 @@ type ReminderLogV1 interface {
 	Seen(ctx context.Context, taskID string) (bool, error)
 }
 
-// RemindDue mails whoever an open task due within a delay is assigned to, once
-// per task.
+// RemindDue mails the owner of each open task due within a delay, once per
+// task.
 type RemindDue interface {
 	Execute(ctx context.Context, in RemindDueInput) (RemindDueOutput, error)
 }
@@ -59,12 +64,13 @@ type RemindDueOutput struct {
 type RemindDueHandler struct {
 	dueSoon     planner.DueSoon
 	reminderLog ReminderLogV1
+	directory   DirectoryV1
 	mailer      MailerV1
 }
 
 // NewRemindDue builds RemindDue on what it calls.
-func NewRemindDue(dueSoon planner.DueSoon, reminderLog ReminderLogV1, mailer MailerV1) *RemindDueHandler {
-	return &RemindDueHandler{dueSoon: dueSoon, reminderLog: reminderLog, mailer: mailer}
+func NewRemindDue(dueSoon planner.DueSoon, reminderLog ReminderLogV1, directory DirectoryV1, mailer MailerV1) *RemindDueHandler {
+	return &RemindDueHandler{dueSoon: dueSoon, reminderLog: reminderLog, directory: directory, mailer: mailer}
 }
 
 // Execute runs RemindDue.

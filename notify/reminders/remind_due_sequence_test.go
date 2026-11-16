@@ -15,8 +15,9 @@ import (
 func givenSequenceRemindDue(t *testing.T, rec sequenceRecorder) func(context.Context) error {
 	t.Helper()
 	uc := NewRemindDue(
-		dueSoon{dueTask("task_a", "ada@example.com")},
+		dueSoon{dueTask("task_a", "user_ada")},
 		rec.RecordRemindersReminderLogV1(memLog{}),
+		rec.RecordRemindersDirectoryV1(everyone),
 		rec.RecordRemindersMailerV1(&memMailer{}),
 	)
 	return func(ctx context.Context) error {

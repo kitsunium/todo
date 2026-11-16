@@ -20,15 +20,15 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
 | `identity/account` | account (domain) | `Account` and its lock, `Session`, `NormalizeEmail`, the errors |
 | `identity/access` | access (application) | the use cases `SignUp` `SignIn` `Authenticate` `SignOut`, the ports `Accounts` `Sessions` `Passwords` `Secrets` `Clock` |
-| `identity/vault` | vault (adapter) | the stores `accounts` and `sessions` with their indexes, `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
+| `identity/vault` | vault (adapter) | the stores `accounts` and `sessions` with their indexes, the query `member` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
 | `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session` |
 | `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
 | `tasks/planner` | planner (application) | the use cases `AddTask` `MoveTask` `ListTasks` `ArchiveDone` `CountTasks` `DueSoon`, the ports `TaskStore` `Clock` `Journal`; `lifecycle.go` is what they share |
 | `tasks/taskstore` | taskstore (adapter) | the store `tasks`, the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes) and `AppClock` |
-| `tasks/api` | api (presentation) | the routes of `/api/tasks`, the job `archive-done`, the setting `archive-after` |
+| `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census`, the job `archive-done`, the setting `archive-after` |
 | `activity/feed` | feed (adapter) | the store `entries`, the subscription `tasks` to the tasks' events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
-| `notify/outbox` | outbox (adapter) | the stores `outbox` and `reminded`, `Relay` (SMTP, its connection declared in the design) and `Ledger`, `GET /api/outbox` |
+| `notify/outbox` | outbox (adapter) | the stores `outbox` and `reminded`, `Relay` (SMTP, its connection declared in the design), `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger`, `GET /api/outbox` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
 | `stats/census` | census (presentation) | the store `snapshots`, the job `sample`, `GET /api/stats` |
 | `web/site` | site (presentation) | the web app: `dist/index.html`, `app.css`, `app.js`, embedded and served at `/` |
@@ -73,6 +73,9 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   are tagged `app:"secret"`. An unknown address and a wrong password are
   answered alike, and cost the same time (`Stretcher.verify` on an empty
   hash).
+- **A component's data is its own**: another component reaches it through
+  a query the owner declares (`vault.MemberQuery.Ask`,
+  `api.CensusQuery.Ask`), a topic it publishes or a port, never its store.
 - **A subscription is delivered at least once, and later**: it keys what
   it writes by the event's own id and writes nothing the second time
   (`feed.record`). A test that reads what a subscription wrote moves the

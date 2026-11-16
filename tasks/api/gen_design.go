@@ -1,8 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
-// Package api — The HTTP API of a member's tasks, and the job that archives
-// what was done long ago.
+// Package api — The HTTP API of a member's tasks, the census the rest of the
+// product asks, and the job that archives what was done long ago.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -36,9 +36,20 @@ type ByID struct {
 	ID string `path:"id"`
 }
 
+// Census — The tasks counted, every member's together.
+type Census struct {
+	Counts  map[string]int `json:"counts" app:"public"`
+	Total   int            `json:"total" app:"public"`
+	Overdue int            `json:"overdue" app:"public"`
+}
+
 // ListRequest — Which tasks to list.
 type ListRequest struct {
 	State string `query:"state"`
+}
+
+// NoInput — A question that needs no word.
+type NoInput struct {
 }
 
 // TaskList — The tasks asked for.
@@ -47,7 +58,7 @@ type TaskList struct {
 }
 
 // Service is api's framework service: what it declares, drawn and run.
-var Service = app.NewService("api", "The HTTP API of a member's tasks, and the job that archives what was done long ago.")
+var Service = app.NewService("api", "The HTTP API of a member's tasks, the census the rest of the product asks, and the job that archives what was done long ago.")
 
 // ArchiveAfterSetting — How long a done task stays listed before it is
 // archived.
@@ -102,6 +113,15 @@ func Sweep(ctx context.Context) error {
 	return sweep(ctx)
 }
 
+// CensusQuery — The census: how many tasks there are per state, for the
+// components that watch the list.
+var CensusQuery = Service.Query("census", Count)
+
+// Count handles the query "census": its body is the hand-written count.
+func Count(ctx context.Context, in NoInput) (Census, error) {
+	return count(ctx, in)
+}
+
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
@@ -110,14 +130,16 @@ var wired struct {
 	moveTask            planner.MoveTask
 	archiveDone         planner.ArchiveDone
 	archiveAfterSetting *app.Setting[time.Duration]
+	countTasks          planner.CountTasks
 }
 
 // Wire gives the handlers what they use: the role that mounts api calls it
 // before its App runs.
-func Wire(addTask planner.AddTask, listTasks planner.ListTasks, moveTask planner.MoveTask, archiveDone planner.ArchiveDone, archiveAfterSetting *app.Setting[time.Duration]) {
+func Wire(addTask planner.AddTask, listTasks planner.ListTasks, moveTask planner.MoveTask, archiveDone planner.ArchiveDone, archiveAfterSetting *app.Setting[time.Duration], countTasks planner.CountTasks) {
 	wired.addTask = addTask
 	wired.listTasks = listTasks
 	wired.moveTask = moveTask
 	wired.archiveDone = archiveDone
 	wired.archiveAfterSetting = archiveAfterSetting
+	wired.countTasks = countTasks
 }

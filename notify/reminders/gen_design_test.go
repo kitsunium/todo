@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 package reminders
 
@@ -19,9 +19,9 @@ func TestRemindDueMailsEachTaskDueSoonOnce(t *testing.T) {
 	then(t, out)
 }
 
-// TestRemindDueSkipsATaskAssignedToNoAddress is RemindDue's scenario "skips a task assigned to no address" (success).
-func TestRemindDueSkipsATaskAssignedToNoAddress(t *testing.T) {
-	uc, in, then := givenRemindDueSkipsATaskAssignedToNoAddress(t)
+// TestRemindDueSkipsATaskWhoseOwnerIsGone is RemindDue's scenario "skips a task whose owner is gone" (success).
+func TestRemindDueSkipsATaskWhoseOwnerIsGone(t *testing.T) {
+	uc, in, then := givenRemindDueSkipsATaskWhoseOwnerIsGone(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("RemindDue: %v, want a success", err)
@@ -33,6 +33,21 @@ func TestRemindDueSkipsATaskAssignedToNoAddress(t *testing.T) {
 // call in order.
 type sequenceRecorder struct {
 	calls *[]string
+}
+
+// RecordRemindersDirectoryV1 records the calls to next, then makes them.
+func (r sequenceRecorder) RecordRemindersDirectoryV1(next DirectoryV1) DirectoryV1 {
+	return recordedremindersDirectoryV1{next: next, calls: r.calls}
+}
+
+type recordedremindersDirectoryV1 struct {
+	next  DirectoryV1
+	calls *[]string
+}
+
+func (x recordedremindersDirectoryV1) Address(ctx context.Context, userID string) (string, bool, error) {
+	*x.calls = append(*x.calls, "notify/port/Directory@v1.Address")
+	return x.next.Address(ctx, userID)
 }
 
 // RecordRemindersMailerV1 records the calls to next, then makes them.
@@ -78,7 +93,7 @@ func TestSequenceRemindDue(t *testing.T) {
 	if err := run(t.Context()); err != nil {
 		t.Fatalf("the sequence failed: %v", err)
 	}
-	want := []string{"notify/port/ReminderLog@v1.Seen", "notify/port/Mailer@v1.Send", "notify/port/ReminderLog@v1.Mark"}
+	want := []string{"notify/port/ReminderLog@v1.Seen", "notify/port/Directory@v1.Address", "notify/port/Mailer@v1.Send", "notify/port/ReminderLog@v1.Mark"}
 	if !slices.Equal(got, want) {
 		t.Errorf("the calls: %q, want %q", got, want)
 	}

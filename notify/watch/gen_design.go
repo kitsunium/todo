@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 // Package watch — The job that sends the reminders.
 //
@@ -23,13 +23,13 @@ var errNotImplemented = errs.New(errs.Pack(64, 3, 3, 255), "NOT_IMPLEMENTED", "n
 // Service is watch's framework service: what it declares, drawn and run.
 var Service = app.NewService("watch", "The job that sends the reminders.")
 
-// RemindWithinSetting — How long before its due date a task's assignee is
+// RemindWithinSetting — How long before its due date a task's owner is
 // reminded.
 var RemindWithinSetting = Service.Setting[time.Duration]("remind-within", 24*time.Hour)
 
 var _ = Service.Every("remind-due", time.Minute, Remind)
 
-// Remind — Reminds the assignees of the tasks due within remind-within.
+// Remind — Reminds the owners of the tasks due within remind-within.
 func Remind(ctx context.Context) error {
 	return remind(ctx)
 }

@@ -40,7 +40,18 @@ func (m *memMailer) Send(_ context.Context, mail Mail) error {
 	return nil
 }
 
-// dueTask is an open task due in an hour, assigned to assignee.
-func dueTask(id, assignee string) task.Task {
-	return task.Task{ID: id, OwnerID: "user_ada", Title: "ship\nthe  release", Assignee: assignee, State: task.LifecycleOpen, Due: epoch.Add(time.Hour)}
+// directory is DirectoryV1 over the addresses it holds, by member.
+type directory map[string]string
+
+func (d directory) Address(_ context.Context, userID string) (string, bool, error) {
+	to, ok := d[userID]
+	return to, ok, nil
+}
+
+// everyone is the directory of the tests: Ada, and nobody else.
+var everyone = directory{"user_ada": "ada@example.com"}
+
+// dueTask is an open task of owner due in an hour.
+func dueTask(id, owner string) task.Task {
+	return task.Task{ID: id, OwnerID: owner, Title: "ship\nthe  release", State: task.LifecycleOpen, Due: epoch.Add(time.Hour)}
 }

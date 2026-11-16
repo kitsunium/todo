@@ -12,8 +12,8 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
-// execute is RemindDue's body: each open task due within Within and
-// assigned to an address is mailed about once. The mail leaves before the
+// execute is RemindDue's body: the owner of each open task due within
+// Within is mailed about it once, at the address the directory gives. The mail leaves before the
 // task is marked, so a mail that fails is tried again at the next run, and
 // one that left is never sent twice unless the mark itself fails.
 func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (RemindDueOutput, error) {
@@ -23,9 +23,6 @@ func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (Rem
 	}
 	var out RemindDueOutput
 	for _, t := range due.Tasks {
-		if !strings.Contains(t.Assignee, "@") {
-			continue
-		}
 		seen, err := h.reminderLog.Seen(ctx, t.ID)
 		if err != nil {
 			return out, err
@@ -33,7 +30,14 @@ func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (Rem
 		if seen {
 			continue
 		}
-		if err := h.mailer.Send(ctx, reminder(t)); err != nil {
+		to, found, err := h.directory.Address(ctx, t.OwnerID)
+		if err != nil {
+			return out, err
+		}
+		if !found {
+			continue // the owner's account is gone: nobody to remind
+		}
+		if err := h.mailer.Send(ctx, reminder(t, to)); err != nil {
 			return out, err
 		}
 		if err := h.reminderLog.Mark(ctx, t.ID); err != nil {
@@ -46,11 +50,11 @@ func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (Rem
 
 // reminder is the mail a task due soon is reminded of with. The title goes
 // into the subject as one line: a line break there would be a header.
-func reminder(t task.Task) Mail {
+func reminder(t task.Task, to string) Mail {
 	title := strings.Join(strings.Fields(t.Title), " ")
 	return Mail{
 		UserID:  t.OwnerID,
-		To:      t.Assignee,
+		To:      to,
 		Subject: "Due soon: " + title,
 		Body:    "\"" + title + "\" is due on " + t.Due.UTC().Format("Monday 2 January 2006 at 15:04 UTC") + ".\n",
 	}

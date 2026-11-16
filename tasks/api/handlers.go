@@ -75,6 +75,16 @@ func sweep(ctx context.Context) error {
 	return nil
 }
 
+// count is the query "census"'s body: every member's tasks counted, through
+// their use case.
+func count(ctx context.Context, in NoInput) (out Census, err error) {
+	res, err := wired.countTasks.Execute(ctx, planner.CountTasksInput{})
+	if err != nil {
+		return Census{}, err
+	}
+	return Census{Counts: res.Counts, Total: res.Total, Overdue: res.Overdue}, nil
+}
+
 // move runs MoveTask for one of the four routes that move a task.
 func move(ctx context.Context, id string, event task.LifecycleEvent) (task.Task, error) {
 	owner, err := caller(ctx)

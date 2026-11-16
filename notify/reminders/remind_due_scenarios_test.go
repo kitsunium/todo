@@ -14,7 +14,7 @@ import (
 func givenRemindDueMailsEachTaskDueSoonOnce(t *testing.T) (RemindDue, RemindDueInput, func(*testing.T, RemindDueOutput)) {
 	t.Helper()
 	mailer, log := &memMailer{}, memLog{"task_told": true}
-	uc := NewRemindDue(dueSoon{dueTask("task_a", "ada@example.com"), dueTask("task_told", "bob@example.com")}, log, mailer)
+	uc := NewRemindDue(dueSoon{dueTask("task_a", "user_ada"), dueTask("task_told", "user_ada")}, log, everyone, mailer)
 	in := RemindDueInput{Within: 24 * time.Hour}
 	return uc, in, func(t *testing.T, out RemindDueOutput) {
 		t.Helper()
@@ -31,12 +31,12 @@ func givenRemindDueMailsEachTaskDueSoonOnce(t *testing.T) (RemindDue, RemindDueI
 	}
 }
 
-// givenRemindDueSkipsATaskAssignedToNoAddress builds RemindDue for "skips a task assigned to no address": the use case, its input, and
+// givenRemindDueSkipsATaskWhoseOwnerIsGone builds RemindDue for "skips a task whose owner is gone": the use case, its input, and
 // what its output must be.
-func givenRemindDueSkipsATaskAssignedToNoAddress(t *testing.T) (RemindDue, RemindDueInput, func(*testing.T, RemindDueOutput)) {
+func givenRemindDueSkipsATaskWhoseOwnerIsGone(t *testing.T) (RemindDue, RemindDueInput, func(*testing.T, RemindDueOutput)) {
 	t.Helper()
 	mailer, log := &memMailer{}, memLog{}
-	uc := NewRemindDue(dueSoon{dueTask("task_a", "Ada"), dueTask("task_b", "")}, log, mailer)
+	uc := NewRemindDue(dueSoon{dueTask("task_a", "user_gone")}, log, everyone, mailer)
 	return uc, RemindDueInput{Within: 24 * time.Hour}, func(t *testing.T, out RemindDueOutput) {
 		t.Helper()
 		if out.Sent != 0 || len(mailer.sent) != 0 || len(log) != 0 {

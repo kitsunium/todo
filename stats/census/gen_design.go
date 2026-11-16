@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 // Package census — The job that samples the task list, and the HTTP read of
 // its samples.
@@ -14,7 +14,6 @@ import (
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
-	"github.com/kitsunium/todo/tasks/planner"
 )
 
 // errNotImplemented is what a skeleton answers until its body is written:
@@ -71,11 +70,10 @@ func Sample(ctx context.Context) error {
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
-	countTasks planner.CountTasks
 }
 
 // Wire gives the handlers what they use: the role that mounts census calls it
 // before its App runs.
-func Wire(countTasks planner.CountTasks) {
-	wired.countTasks = countTasks
+func Wire() {
+
 }

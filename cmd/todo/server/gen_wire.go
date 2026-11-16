@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -49,18 +49,19 @@ func Wire(ctx context.Context, build Build) {
 	listTasks := planner.NewListTasks(tasks)
 	moveTask := planner.NewMoveTask(tasks, appClock, announcer)
 	archiveDone := planner.NewArchiveDone(appClock, tasks, announcer)
+	countTasks := planner.NewCountTasks(appClock, tasks)
 	dueSoon := planner.NewDueSoon(appClock, tasks)
 	ledger := outbox.NewLedger()
+	members := outbox.NewMembers()
 	relay := outbox.NewRelay(outbox.SmtpAddrSetting, outbox.MailFromSetting)
-	remindDue := reminders.NewRemindDue(dueSoon, ledger, relay)
-	countTasks := planner.NewCountTasks(appClock, tasks)
+	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, relay)
 	vault.Wire()
 	authapi.Wire(signUp, signIn, signOut, authenticate)
 	taskstore.Wire()
-	api.Wire(addTask, listTasks, moveTask, archiveDone, api.ArchiveAfterSetting)
+	api.Wire(addTask, listTasks, moveTask, archiveDone, api.ArchiveAfterSetting, countTasks)
 	feed.Wire()
 	outbox.Wire()
 	watch.Wire(remindDue, watch.RemindWithinSetting)
-	census.Wire(countTasks)
+	census.Wire()
 	site.Wire()
 }

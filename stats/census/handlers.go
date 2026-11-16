@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/kitsunium/sdk/framework/app"
-	"github.com/kitsunium/todo/tasks/planner"
+	"github.com/kitsunium/todo/tasks/api"
 )
 
 // current is GET /api/stats's body: the samples kept, oldest first, and the
@@ -29,10 +29,10 @@ func current(ctx context.Context, in NoInput) (out Report, err error) {
 }
 
 // sample is the job "sample"'s body: an error is the run's failure. It
-// counts the tasks through their use case, keeps the count, and drops the
+// asks the tasks' API for its census: a component's data is its own, keeps the count, and drops the
 // oldest samples beyond Keep.
 func sample(ctx context.Context) error {
-	count, err := wired.countTasks.Execute(ctx, planner.CountTasksInput{})
+	count, err := api.CensusQuery.Ask(ctx, api.NoInput{})
 	if err != nil {
 		return err
 	}

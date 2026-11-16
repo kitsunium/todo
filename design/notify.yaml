@@ -1,4 +1,4 @@
-# The reminders: a mail to whoever a task due soon is assigned to, once.
+# The reminders: a mail to the owner of a task due soon, once.
 apiVersion: design/v2
 domains:
   - name: notify
@@ -25,6 +25,12 @@ domains:
             description: MailerV1 sends a mail.
             methods:
               - {name: Send, params: [{name: m, type: Mail}]}
+          - name: Directory
+            direction: out
+            version: 1
+            description: DirectoryV1 gives the address a member is written to.
+            methods:
+              - {name: Address, params: [{name: userID, type: string}], results: [{type: string}, {type: bool}]}
           - name: ReminderLog
             direction: out
             version: 1
@@ -34,25 +40,25 @@ domains:
               - {name: Mark, params: [{name: taskID, type: string}]}
         usecases:
           - name: RemindDue
-            description: RemindDue mails whoever an open task due within a delay is assigned to, once per task.
+            description: RemindDue mails the owner of each open task due within a delay, once per task.
             input:
               - {name: Within, type: time.Duration}
             output:
               - {name: Sent, type: int}
-            calls: [tasks/usecase/DueSoon, notify/port/ReminderLog@v1.Seen, notify/port/Mailer@v1.Send, notify/port/ReminderLog@v1.Mark]
+            calls: [tasks/usecase/DueSoon, notify/port/ReminderLog@v1.Seen, notify/port/Directory@v1.Address, notify/port/Mailer@v1.Send, notify/port/ReminderLog@v1.Mark]
             scenarios:
               - {name: mails each task due soon once, kind: success}
-              - {name: skips a task assigned to no address, kind: success}
+              - {name: skips a task whose owner is gone, kind: success}
         internals:
           functions:
             - name: reminder
               description: "reminder is the mail a task due soon is reminded of with."
-              params: [{name: t, type: "task.Task"}]
+              params: [{name: t, type: "task.Task"}, {name: to, type: "string"}]
               results: [{type: "Mail"}]
       - name: outbox
         role: adapter
         code: 64.3.2
-        uses: [reminders]
+        uses: [reminders, vault]
         description: The mails sent, kept, handed to the SMTP relay when one is named, their HTTP read, and the log of the reminders.
         entities:
           - name: Sent
@@ -94,6 +100,9 @@ domains:
             uses: ["setting:smtp-addr", "setting:mail-from"]
             connections:
               - {name: smtp-submission, description: "The server hands each reminder to the deployment's SMTP relay.", transport: tcp, side: dials, port: 587, to: "system:mail-relay", security: starttls, frames: [Mail]}
+          - name: Members
+            description: Members is Directory@v1 on the identity's query "member".
+            implements: [notify/port/Directory@v1]
           - name: Ledger
             description: Ledger is ReminderLog@v1 on the store "reminded".
             implements: [notify/port/ReminderLog@v1]
@@ -111,14 +120,15 @@ domains:
         uses: [reminders]
         description: The job that sends the reminders.
         settings:
-          - {name: remind-within, type: duration, default: 24h, description: How long before its due date a task's assignee is reminded.}
+          - {name: remind-within, type: duration, default: 24h, description: How long before its due date a task's owner is reminded.}
         jobs:
-          - {name: remind-due, every: 1m, handler: Remind, description: Reminds the assignees of the tasks due within remind-within., uses: [notify/usecase/RemindDue, "setting:remind-within"], calls: [notify/usecase/RemindDue]}
+          - {name: remind-due, every: 1m, handler: Remind, description: Reminds the owners of the tasks due within remind-within., uses: [notify/usecase/RemindDue, "setting:remind-within"], calls: [notify/usecase/RemindDue]}
     sequences:
       - name: remind-due
-        description: The server reminds an assignee of a task due soon.
+        description: The server reminds a member of a task of theirs due soon.
         start: notify/usecase/RemindDue
         steps:
           - call: notify/port/ReminderLog@v1.Seen
+          - call: notify/port/Directory@v1.Address
           - call: notify/port/Mailer@v1.Send
           - call: notify/port/ReminderLog@v1.Mark

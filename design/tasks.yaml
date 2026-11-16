@@ -242,7 +242,7 @@ domains:
         role: presentation
         code: 64.1.4
         uses: [planner, task]
-        description: The HTTP API of a member's tasks, and the job that archives what was done long ago.
+        description: The HTTP API of a member's tasks, the census the rest of the product asks, and the job that archives what was done long ago.
         values:
           - name: AddRequest
             description: What a member sends to add a task.
@@ -260,12 +260,22 @@ domains:
             description: Which tasks to list.
             fields:
               - {name: State, type: string, tag: 'query:"state"'}
+          - name: Census
+            description: The tasks counted, every member's together.
+            fields:
+              - {name: Counts, type: "map[string]int", tag: 'json:"counts" app:"public"'}
+              - {name: Total, type: int, tag: 'json:"total" app:"public"'}
+              - {name: Overdue, type: int, tag: 'json:"overdue" app:"public"'}
+          - name: NoInput
+            description: A question that needs no word.
           - name: TaskList
             description: The tasks asked for.
             fields:
               - {name: Tasks, type: "[]task.Task", tag: 'json:"tasks"'}
         settings:
           - {name: archive-after, type: duration, default: 24h, description: How long a done task stays listed before it is archived.}
+        queries:
+          - {name: census, input: NoInput, output: Census, handler: Count, description: "The census: how many tasks there are per state, for the components that watch the list.", uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
         endpoints:
           - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
           - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}

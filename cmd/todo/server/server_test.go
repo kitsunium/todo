@@ -227,13 +227,13 @@ func TestATaskGoesThroughItsLifecycle(t *testing.T) {
 	}
 }
 
-// The jobs run on the product's clock: the vital signs are sampled, a task
-// due soon is reminded of once, and a task done for a day is archived.
+// The jobs run on the product's clock: the vital signs are sampled, the owner of
+// a task due soon is reminded of it once, and a task done for a day is archived.
 func TestTheJobsRunOnTheClock(t *testing.T) {
 	p := start(t)
 	ada := p.signUp("Ada", "ada@example.com")
 	var soon, other taskView
-	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Ship the release", "assignee": "ada@example.com", "due": epoch.Add(6 * time.Hour)}, &soon)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Ship the release", "assignee": "Grace", "due": epoch.Add(6 * time.Hour)}, &soon)
 	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Tidy the backlog"}, &other)
 	ada.call(http.StatusOK, "POST", "/api/tasks/"+other.ID+"/complete", nil, nil)
 

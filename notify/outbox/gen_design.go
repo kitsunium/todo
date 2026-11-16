@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 // Package outbox — The mails sent, kept, handed to the SMTP relay when one
 // is named, their HTTP read, and the log of the reminders.
@@ -70,6 +70,23 @@ func (a *Ledger) Seen(ctx context.Context, taskID string) (bool, error) {
 }
 
 var _ reminders.ReminderLogV1 = (*Ledger)(nil)
+
+// Members is Directory@v1 on the identity's query "member".
+type Members struct {
+	members // its own state, hand-written
+}
+
+// NewMembers builds Members: its body is the hand-written newMembers.
+func NewMembers() *Members {
+	return newMembers()
+}
+
+// Address is notify/port/Directory@v1's.
+func (a *Members) Address(ctx context.Context, userID string) (string, bool, error) {
+	return a.address(ctx, userID)
+}
+
+var _ reminders.DirectoryV1 = (*Members)(nil)
 
 // Relay is Mailer@v1; it keeps the mail in the store "outbox" and hands it to
 // the relay smtp-addr names.

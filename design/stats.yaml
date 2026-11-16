@@ -7,7 +7,7 @@ domains:
       - name: census
         role: presentation
         code: 64.4.1
-        uses: [planner]
+        uses: [api]
         description: The job that samples the task list, and the HTTP read of its samples.
         evidence: [legacy-product]
         entities:
@@ -33,7 +33,7 @@ domains:
         stores:
           - {name: snapshots, entity: Snapshot, key: ID, description: "The latest samples, keyed by a time-ordered id."}
         jobs:
-          - {name: sample, every: 30s, handler: Sample, description: Counts the tasks and keeps the count., uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
+          - {name: sample, every: 30s, handler: Sample, description: Counts the tasks and keeps the count.}
         endpoints:
           - {route: "GET /api/stats", request: NoInput, response: Report, handler: Current}
         internals:

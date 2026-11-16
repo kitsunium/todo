@@ -156,7 +156,7 @@ domains:
         role: adapter
         code: 64.6.3
         uses: [access, account]
-        description: The accounts and the sessions in the framework's stores, the passwords stretched, the secrets drawn.
+        description: The accounts and the sessions in the framework's stores, the directory the rest of the product asks, the passwords stretched, the secrets drawn.
         entities:
           - name: AccountRecord
             description: An account as the store keeps it, field for field.
@@ -178,6 +178,20 @@ domains:
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
               - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+        values:
+          - name: ByID
+            description: Which member is asked about.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+          - name: Member
+            description: A member as the rest of the product may know them; Found is false when there is none.
+            fields:
+              - {name: Found, type: bool, tag: 'json:"found" app:"public"'}
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+        queries:
+          - {name: member, input: ByID, output: Member, handler: Directory, description: "The directory: a member's address and name by their id, for the components that write to them."}
         stores:
           - name: accounts
             entity: AccountRecord

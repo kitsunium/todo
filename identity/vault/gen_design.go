@@ -1,8 +1,9 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
+// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
 
 // Package vault — The accounts and the sessions in the framework's stores,
-// the passwords stretched, the secrets drawn.
+// the directory the rest of the product asks, the passwords stretched, the
+// secrets drawn.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -42,6 +43,20 @@ type SessionRecord struct {
 	CreatedAt  time.Time `json:"createdAt" app:"public"`
 	LastSeenAt time.Time `json:"lastSeenAt" app:"public"`
 	ExpiresAt  time.Time `json:"expiresAt" app:"public"`
+}
+
+// ByID — Which member is asked about.
+type ByID struct {
+	ID string `json:"id" app:"public"`
+}
+
+// Member — A member as the rest of the product may know them; Found is false
+// when there is none.
+type Member struct {
+	Found bool   `json:"found" app:"public"`
+	ID    string `json:"id" app:"public"`
+	Email string `json:"email" app:"personal"`
+	Name  string `json:"name" app:"personal"`
 }
 
 // Accounts is Accounts@v1 on the store "accounts".
@@ -170,7 +185,7 @@ func (a *WallClock) Now(ctx context.Context) (time.Time, error) {
 var _ access.ClockV1 = (*WallClock)(nil)
 
 // Service is vault's framework service: what it declares, drawn and run.
-var Service = app.NewService("vault", "The accounts and the sessions in the framework's stores, the passwords stretched, the secrets drawn.")
+var Service = app.NewService("vault", "The accounts and the sessions in the framework's stores, the directory the rest of the product asks, the passwords stretched, the secrets drawn.")
 
 // AccountsStore — Every account, keyed by its id; one untouched for three
 // years is erased.
@@ -185,6 +200,15 @@ var SessionsStore = Service.Store("sessions", func(e SessionRecord) string { ret
 	app.DeleteAfter[SessionRecord](time.Duration(86400000000000) /* 24h */, func(e SessionRecord) (time.Time, bool) { return e.ExpiresAt, !e.ExpiresAt.IsZero() }),
 	app.Unique[SessionRecord]("by-token", func(e SessionRecord) string { return e.TokenHash }),
 )
+
+// MemberQuery — The directory: a member's address and name by their id, for
+// the components that write to them.
+var MemberQuery = Service.Query("member", Directory)
+
+// Directory handles the query "member": its body is the hand-written directory.
+func Directory(ctx context.Context, in ByID) (Member, error) {
+	return directory(ctx, in)
+}
 
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).

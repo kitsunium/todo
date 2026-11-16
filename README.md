@@ -10,8 +10,8 @@ and imports the SDK alone.
 A member signs up with an address and a password, signs in, and has a task
 list of their own. They add tasks with a priority, an assignee and a due date, and moves
 them through their lifecycle: open, done, archived. Every move is published on a topic, and lands in their activity feed a
-moment later. A task done for a day is archived on its own, whoever a task
-due within a day is assigned to gets one reminder by mail, and the task list
+moment later. A task done for a day is archived on its own, the owner of a task
+due within a day gets one reminder by mail, and the task list
 is counted every thirty seconds. The server serves a small web app at `/`,
 in French: sign up, sign in, add tasks, move them, read the feed.
 
@@ -77,7 +77,7 @@ interface, so a deployment names its address. Its data lives in
 | Setting | Default | Says |
 |---|---|---|
 | `SERVER_ARCHIVE_AFTER` | `24h` | how long a done task stays listed before it is archived |
-| `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's assignee is reminded |
+| `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's owner is reminded |
 | `SERVER_SMTP_ADDR` | empty | the SMTP relay's host and port (587, STARTTLS when the relay offers it); empty, the mails are kept in the outbox and not relayed |
 | `SERVER_MAIL_FROM` | `todo@localhost` | the address the mails come from |
 
