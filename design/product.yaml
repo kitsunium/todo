@@ -19,6 +19,13 @@ context:
   systems:
     - name: mail-relay
       description: The SMTP relay the reminders are handed to, when the deployment names one.
+deployment:
+  description: One machine that serves the todo, and the operator's, from which a load is driven against it.
+  nodes:
+    - {name: host, description: The machine that serves the API., runs: [todo/server]}
+    - {name: workstation, description: "The operator's machine, where the load command is run by hand.", runs: [todo/load]}
+  links:
+    - {name: load-to-api, description: "The load calls the server's HTTP API.", connection: api, between: [workstation, host]}
 evidence:
   - name: owner-2026-11-16
     kind: decision

@@ -20,5 +20,10 @@
   default port: `Relay` dials the mail relay on 587, `Client` dials the
   server on 4000. The server's own listening socket is the framework's, no
   adapter's, so the design declares none for it.
+- `product.yaml` holds the deployment: the node `host` runs the server
+  role, `workstation` the load, and the link `load-to-api` carries the
+  connection `api` between them. A node runs a role of the product, so the
+  mail relay, a system of the context, is no node: the connection
+  `smtp-submission` has no link yet.
 - The product is closed: a new package or exported symbol is declared here
   first, and `product.exceptions` stays empty.
