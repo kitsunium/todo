@@ -20,7 +20,7 @@
 #                       X-Forwarded-For hop, the one the proxy appended (sessions
 #                       list it)
 
-FROM golang:1.27.2 AS build
+FROM golang:1.27.3 AS build
 WORKDIR /src/todo
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download

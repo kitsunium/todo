@@ -136,6 +136,8 @@ func (h *harness) client(name string) *client {
 
 // do sends a request and returns the status, the body and the headers. A
 // rate-limited request is retried: the limits are real, and tests go fast.
+// The buckets refill on the product's clock, the manual one, so a retry
+// moves it by what one token costs the slowest bucket (two a second).
 func (c *client) do(method, path string, body any) (int, []byte, http.Header) {
 	c.h.t.Helper()
 	var raw []byte
@@ -166,7 +168,8 @@ func (c *client) do(method, path string, body any) (int, []byte, http.Header) {
 		out, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests && attempt < 60 {
-			time.Sleep(200 * time.Millisecond)
+			c.h.clk.Advance(500 * time.Millisecond)
+			time.Sleep(2 * time.Millisecond)
 			continue
 		}
 		return resp.StatusCode, out, resp.Header
