@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:26d1b0e07fdcb45ae42a884f00894f45058e418a1201ef1ac19b51ed5bc9129f
+// design:digest sha256:6d83e3d5800ec2321096deeccd3c573f533b4ecf81275cccebf1ad5e2b7143c2
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -43,11 +43,11 @@ func Wire(ctx context.Context, build Build) {
 	authenticate := access.NewAuthenticate(drawer, sessions, wallClock, accounts)
 	appClock := taskstore.NewAppClock()
 	tasks := taskstore.NewTasks()
-	feedFeed := feed.NewFeed()
-	addTask := planner.NewAddTask(appClock, tasks, feedFeed)
+	announcer := taskstore.NewAnnouncer()
+	addTask := planner.NewAddTask(appClock, tasks, announcer)
 	listTasks := planner.NewListTasks(tasks)
-	moveTask := planner.NewMoveTask(tasks, appClock, feedFeed)
-	archiveDone := planner.NewArchiveDone(appClock, tasks, feedFeed)
+	moveTask := planner.NewMoveTask(tasks, appClock, announcer)
+	archiveDone := planner.NewArchiveDone(appClock, tasks, announcer)
 	dueSoon := planner.NewDueSoon(appClock, tasks)
 	ledger := outbox.NewLedger()
 	relay := outbox.NewRelay(outbox.SmtpAddrSetting, outbox.MailFromSetting)

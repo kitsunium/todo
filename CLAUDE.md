@@ -24,9 +24,9 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session` |
 | `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
 | `tasks/planner` | planner (application) | the use cases `AddTask` `MoveTask` `ListTasks` `ArchiveDone` `CountTasks` `DueSoon`, the ports `TaskStore` `Clock` `Journal`; `lifecycle.go` is what they share |
-| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, `Tasks` and `AppClock` |
+| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes) and `AppClock` |
 | `tasks/api` | api (presentation) | the routes of `/api/tasks`, the job `archive-done`, the setting `archive-after` |
-| `activity/feed` | feed (adapter) | the store `entries`, `Feed` (the tasks' `Journal`), `GET /api/activity` |
+| `activity/feed` | feed (adapter) | the store `entries`, the subscription `tasks` to the tasks' events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
 | `notify/outbox` | outbox (adapter) | the stores `outbox` and `reminded`, `Relay` (SMTP, its connection declared in the design) and `Ledger`, `GET /api/outbox` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
@@ -69,6 +69,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   are tagged `app:"secret"`. An unknown address and a wrong password are
   answered alike, and cost the same time (`Stretcher.verify` on an empty
   hash).
+- **A subscription is delivered at least once, and later**: it keys what
+  it writes by the event's own id and writes nothing the second time
+  (`feed.record`). A test that reads what a subscription wrote moves the
+  clock until it is there.
 - **Time is the framework's**: `app.Now(ctx)`, in UTC, to the millisecond
   (`AppClock`, and the adapters that stamp a record). A test moves it.
 - **Ask "is there one?" with `Filter`, not `Get`**: a missing key is a

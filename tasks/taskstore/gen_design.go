@@ -1,8 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:26d1b0e07fdcb45ae42a884f00894f45058e418a1201ef1ac19b51ed5bc9129f
+// design:digest sha256:6d83e3d5800ec2321096deeccd3c573f533b4ecf81275cccebf1ad5e2b7143c2
 
-// Package taskstore — The tasks in the framework's store, and the
-// framework's clock.
+// Package taskstore — The tasks in the framework's store, their events on a
+// topic, and the framework's clock.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -36,6 +36,38 @@ type Record struct {
 	UpdatedAt time.Time `json:"updatedAt" app:"public"`
 	DoneAt    time.Time `json:"doneAt" app:"public"`
 }
+
+// Event — What happened to a task, as the topic carries it to whoever
+// listens.
+type Event struct {
+	// ID is the event's own: a listener that is delivered it twice keys what it
+	// writes by it.
+	ID string `json:"id" app:"public"`
+	// Kind is added, or the lifecycle event that moved the task.
+	Kind     string    `json:"kind" app:"public"`
+	TaskID   string    `json:"taskId" app:"public"`
+	OwnerID  string    `json:"ownerId" app:"public"`
+	Title    string    `json:"title" app:"public"`
+	Assignee string    `json:"assignee" app:"personal"`
+	At       time.Time `json:"at" app:"public"`
+}
+
+// Announcer is Journal@v1 on the topic "events".
+type Announcer struct {
+	announcer // its own state, hand-written
+}
+
+// NewAnnouncer builds Announcer: its body is the hand-written newAnnouncer.
+func NewAnnouncer() *Announcer {
+	return newAnnouncer()
+}
+
+// Record is tasks/port/Journal@v1's.
+func (a *Announcer) Record(ctx context.Context, kind string, t task.Task) error {
+	return a.record(ctx, kind, t)
+}
+
+var _ planner.JournalV1 = (*Announcer)(nil)
 
 // AppClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
 type AppClock struct {
@@ -87,13 +119,17 @@ func (self *Tasks) Save(ctx context.Context, t task.Task) error {
 var _ planner.TaskStoreV1 = (*Tasks)(nil)
 
 // Service is taskstore's framework service: what it declares, drawn and run.
-var Service = app.NewService("taskstore", "The tasks in the framework's store, and the framework's clock.")
+var Service = app.NewService("taskstore", "The tasks in the framework's store, their events on a topic, and the framework's clock.")
 
 // TasksStore — Every task, keyed by its id; who it is assigned to is erased
 // a year after it was last written.
 var TasksStore = Service.Store("tasks", func(e Record) string { return e.ID },
 	app.EraseAfter[Record](time.Duration(31536000000000000) /* 8760h */, func(e Record) (time.Time, bool) { return e.UpdatedAt, !e.UpdatedAt.IsZero() }),
 )
+
+// EventsTopic — What happened to the tasks: one message a task added or
+// moved, delivered at least once.
+var EventsTopic = Service.Topic[Event]("events")
 
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).

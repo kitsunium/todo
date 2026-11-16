@@ -7,8 +7,8 @@ domains:
       - name: feed
         role: adapter
         code: 64.2.1
-        uses: [planner, task]
-        description: The feed, written from what the tasks' use cases record, and its HTTP read.
+        uses: [taskstore]
+        description: The feed, written from the tasks' events, and its HTTP read.
         evidence: [legacy-product]
         entities:
           - name: Entry
@@ -32,16 +32,14 @@ domains:
             fields:
               - {name: Limit, type: int, tag: 'query:"limit"'}
         constants:
-          - {name: Keep, type: int, value: "200", description: Keep is how many entries the feed keeps.}
+          - {name: Keep, type: int, value: "200", description: Keep is how many entries the feed keeps for a member.}
         stores:
           - name: entries
             entity: Entry
             key: ID
-            description: "The feed's entries, keyed by their id; an entry is deleted ninety days after it was written."
+            description: "The feed's entries, keyed by the id of the event each one tells; an entry is deleted ninety days after it was written."
             deleteAfter: {delay: 2160h, since: At}
-        adapters:
-          - name: Feed
-            description: Feed is Journal@v1 on the store "entries"; it keeps the latest Keep entries.
-            implements: [tasks/port/Journal@v1]
+        subscriptions:
+          - {name: tasks, topic: tasks/topic/events, handler: Record}
         endpoints:
           - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent, auth: required}

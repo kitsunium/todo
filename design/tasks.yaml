@@ -165,7 +165,7 @@ domains:
         role: adapter
         code: 64.1.3
         uses: [planner, task]
-        description: The tasks in the framework's store, and the framework's clock.
+        description: The tasks in the framework's store, their events on a topic, and the framework's clock.
         entities:
           - name: Record
             description: A task as the store keeps it, field for field.
@@ -181,6 +181,19 @@ domains:
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
               - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"'}
+        values:
+          - name: Event
+            description: What happened to a task, as the topic carries it to whoever listens.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"', description: "ID is the event's own: a listener that is delivered it twice keys what it writes by it."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
+              - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
+              - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"'}
+              - {name: Title, type: string, tag: 'json:"title" app:"public"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        topics:
+          - {name: events, message: Event, description: "What happened to the tasks: one message a task added or moved, delivered at least once."}
         stores:
           - name: tasks
             entity: Record
@@ -191,6 +204,9 @@ domains:
           - name: Tasks
             description: Tasks is TaskStore@v1 on the store "tasks".
             implements: [tasks/port/TaskStore@v1]
+          - name: Announcer
+            description: Announcer is Journal@v1 on the topic "events".
+            implements: [tasks/port/Journal@v1]
           - name: AppClock
             description: AppClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
             implements: [tasks/port/Clock@v1]

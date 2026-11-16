@@ -18,6 +18,7 @@ import (
 	// What the binary's main links for this role: the HTTP engine and the
 	// subsystems its components declare. A test program links them itself.
 	_ "github.com/kitsunium/sdk/framework/app/jobs"
+	_ "github.com/kitsunium/sdk/framework/app/queue"
 	_ "github.com/kitsunium/sdk/framework/app/server"
 	_ "github.com/kitsunium/sdk/framework/app/store"
 )
@@ -200,7 +201,11 @@ func TestATaskGoesThroughItsLifecycle(t *testing.T) {
 			TaskID string `json:"taskId"`
 		} `json:"entries"`
 	}
-	ada.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+	// The feed hears of the moves through a topic: later, on the product's clock.
+	p.settle("the six entries of the feed", 50*time.Millisecond, func() bool {
+		ada.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+		return len(feed.Entries) >= 6
+	})
 	var kinds []string
 	for _, e := range feed.Entries {
 		if e.TaskID != added.ID {
