@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/kitsunium/sdk/framework/app"
+	"github.com/kitsunium/todo/contacts/linkstore"
 	"github.com/kitsunium/todo/tasks/taskstore"
 )
 
@@ -45,20 +46,32 @@ func recent(ctx context.Context, in PageRequest) (out Page, err error) {
 // the next.
 var writing sync.Mutex
 
-// record is the subscription "tasks"'s body: one entry a message, keyed by
-// the event's id, so a message delivered twice writes nothing the second
-// time. The entry is numbered after the newest one, and the number is what
-// orders the feed: two entries written in the same millisecond have the
-// same date, and an id says nothing of which came first. The member's
-// oldest entries beyond Keep are then dropped.
+// record is the subscription "tasks"'s body: one entry a message, in the
+// feed of the task's owner.
 func record(ctx context.Context, msg taskstore.Event) error {
+	return write(ctx, Entry{ID: msg.ID, UserID: msg.OwnerID, Kind: msg.Kind, TaskID: msg.TaskID, Title: msg.Title, Assignee: msg.Assignee, At: msg.At})
+}
+
+// recordContact is the subscription "contacts"'s body: one entry a message,
+// in the feed of the member it is told to, titled with who did it.
+func recordContact(ctx context.Context, msg linkstore.Event) error {
+	return write(ctx, Entry{ID: msg.ID, UserID: msg.UserID, Kind: msg.Kind, Title: msg.ActorName, At: msg.At})
+}
+
+// write keeps an entry, keyed by its event's id, so a message delivered
+// twice writes nothing the second time. The entry is numbered after the
+// newest one, and the number is what orders the feed: two entries written
+// in the same millisecond have the same date, and an id says nothing of
+// which came first. The member's oldest entries beyond Keep are then
+// dropped.
+func write(ctx context.Context, e Entry) error {
 	writing.Lock()
 	defer writing.Unlock()
 	all, err := newestFirst(ctx)
 	if err != nil {
 		return err
 	}
-	e := Entry{ID: msg.ID, Seq: 1, UserID: msg.OwnerID, Kind: msg.Kind, TaskID: msg.TaskID, Title: msg.Title, Assignee: msg.Assignee, At: msg.At}
+	e.Seq = 1
 	if len(all) > 0 {
 		e.Seq = all[0].Seq + 1
 	}

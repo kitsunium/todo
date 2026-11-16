@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
+// design:digest sha256:dd6d9d76cd70cb3afe4d348b4ed0e2bdf2f8aa9f13db84b61b2cb1c34cdd43a0
 
 // Package census — The job that samples the task list, and the HTTP read of
 // its samples.

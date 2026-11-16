@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
+// design:digest sha256:dd6d9d76cd70cb3afe4d348b4ed0e2bdf2f8aa9f13db84b61b2cb1c34cdd43a0
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -11,6 +11,9 @@ import (
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/framework/model"
 	"github.com/kitsunium/todo/activity/feed"
+	"github.com/kitsunium/todo/contacts/circle"
+	"github.com/kitsunium/todo/contacts/contactsapi"
+	"github.com/kitsunium/todo/contacts/linkstore"
 	"github.com/kitsunium/todo/identity/access"
 	"github.com/kitsunium/todo/identity/authapi"
 	"github.com/kitsunium/todo/identity/vault"
@@ -24,8 +27,8 @@ import (
 	"github.com/kitsunium/todo/web/site"
 )
 
-// App is role server: the framework App of vault, authapi, taskstore, api, feed, outbox, watch, census, site, profile server.
-var App = app.NewApp("server", vault.Service, authapi.Service, taskstore.Service, api.Service, feed.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer))
+// App is role server: the framework App of vault, authapi, linkstore, contactsapi, taskstore, api, feed, outbox, watch, census, site, profile server.
+var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, taskstore.Service, api.Service, feed.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer))
 
 // Build is what the binary's build says: its variables, set by -ldflags -X.
 type Build struct {
@@ -42,13 +45,21 @@ func Wire(ctx context.Context, build Build) {
 	signIn := access.NewSignIn(accounts, wallClock, stretcher, drawer, sessions)
 	signOut := access.NewSignOut(sessions)
 	authenticate := access.NewAuthenticate(drawer, sessions, wallClock, accounts)
+	links := linkstore.NewLinks()
+	directory := linkstore.NewDirectory()
+	listContacts := circle.NewListContacts(links, directory)
+	linkstoreWallClock := linkstore.NewWallClock()
+	announcer := linkstore.NewAnnouncer()
+	requestContact := circle.NewRequestContact(directory, links, linkstoreWallClock, announcer)
+	answerRequest := circle.NewAnswerRequest(links, linkstoreWallClock, directory, announcer)
+	removeContact := circle.NewRemoveContact(links)
 	appClock := taskstore.NewAppClock()
 	tasks := taskstore.NewTasks()
-	announcer := taskstore.NewAnnouncer()
-	addTask := planner.NewAddTask(appClock, tasks, announcer)
+	taskstoreAnnouncer := taskstore.NewAnnouncer()
+	addTask := planner.NewAddTask(appClock, tasks, taskstoreAnnouncer)
 	listTasks := planner.NewListTasks(tasks)
-	moveTask := planner.NewMoveTask(tasks, appClock, announcer)
-	archiveDone := planner.NewArchiveDone(appClock, tasks, announcer)
+	moveTask := planner.NewMoveTask(tasks, appClock, taskstoreAnnouncer)
+	archiveDone := planner.NewArchiveDone(appClock, tasks, taskstoreAnnouncer)
 	countTasks := planner.NewCountTasks(appClock, tasks)
 	dueSoon := planner.NewDueSoon(appClock, tasks)
 	ledger := outbox.NewLedger()
@@ -57,6 +68,8 @@ func Wire(ctx context.Context, build Build) {
 	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, relay)
 	vault.Wire()
 	authapi.Wire(signUp, signIn, signOut, authenticate)
+	linkstore.Wire()
+	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact)
 	taskstore.Wire()
 	api.Wire(addTask, listTasks, moveTask, archiveDone, api.ArchiveAfterSetting, countTasks)
 	feed.Wire()

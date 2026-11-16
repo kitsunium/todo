@@ -1,0 +1,270 @@
+# The contacts: who a member works with, by a request the other accepts.
+apiVersion: design/v2
+domains:
+  - name: contacts
+    description: Who a member works with.
+    components:
+      - name: link
+        role: domain
+        code: 64.8.1
+        description: The link between two members, and the request that makes it.
+        evidence: [legacy-product]
+        entities:
+          - name: Link
+            description: A contact request between two members, and the contact it becomes once accepted.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Pair, type: string, tag: 'json:"pair" app:"public"', description: "Pair names the two members whatever their order: there is one link a pair at most."}
+              - {name: RequesterID, type: string, tag: 'json:"requesterId" app:"public"'}
+              - {name: AddresseeID, type: string, tag: 'json:"addresseeId" app:"public"'}
+              - {name: State, type: RequestsState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+            methods:
+              - name: Other
+                description: Other is the member at the other end of the link from user, and whether user is at one end.
+                params: [{name: user, type: string}]
+                results: [{type: string}, {type: bool}]
+                properties: [TheOtherEnd]
+        functions:
+          - name: PairOf
+            description: PairOf names two members whatever their order.
+            params: [{name: a, type: string}, {name: b, type: string}]
+            results: [{type: string}]
+            properties: [Symmetric]
+        errors:
+          - {name: ErrNotFound, serial: 1, message: no such contact}
+          - {name: ErrUnknownMember, serial: 2, message: nobody has this address}
+          - {name: ErrSelf, serial: 3, message: a member is not their own contact}
+          - {name: ErrAlready, serial: 4, message: "you are already contacts, or a request between you is waiting for an answer"}
+          - {name: ErrNotAllowed, serial: 5, message: this request is not yours to answer this way}
+        workflows:
+          - name: Requests
+            entity: Link
+            description: A request is pending until its addressee accepts or declines it, or its requester cancels it.
+            states: [pending, accepted, declined, cancelled]
+            initial: pending
+            transitions:
+              - {event: accept, from: [pending], to: accepted}
+              - {event: decline, from: [pending], to: declined}
+              - {event: cancel, from: [pending], to: cancelled}
+      - name: circle
+        role: application
+        code: 64.8.2
+        uses: [link]
+        description: Asking a member to be a contact, answering, and listing one's contacts.
+        values:
+          - name: Person
+            description: A member as a contact sees them.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+          - name: Contact
+            description: A link as one of its two members reads it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: User, type: Person, tag: 'json:"user"'}
+              - {name: Since, type: time.Time, tag: 'json:"since" app:"public"'}
+        ports:
+          - name: Links
+            direction: out
+            version: 1
+            description: LinksV1 keeps the links.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: l, type: link.Link}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: link.Link}, {type: bool}]}
+              - {name: ByPair, params: [{name: pair, type: string}], results: [{type: link.Link}, {type: bool}]}
+              - {name: Of, params: [{name: user, type: string}], results: [{type: "[]link.Link"}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+          - name: People
+            direction: out
+            version: 1
+            description: PeopleV1 is the directory of the members.
+            methods:
+              - {name: ByEmail, params: [{name: email, type: string}], results: [{type: Person}, {type: bool}]}
+              - {name: ByID, params: [{name: id, type: string}], results: [{type: Person}, {type: bool}]}
+          - name: Notices
+            direction: out
+            version: 1
+            description: NoticesV1 is told what happened to a link, for whoever tells the members.
+            methods:
+              - {name: Tell, params: [{name: kind, type: string}, {name: l, type: link.Link}, {name: actor, type: Person}]}
+          - name: Clock
+            direction: out
+            version: 1
+            description: ClockV1 tells the time.
+            methods:
+              - {name: Now, results: [{type: time.Time}]}
+        usecases:
+          - name: RequestContact
+            description: RequestContact asks the member an address belongs to to be a contact.
+            input:
+              - {name: From, type: string}
+              - {name: Email, type: string}
+            output:
+              - {name: Link, type: link.Link}
+            errors: [link.ErrUnknownMember, link.ErrSelf, link.ErrAlready]
+            calls: [contacts/port/People@v1.ByEmail, contacts/port/People@v1.ByID, contacts/port/Links@v1.ByPair, contacts/port/Links@v1.Delete, contacts/port/Clock@v1.Now, contacts/port/Links@v1.NewID, contacts/port/Links@v1.Save, contacts/port/Notices@v1.Tell]
+            scenarios:
+              - {name: asks a member, kind: success}
+              - {name: asks again after a refusal, kind: success}
+              - {name: refuses an unknown address, kind: refusal, error: link.ErrUnknownMember}
+              - {name: refuses oneself, kind: refusal, error: link.ErrSelf}
+              - {name: refuses a pair already linked, kind: refusal, error: link.ErrAlready}
+          - name: AnswerRequest
+            description: AnswerRequest moves a pending request by one event, accept or decline for its addressee, cancel for its requester.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Event, type: string}
+            output:
+              - {name: Link, type: link.Link}
+            errors: [link.ErrNotFound, link.ErrNotAllowed]
+            calls: [contacts/port/Links@v1.Get, contacts/port/Clock@v1.Now, contacts/port/Links@v1.Save, contacts/port/People@v1.ByID, contacts/port/Notices@v1.Tell]
+            scenarios:
+              - {name: accepts a request, kind: success}
+              - {name: refuses the request of others, kind: refusal, error: link.ErrNotFound}
+              - {name: refuses the requester who accepts, kind: refusal, error: link.ErrNotAllowed}
+              - {name: refuses a request already answered, kind: refusal, error: link.ErrNotAllowed}
+          - name: RemoveContact
+            description: RemoveContact ends a contact, for either of its two members.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            errors: [link.ErrNotFound]
+            calls: [contacts/port/Links@v1.Get, contacts/port/Links@v1.Delete]
+            scenarios:
+              - {name: ends a contact, kind: success}
+              - {name: refuses a contact of others, kind: refusal, error: link.ErrNotFound}
+          - name: ListContacts
+            description: ListContacts lists a member's contacts by name, and the requests waiting, those they received and those they sent.
+            input:
+              - {name: User, type: string}
+            output:
+              - {name: Contacts, type: "[]Contact"}
+              - {name: Incoming, type: "[]Contact"}
+              - {name: Outgoing, type: "[]Contact"}
+            calls: [contacts/port/Links@v1.Of, contacts/port/People@v1.ByID]
+            scenarios:
+              - {name: lists contacts and requests apart, kind: success}
+          - name: AreContacts
+            description: AreContacts says whether two members are contacts.
+            input:
+              - {name: A, type: string}
+              - {name: B, type: string}
+            output:
+              - {name: Yes, type: bool}
+            calls: [contacts/port/Links@v1.ByPair]
+            scenarios:
+              - {name: says yes for an accepted link only, kind: success}
+      - name: linkstore
+        role: adapter
+        code: 64.8.3
+        uses: [circle, link, vault]
+        description: The links in the framework's store, their events on a topic, the directory asked of the identity, and the framework's clock.
+        entities:
+          - name: Record
+            description: A link as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Pair, type: string, tag: 'json:"pair" app:"public"'}
+              - {name: RequesterID, type: string, tag: 'json:"requesterId" app:"public"'}
+              - {name: AddresseeID, type: string, tag: 'json:"addresseeId" app:"public"'}
+              - {name: State, type: string, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+        values:
+          - name: Event
+            description: What happened to a link, as the topic carries it to whoever listens.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"', description: "ID is the event's own: a listener that is delivered it twice keys what it writes by it."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is contact-requested or contact-accepted."}
+              - {name: LinkID, type: string, tag: 'json:"linkId" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"', description: "UserID is the member the event is told to."}
+              - {name: ActorID, type: string, tag: 'json:"actorId" app:"public"'}
+              - {name: ActorName, type: string, tag: 'json:"actorName" app:"personal"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        topics:
+          - {name: events, message: Event, description: "What happened to the links: a request received, a request accepted, delivered at least once."}
+        stores:
+          - name: links
+            entity: Record
+            key: ID
+            description: "Every link, keyed by its id; one a pair at most."
+            indexes: [{name: by-pair, field: Pair, unique: true}]
+        adapters:
+          - name: Links
+            description: Links is Links@v1 on the store "links".
+            implements: [contacts/port/Links@v1]
+          - name: Directory
+            description: Directory is People@v1 on the identity's queries "member" and "member-by-email".
+            implements: [contacts/port/People@v1]
+          - name: Announcer
+            description: Announcer is Notices@v1 on the topic "events".
+            implements: [contacts/port/Notices@v1]
+          - name: WallClock
+            description: WallClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
+            implements: [contacts/port/Clock@v1]
+        internals:
+          functions:
+            - name: linkOf
+              description: "linkOf is the link a record keeps."
+              params: [{name: r, type: "Record"}]
+              results: [{type: "link.Link"}]
+      - name: contactsapi
+        role: presentation
+        code: 64.8.4
+        uses: [circle, link]
+        description: The HTTP API of a member's contacts.
+        values:
+          - name: AddRequest
+            description: The address of the member asked.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+          - name: ByID
+            description: The link a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+          - name: NoInput
+            description: A request, or an answer, that says nothing.
+          - name: Listing
+            description: A member's contacts, and the requests waiting.
+            fields:
+              - {name: Contacts, type: "[]circle.Contact", tag: 'json:"contacts"'}
+              - {name: Incoming, type: "[]circle.Contact", tag: 'json:"incoming"'}
+              - {name: Outgoing, type: "[]circle.Contact", tag: 'json:"outgoing"'}
+        endpoints:
+          - {route: "GET /api/contacts", request: NoInput, response: Listing, handler: List, auth: required, uses: [contacts/usecase/ListContacts], calls: [contacts/usecase/ListContacts]}
+          - {route: "POST /api/contacts", request: AddRequest, response: link.Link, handler: Add, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}
+          - {route: "POST /api/contacts/{id}/accept", request: ByID, response: link.Link, handler: Accept, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "POST /api/contacts/{id}/decline", request: ByID, response: link.Link, handler: Decline, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: link.Link, handler: Cancel, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "DELETE /api/contacts/{id}", request: ByID, response: NoInput, handler: Remove, auth: required, uses: [contacts/usecase/RemoveContact], calls: [contacts/usecase/RemoveContact]}
+        internals:
+          functions:
+            - name: answer
+              description: "answer runs AnswerRequest for one of the three routes that move a request."
+              params: [{name: ctx, type: "context.Context"}, {name: id, type: "string"}, {name: event, type: "link.RequestsEvent"}]
+              results: [{type: "link.Link"}, {type: "error"}]
+            - name: caller
+              description: "caller is the member the request comes from; every route asks for one."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: refusal
+              description: "refusal is a use case's error as the API answers it: 404 for a link that is not the caller's or an address nobody has, 409 for a pair already linked or a request that cannot be answered this way, 400 for oneself."
+              params: [{name: err, type: "error"}]
+              results: [{type: "error"}]
+    sequences:
+      - name: request-contact
+        description: A member asks another to be a contact; the other is told.
+        start: contacts/usecase/RequestContact
+        steps:
+          - call: contacts/port/People@v1.ByEmail
+          - call: contacts/port/Links@v1.ByPair
+          - call: contacts/port/Clock@v1.Now
+          - call: contacts/port/Links@v1.NewID
+          - call: contacts/port/Links@v1.Save
+          - call: contacts/port/People@v1.ByID
+          - call: contacts/port/Notices@v1.Tell

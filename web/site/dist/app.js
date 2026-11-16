@@ -5,6 +5,7 @@
 const $ = (id) => document.getElementById(id);
 const priorities = { high: "haute", normal: "normale", low: "basse" };
 const kinds = { added: "ajoutée", complete: "faite", reopen: "rouverte", archive: "archivée", restore: "restaurée" };
+const people = { "contact-requested": "vous demande en contact", "contact-accepted": "a accepté votre demande de contact" };
 const moves = {
   open: [["complete", "Fait"]],
   done: [["reopen", "Rouvrir"], ["archive", "Archiver"]],
@@ -96,7 +97,7 @@ async function refresh() {
   }));
   $("empty").hidden = list.tasks.length > 0;
   $("feed").replaceChildren(...feed.entries.map((e) =>
-    el("li", "", when(e.at) + " — « " + e.title + " » " + (kinds[e.kind] || e.kind))));
+    el("li", "", when(e.at) + " — " + (people[e.kind] ? e.title + " " + people[e.kind] : "« " + e.title + " » " + (kinds[e.kind] || e.kind)))));
 }
 
 function fields(form) {

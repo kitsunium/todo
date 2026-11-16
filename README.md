@@ -12,12 +12,13 @@ list of their own. They add tasks with a priority, an assignee and a due date, a
 them through their lifecycle: open, done, archived. Every move is published on a topic, and lands in their activity feed a
 moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
-is counted every thirty seconds. The server serves a small web app at `/`,
+is counted every thirty seconds. Two members become contacts by a
+request one sends to the other's address and the other accepts. The server serves a small web app at `/`,
 in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
-lives — address verification and password reset by mail, contacts, groups,
-shared tasks, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
+lives — address verification and password reset by mail, invitations of people
+who have no account, groups, shared tasks, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
 module of its own.
 
 ## The design
@@ -26,6 +27,7 @@ module of its own.
 |---|---|---|
 | `design/product.yaml` | — | the product, its context (a member, an operator, the mail relay) and the binary `todo` with its two process roles, `server` and `load` |
 | `design/identity.yaml` | identity | the account and its lock, the session, four use cases and their five ports, the stores behind them, the HTTP API and the handler that says who calls a route, the sequence `sign-in` |
+| `design/contacts.yaml` | contacts | the link between two members and its request, five use cases and their four ports, the store and the topic behind them, the HTTP API, the sequence `request-contact` |
 | `design/tasks.yaml` | tasks | the task and its lifecycle, six use cases and their three ports, the store behind them, the HTTP API, the sequence `complete-task` |
 | `design/activity.yaml` | activity | the feed, written from what the use cases record |
 | `design/notify.yaml` | notify | the reminders, the outbox and its SMTP connection, the sequence `remind-due` |
@@ -44,6 +46,10 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `POST /api/auth/login` | opens a session: `email`, `password`; sets the `todo_session` cookie and answers the same secret as `token` |
 | `POST /api/auth/logout` | ends the caller's session |
 | `GET /api/auth/me` | the caller |
+| `GET /api/contacts` | the caller's contacts, the requests they received and those they sent |
+| `POST /api/contacts` | asks the member an `email` belongs to to be a contact |
+| `POST /api/contacts/{id}/accept` `decline` `cancel` | answers a request: its addressee accepts or declines, its requester cancels |
+| `DELETE /api/contacts/{id}` | ends a contact, for either member |
 | `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `assignee`, `due` (RFC 3339) |
 | `GET /api/tasks` | lists the caller's tasks not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
 | `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |

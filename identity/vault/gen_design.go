@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f104c7021eaa4042e4e05c8eee616c2187a4c13da669edf1751ec9d5e3b42339
+// design:digest sha256:dd6d9d76cd70cb3afe4d348b4ed0e2bdf2f8aa9f13db84b61b2cb1c34cdd43a0
 
 // Package vault — The accounts and the sessions in the framework's stores,
 // the directory the rest of the product asks, the passwords stretched, the
@@ -43,6 +43,11 @@ type SessionRecord struct {
 	CreatedAt  time.Time `json:"createdAt" app:"public"`
 	LastSeenAt time.Time `json:"lastSeenAt" app:"public"`
 	ExpiresAt  time.Time `json:"expiresAt" app:"public"`
+}
+
+// ByEmail — Which address is asked about.
+type ByEmail struct {
+	Email string `json:"email" app:"personal"`
 }
 
 // ByID — Which member is asked about.
@@ -208,6 +213,15 @@ var MemberQuery = Service.Query("member", Directory)
 // Directory handles the query "member": its body is the hand-written directory.
 func Directory(ctx context.Context, in ByID) (Member, error) {
 	return directory(ctx, in)
+}
+
+// MemberByEmailQuery — The directory, by address: whose account an address
+// is.
+var MemberByEmailQuery = Service.Query("member-by-email", Lookup)
+
+// Lookup handles the query "member-by-email": its body is the hand-written lookup.
+func Lookup(ctx context.Context, in ByEmail) (Member, error) {
+	return lookup(ctx, in)
 }
 
 // wired is what the handlers' twins reach, set by the role that mounts

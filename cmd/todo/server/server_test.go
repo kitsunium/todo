@@ -388,3 +388,71 @@ func TestTheServerServesTheWebApp(t *testing.T) {
 		t.Errorf("GET /api/tasks: %d %s, want the API's 401", code, kind)
 	}
 }
+
+// Two members become contacts by a request one sends and the other
+// accepts; each is told in their feed, a stranger to the link finds none,
+// and either ends it.
+func TestMembersBecomeContacts(t *testing.T) {
+	p := start(t)
+	ada, bob, cy := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com")
+	p.stranger().call(http.StatusUnauthorized, "GET", "/api/contacts", nil, nil)
+	ada.call(http.StatusNotFound, "POST", "/api/contacts", map[string]any{"email": "nobody@example.com"}, nil)
+	ada.call(http.StatusBadRequest, "POST", "/api/contacts", map[string]any{"email": "ada@example.com"}, nil)
+
+	var l struct {
+		ID, State string
+	}
+	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "Bob@Example.com"}, &l)
+	if l.ID == "" || l.State != "pending" {
+		t.Fatalf("the request: %+v", l)
+	}
+	bob.call(http.StatusConflict, "POST", "/api/contacts", map[string]any{"email": "ada@example.com"}, nil) // already waiting
+	cy.call(http.StatusNotFound, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil)
+	ada.call(http.StatusConflict, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil) // hers to cancel, not to accept
+
+	type listing struct {
+		Contacts, Incoming, Outgoing []struct {
+			ID   string
+			User struct{ ID, Name, Email string }
+		}
+	}
+	var mine, his listing
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	bob.call(http.StatusOK, "GET", "/api/contacts", nil, &his)
+	if len(mine.Outgoing) != 1 || mine.Outgoing[0].User.Name != "Bob" || len(his.Incoming) != 1 || his.Incoming[0].User.Email != "ada@example.com" {
+		t.Fatalf("the request waiting: Ada sees %+v, Bob sees %+v", mine, his)
+	}
+
+	bob.call(http.StatusOK, "POST", "/api/contacts/"+l.ID+"/accept", nil, &l)
+	if l.State != "accepted" {
+		t.Fatalf("the request accepted: %+v", l)
+	}
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Contacts) != 1 || mine.Contacts[0].User.ID != bob.id || len(mine.Outgoing) != 0 {
+		t.Errorf("Ada's contacts: %+v, want Bob alone", mine)
+	}
+
+	var feed struct {
+		Entries []struct{ Kind, Title string }
+	}
+	told := func(m *member, kind, by string) {
+		t.Helper()
+		p.settle(kind+" in the feed", 50*time.Millisecond, func() bool {
+			m.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+			return len(feed.Entries) > 0
+		})
+		if len(feed.Entries) != 1 || feed.Entries[0].Kind != kind || feed.Entries[0].Title != by {
+			t.Errorf("the feed: %+v, want %s by %s alone", feed.Entries, kind, by)
+		}
+	}
+	told(bob, "contact-requested", "Ada")
+	told(ada, "contact-accepted", "Bob")
+
+	cy.call(http.StatusNotFound, "DELETE", "/api/contacts/"+l.ID, nil, nil)
+	bob.call(http.StatusOK, "DELETE", "/api/contacts/"+l.ID, nil, nil)
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Contacts) != 0 {
+		t.Errorf("Ada still has %+v after Bob ended the contact", mine.Contacts)
+	}
+	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "bob@example.com"}, nil) // and may ask again
+}

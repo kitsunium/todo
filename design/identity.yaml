@@ -183,6 +183,10 @@ domains:
             description: Which member is asked about.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+          - name: ByEmail
+            description: Which address is asked about.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
           - name: Member
             description: A member as the rest of the product may know them; Found is false when there is none.
             fields:
@@ -192,6 +196,7 @@ domains:
               - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
         queries:
           - {name: member, input: ByID, output: Member, handler: Directory, description: "The directory: a member's address and name by their id, for the components that write to them."}
+          - {name: member-by-email, input: ByEmail, output: Member, handler: Lookup, description: "The directory, by address: whose account an address is."}
         stores:
           - name: accounts
             entity: AccountRecord

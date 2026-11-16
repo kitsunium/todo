@@ -20,13 +20,17 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
 | `identity/account` | account (domain) | `Account` and its lock, `Session`, `NormalizeEmail`, the errors |
 | `identity/access` | access (application) | the use cases `SignUp` `SignIn` `Authenticate` `SignOut`, the ports `Accounts` `Sessions` `Passwords` `Secrets` `Clock` |
-| `identity/vault` | vault (adapter) | the stores `accounts` and `sessions` with their indexes, the query `member` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
+| `identity/vault` | vault (adapter) | the stores `accounts` and `sessions` with their indexes, the queries `member` and `member-by-email` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
 | `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session` |
+| `contacts/link` | link (domain) | `Link`, `PairOf`, the `Requests` workflow, the errors |
+| `contacts/circle` | circle (application) | the use cases `RequestContact` `AnswerRequest` `RemoveContact` `ListContacts` `AreContacts`, the ports `Links` `People` `Notices` `Clock` |
+| `contacts/linkstore` | linkstore (adapter) | the store `links`, the topic `events`, `Links`, `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
+| `contacts/contactsapi` | contactsapi (presentation) | the routes of `/api/contacts` |
 | `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
 | `tasks/planner` | planner (application) | the use cases `AddTask` `MoveTask` `ListTasks` `ArchiveDone` `CountTasks` `DueSoon`, the ports `TaskStore` `Clock` `Journal`; `lifecycle.go` is what they share |
 | `tasks/taskstore` | taskstore (adapter) | the store `tasks`, the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes) and `AppClock` |
 | `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census`, the job `archive-done`, the setting `archive-after` |
-| `activity/feed` | feed (adapter) | the store `entries`, the subscription `tasks` to the tasks' events, `GET /api/activity` |
+| `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks` and `contacts` to their events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
 | `notify/outbox` | outbox (adapter) | the stores `outbox` and `reminded`, `Relay` (SMTP, its connection declared in the design), `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger`, `GET /api/outbox` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
