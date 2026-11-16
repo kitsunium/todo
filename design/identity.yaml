@@ -34,6 +34,8 @@ domains:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
               - {name: TokenHash, type: string, tag: 'json:"-" app:"secret"', description: "TokenHash is the SHA-256 of the session's secret: the secret itself is kept nowhere."}
+              - {name: UserAgent, type: string, tag: 'json:"userAgent" app:"personal"', description: "UserAgent is the browser or the client that signed in, as it named itself."}
+              - {name: IP, type: string, tag: 'json:"ip" app:"personal"', description: "IP is the address the sign-in came from."}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
               - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
@@ -95,6 +97,7 @@ domains:
               - {name: ByTokenHash, params: [{name: hash, type: string}], results: [{type: account.Session}, {type: bool}]}
               - {name: Delete, params: [{name: id, type: string}]}
               - {name: DeleteOf, params: [{name: userID, type: string}, {name: keep, type: string}]}
+              - {name: Of, params: [{name: userID, type: string}], results: [{type: "[]account.Session"}]}
           - name: Links
             direction: out
             version: 1
@@ -207,6 +210,8 @@ domains:
             input:
               - {name: Email, type: string}
               - {name: Password, type: string}
+              - {name: UserAgent, type: string}
+              - {name: IP, type: string}
             output:
               - {name: Secret, type: string}
               - {name: Session, type: account.Session}
@@ -233,6 +238,25 @@ domains:
               - {name: names the member of a live session, kind: success}
               - {name: refuses an expired session, kind: refusal, error: account.ErrNoSession}
               - {name: refuses an unknown secret, kind: refusal, error: account.ErrNoSession}
+          - name: ListSessions
+            description: ListSessions lists the sessions a member has open, the one last seen first.
+            input:
+              - {name: UserID, type: string}
+            output:
+              - {name: Sessions, type: "[]account.Session"}
+            calls: [identity/port/Sessions@v1.Of, identity/port/Clock@v1.Now]
+            scenarios:
+              - {name: lists the live sessions of the member, kind: success}
+          - name: RevokeSession
+            description: RevokeSession ends one of a member's sessions; another member's is not found.
+            input:
+              - {name: UserID, type: string}
+              - {name: ID, type: string}
+            errors: [account.ErrNoSession]
+            calls: [identity/port/Sessions@v1.Of, identity/port/Sessions@v1.Delete]
+            scenarios:
+              - {name: ends a session of the member, kind: success}
+              - {name: refuses a session of another member, kind: refusal, error: account.ErrNoSession}
           - name: SignOut
             description: SignOut ends a session.
             input:
@@ -276,8 +300,10 @@ domains:
             description: A session as the store keeps it, field for field.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
-              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"personal,subject"'}
               - {name: TokenHash, type: string, tag: 'json:"tokenHash" app:"secret"'}
+              - {name: UserAgent, type: string, tag: 'json:"userAgent" app:"personal"'}
+              - {name: IP, type: string, tag: 'json:"ip" app:"personal"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
               - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
@@ -363,6 +389,10 @@ domains:
               description: "gone is the error of a delete, a record already gone being none."
               params: [{name: err, type: "error"}]
               results: [{type: "error"}]
+            - name: sessionOf
+              description: "sessionOf is the session a record keeps."
+              params: [{name: r, type: "SessionRecord"}]
+              results: [{type: "account.Session"}]
           types:
             - name: Postman
               methods:
@@ -427,6 +457,23 @@ domains:
             fields:
               - {name: Current, type: string, tag: 'json:"current" app:"secret"'}
               - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+          - name: SessionView
+            description: A session of the caller, as the API answers it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserAgent, type: string, tag: 'json:"userAgent" app:"personal"'}
+              - {name: IP, type: string, tag: 'json:"ip" app:"personal"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
+              - {name: Current, type: bool, tag: 'json:"current" app:"public"', description: "Current says the request runs in this session."}
+          - name: SessionList
+            description: The caller's sessions, the one last seen first.
+            fields:
+              - {name: Sessions, type: "[]SessionView", tag: 'json:"sessions"'}
+          - name: SessionID
+            description: The session a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
           - name: Profile
             description: A member, as the API answers them.
             fields:
@@ -460,6 +507,8 @@ domains:
           - {route: "POST /api/auth/password", request: ChangeRequest, response: NoInput, handler: ChangePassword, auth: required, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ChangePassword], calls: [identity/usecase/ChangePassword]}
           - {route: "POST /api/auth/login", request: SignInRequest, response: SignedIn, handler: SignIn, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/SignIn], calls: [identity/usecase/SignIn]}
           - {route: "POST /api/auth/logout", request: NoInput, response: NoInput, handler: SignOut, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [identity/usecase/SignOut], calls: [identity/usecase/SignOut]}
+          - {route: "GET /api/auth/sessions", request: NoInput, response: SessionList, handler: Sessions, auth: required, uses: [identity/usecase/ListSessions], calls: [identity/usecase/ListSessions]}
+          - {route: "DELETE /api/auth/sessions/{id}", request: SessionID, response: NoInput, handler: Revoke, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [identity/usecase/RevokeSession], calls: [identity/usecase/RevokeSession]}
           - {route: "GET /api/auth/me", request: NoInput, response: Profile, handler: Me, auth: required}
         internals:
           functions:

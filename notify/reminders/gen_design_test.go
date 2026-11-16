@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 package reminders
 

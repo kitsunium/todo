@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -52,6 +52,8 @@ func Wire(ctx context.Context, build Build) {
 	changePassword := access.NewChangePassword(accounts, stretcher, wallClock, sessions)
 	signIn := access.NewSignIn(accounts, wallClock, stretcher, drawer, sessions)
 	signOut := access.NewSignOut(sessions)
+	listSessions := access.NewListSessions(sessions, wallClock)
+	revokeSession := access.NewRevokeSession(sessions)
 	authenticate := access.NewAuthenticate(drawer, sessions, wallClock, accounts)
 	links := linkstore.NewLinks()
 	directory := linkstore.NewDirectory()
@@ -81,7 +83,7 @@ func Wire(ctx context.Context, build Build) {
 	carrier := post.NewCarrier()
 	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, carrier)
 	vault.Wire()
-	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, authenticate)
+	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, listSessions, revokeSession, authenticate)
 	linkstore.Wire()
 	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact, areContacts)
 	taskstore.Wire()

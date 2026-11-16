@@ -19,7 +19,7 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 |---|---|---|
 | `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
 | `identity/account` | account (domain) | `Account` and its lock, `Session`, `NormalizeEmail`, the errors |
-| `identity/access` | access (application) | the use cases `SignUp` `VerifyEmail` `ResendVerification` `SignIn` `Authenticate` `SignOut` `ForgotPassword` `ResetPassword` `ChangePassword`, the ports `Accounts` `Sessions` `Links` `Courier` `Passwords` `Secrets` `Clock`; `links.go` is what the one-time links share |
+| `identity/access` | access (application) | the use cases `SignUp` `VerifyEmail` `ResendVerification` `SignIn` `Authenticate` `SignOut` `ListSessions` `RevokeSession` `ForgotPassword` `ResetPassword` `ChangePassword`, the ports `Accounts` `Sessions` `Links` `Courier` `Passwords` `Secrets` `Clock`; `links.go` is what the one-time links share |
 | `identity/vault` | vault (adapter) | the stores `accounts`, `sessions` and `links` with their indexes, `Postman` (the mails of an account, sent through `post`), the setting `base-url`, the queries `member` and `member-by-email` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
 | `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session`, the setting `verify-addresses` |
 | `contacts/link` | link (domain) | `Link`, `PairOf`, the `Requests` workflow, the errors |

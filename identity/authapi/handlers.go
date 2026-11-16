@@ -83,7 +83,9 @@ func changePassword(ctx context.Context, in ChangeRequest) (out NoInput, err err
 // session's secret goes to a browser as its cookie, and in the answer for a
 // client that keeps none.
 func signIn(ctx context.Context, in SignInRequest) (out SignedIn, err error) {
-	res, err := wired.signIn.Execute(ctx, access.SignInInput{Email: in.Email, Password: in.Password})
+	res, err := wired.signIn.Execute(ctx, access.SignInInput{
+		Email: in.Email, Password: in.Password, UserAgent: app.UserAgent(ctx), IP: app.ClientIP(ctx),
+	})
 	if err != nil {
 		return SignedIn{}, refusal(err)
 	}
@@ -98,6 +100,45 @@ func signOut(ctx context.Context, in NoInput) (out NoInput, err error) {
 		return NoInput{}, err
 	}
 	app.ClearCookie(ctx, CookieName)
+	return NoInput{}, nil
+}
+
+// sessions is GET /api/auth/sessions's body; what it uses is in wired.
+func sessions(ctx context.Context, in NoInput) (out SessionList, err error) {
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return SessionList{}, app.Unauthenticated("sign in first")
+	}
+	p, _ := app.AuthData[Principal](ctx)
+	res, err := wired.listSessions.Execute(ctx, access.ListSessionsInput{UserID: string(uid)})
+	if err != nil {
+		return SessionList{}, err
+	}
+	out.Sessions = make([]SessionView, len(res.Sessions))
+	for i, s := range res.Sessions {
+		out.Sessions[i] = SessionView{
+			ID: s.ID, UserAgent: s.UserAgent, IP: s.IP, CreatedAt: s.CreatedAt, LastSeenAt: s.LastSeenAt, Current: s.ID == p.SessionID,
+		}
+	}
+	return out, nil
+}
+
+// revoke is DELETE /api/auth/sessions/{id}'s body; what it uses is in wired.
+// Ending the session the request runs in also forgets its cookie.
+func revoke(ctx context.Context, in SessionID) (out NoInput, err error) {
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return NoInput{}, app.Unauthenticated("sign in first")
+	}
+	if _, err := wired.revokeSession.Execute(ctx, access.RevokeSessionInput{UserID: string(uid), ID: in.ID}); err != nil {
+		if errors.Is(err, account.ErrNoSession) {
+			return NoInput{}, app.NotFound("no such session")
+		}
+		return NoInput{}, err
+	}
+	if p, _ := app.AuthData[Principal](ctx); p.SessionID == in.ID {
+		app.ClearCookie(ctx, CookieName)
+	}
 	return NoInput{}, nil
 }
 

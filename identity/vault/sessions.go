@@ -28,10 +28,28 @@ func (a *Sessions) byTokenHash(ctx context.Context, hash string) (r0 account.Ses
 	if err != nil || len(found) == 0 {
 		return account.Session{}, false, err
 	}
-	r := found[0]
+	return sessionOf(found[0]), true, nil
+}
+
+// of is Sessions.Of's body: every session of a member.
+func (a *Sessions) of(ctx context.Context, userID string) (r0 []account.Session, err error) {
+	found, err := SessionsStore.Filter(ctx, func(r SessionRecord) bool { return r.UserID == userID })
+	if err != nil {
+		return nil, err
+	}
+	r0 = make([]account.Session, len(found))
+	for i, r := range found {
+		r0[i] = sessionOf(r)
+	}
+	return r0, nil
+}
+
+// sessionOf is the session a record keeps.
+func sessionOf(r SessionRecord) account.Session {
 	return account.Session{
-		ID: r.ID, UserID: r.UserID, TokenHash: r.TokenHash, CreatedAt: r.CreatedAt, LastSeenAt: r.LastSeenAt, ExpiresAt: r.ExpiresAt,
-	}, true, nil
+		ID: r.ID, UserID: r.UserID, TokenHash: r.TokenHash, UserAgent: r.UserAgent, IP: r.IP,
+		CreatedAt: r.CreatedAt, LastSeenAt: r.LastSeenAt, ExpiresAt: r.ExpiresAt,
+	}
 }
 
 // deleteBody is Sessions.Delete's body: a session already gone is deleted.
@@ -71,6 +89,7 @@ func (a *Sessions) newID(ctx context.Context) (r0 string, err error) {
 // save is Sessions.Save's body: the session replaces what its id held.
 func (a *Sessions) save(ctx context.Context, s account.Session) (err error) {
 	return SessionsStore.Put(ctx, SessionRecord{
-		ID: s.ID, UserID: s.UserID, TokenHash: s.TokenHash, CreatedAt: s.CreatedAt, LastSeenAt: s.LastSeenAt, ExpiresAt: s.ExpiresAt,
+		ID: s.ID, UserID: s.UserID, TokenHash: s.TokenHash, UserAgent: s.UserAgent, IP: s.IP,
+		CreatedAt: s.CreatedAt, LastSeenAt: s.LastSeenAt, ExpiresAt: s.ExpiresAt,
 	})
 }

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 // Package account — The account, its lock after wrong passwords, and the
 // session.
@@ -102,7 +102,11 @@ type Session struct {
 	UserID string `json:"userId" app:"public"`
 	// TokenHash is the SHA-256 of the session's secret: the secret itself is kept
 	// nowhere.
-	TokenHash  string    `json:"-" app:"secret"`
+	TokenHash string `json:"-" app:"secret"`
+	// UserAgent is the browser or the client that signed in, as it named itself.
+	UserAgent string `json:"userAgent" app:"personal"`
+	// IP is the address the sign-in came from.
+	IP         string    `json:"ip" app:"personal"`
 	CreatedAt  time.Time `json:"createdAt" app:"public"`
 	LastSeenAt time.Time `json:"lastSeenAt" app:"public"`
 	ExpiresAt  time.Time `json:"expiresAt" app:"public"`

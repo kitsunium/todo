@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 // Package access — Signing up, signing in and out, and naming the member a
 // session belongs to.
@@ -67,6 +67,7 @@ type SessionsV1 interface {
 	Delete(ctx context.Context, id string) error
 	DeleteOf(ctx context.Context, userID string, keep string) error
 	NewID(ctx context.Context) (string, error)
+	Of(ctx context.Context, userID string) ([]account.Session, error)
 	Save(ctx context.Context, s account.Session) error
 }
 
@@ -182,6 +183,39 @@ func (h *ForgotPasswordHandler) Execute(ctx context.Context, in ForgotPasswordIn
 
 var _ ForgotPassword = (*ForgotPasswordHandler)(nil)
 
+// ListSessions lists the sessions a member has open, the one last seen first.
+type ListSessions interface {
+	Execute(ctx context.Context, in ListSessionsInput) (ListSessionsOutput, error)
+}
+
+// ListSessionsInput is ListSessions's input: a field added breaks no caller.
+type ListSessionsInput struct {
+	UserID string
+}
+
+// ListSessionsOutput is ListSessions's output.
+type ListSessionsOutput struct {
+	Sessions []account.Session
+}
+
+// ListSessionsHandler runs ListSessions: its body is the hand-written execute.
+type ListSessionsHandler struct {
+	sessions SessionsV1
+	clock    ClockV1
+}
+
+// NewListSessions builds ListSessions on what it calls.
+func NewListSessions(sessions SessionsV1, clock ClockV1) *ListSessionsHandler {
+	return &ListSessionsHandler{sessions: sessions, clock: clock}
+}
+
+// Execute runs ListSessions.
+func (h *ListSessionsHandler) Execute(ctx context.Context, in ListSessionsInput) (ListSessionsOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ListSessions = (*ListSessionsHandler)(nil)
+
 // ResendVerification mails a new link to an address whose account is not
 // verified yet, and says nothing of the others.
 type ResendVerification interface {
@@ -256,6 +290,39 @@ func (h *ResetPasswordHandler) Execute(ctx context.Context, in ResetPasswordInpu
 
 var _ ResetPassword = (*ResetPasswordHandler)(nil)
 
+// RevokeSession ends one of a member's sessions; another member's is not
+// found.
+type RevokeSession interface {
+	Execute(ctx context.Context, in RevokeSessionInput) (RevokeSessionOutput, error)
+}
+
+// RevokeSessionInput is RevokeSession's input: a field added breaks no caller.
+type RevokeSessionInput struct {
+	UserID string
+	ID     string
+}
+
+// RevokeSessionOutput is RevokeSession's output.
+type RevokeSessionOutput struct {
+}
+
+// RevokeSessionHandler runs RevokeSession: its body is the hand-written execute.
+type RevokeSessionHandler struct {
+	sessions SessionsV1
+}
+
+// NewRevokeSession builds RevokeSession on what it calls.
+func NewRevokeSession(sessions SessionsV1) *RevokeSessionHandler {
+	return &RevokeSessionHandler{sessions: sessions}
+}
+
+// Execute runs RevokeSession.
+func (h *RevokeSessionHandler) Execute(ctx context.Context, in RevokeSessionInput) (RevokeSessionOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ RevokeSession = (*RevokeSessionHandler)(nil)
+
 // SignIn opens a session for an address and its password; five wrong passwords
 // in a row lock the account for fifteen minutes.
 type SignIn interface {
@@ -264,8 +331,10 @@ type SignIn interface {
 
 // SignInInput is SignIn's input: a field added breaks no caller.
 type SignInInput struct {
-	Email    string
-	Password string
+	Email     string
+	Password  string
+	UserAgent string
+	IP        string
 }
 
 // SignInOutput is SignIn's output.

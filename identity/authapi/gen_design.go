@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 // Package authapi — The HTTP API of the accounts, and the handler that says
 // who calls a route.
@@ -10,6 +10,7 @@ package authapi
 
 import (
 	"context"
+	"time"
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
@@ -70,6 +71,27 @@ type Profile struct {
 type ResetRequest struct {
 	Token    string `json:"token" app:"secret"`
 	Password string `json:"password" app:"secret"`
+}
+
+// SessionID — The session a route names.
+type SessionID struct {
+	ID string `path:"id"`
+}
+
+// SessionList — The caller's sessions, the one last seen first.
+type SessionList struct {
+	Sessions []SessionView `json:"sessions"`
+}
+
+// SessionView — A session of the caller, as the API answers it.
+type SessionView struct {
+	ID         string    `json:"id" app:"public"`
+	UserAgent  string    `json:"userAgent" app:"personal"`
+	IP         string    `json:"ip" app:"personal"`
+	CreatedAt  time.Time `json:"createdAt" app:"public"`
+	LastSeenAt time.Time `json:"lastSeenAt" app:"public"`
+	// Current says the request runs in this session.
+	Current bool `json:"current" app:"public"`
 }
 
 // SignInRequest — An address and its password.
@@ -164,6 +186,20 @@ func SignOut(ctx context.Context, in NoInput) (NoInput, error) {
 	return signOut(ctx, in)
 }
 
+var _ = Service.Endpoint("GET /api/auth/sessions", Sessions, app.Auth())
+
+// Sessions serves GET /api/auth/sessions: its body is the hand-written sessions.
+func Sessions(ctx context.Context, in NoInput) (SessionList, error) {
+	return sessions(ctx, in)
+}
+
+var _ = Service.Endpoint("DELETE /api/auth/sessions/{id}", Revoke, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Revoke serves DELETE /api/auth/sessions/{id}: its body is the hand-written revoke.
+func Revoke(ctx context.Context, in SessionID) (NoInput, error) {
+	return revoke(ctx, in)
+}
+
 var _ = Service.Endpoint("GET /api/auth/me", Me, app.Auth())
 
 // Me serves GET /api/auth/me: its body is the hand-written me.
@@ -192,12 +228,14 @@ var wired struct {
 	changePassword         access.ChangePassword
 	signIn                 access.SignIn
 	signOut                access.SignOut
+	listSessions           access.ListSessions
+	revokeSession          access.RevokeSession
 	authenticate           access.Authenticate
 }
 
 // Wire gives the handlers what they use: the role that mounts authapi calls it
 // before its App runs.
-func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verifyEmail access.VerifyEmail, resendVerification access.ResendVerification, forgotPassword access.ForgotPassword, resetPassword access.ResetPassword, changePassword access.ChangePassword, signIn access.SignIn, signOut access.SignOut, authenticate access.Authenticate) {
+func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verifyEmail access.VerifyEmail, resendVerification access.ResendVerification, forgotPassword access.ForgotPassword, resetPassword access.ResetPassword, changePassword access.ChangePassword, signIn access.SignIn, signOut access.SignOut, listSessions access.ListSessions, revokeSession access.RevokeSession, authenticate access.Authenticate) {
 	wired.signUp = signUp
 	wired.verifyAddressesSetting = verifyAddressesSetting
 	wired.verifyEmail = verifyEmail
@@ -207,5 +245,7 @@ func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verif
 	wired.changePassword = changePassword
 	wired.signIn = signIn
 	wired.signOut = signOut
+	wired.listSessions = listSessions
+	wired.revokeSession = revokeSession
 	wired.authenticate = authenticate
 }

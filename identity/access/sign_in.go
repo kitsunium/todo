@@ -70,7 +70,7 @@ func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOut
 	if err != nil {
 		return SignInOutput{}, err
 	}
-	s := account.Session{ID: id, UserID: a.ID, TokenHash: digest, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(account.SessionFor)}
+	s := account.Session{ID: id, UserID: a.ID, TokenHash: digest, UserAgent: in.UserAgent, IP: in.IP, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(account.SessionFor)}
 	if err := h.sessions.Save(ctx, s); err != nil {
 		return SignInOutput{}, err
 	}

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 package access
 
@@ -80,6 +80,16 @@ func TestForgotPasswordSaysNothingOfAnUnknownAddress(t *testing.T) {
 	then(t, out)
 }
 
+// TestListSessionsListsTheLiveSessionsOfTheMember is ListSessions's scenario "lists the live sessions of the member" (success).
+func TestListSessionsListsTheLiveSessionsOfTheMember(t *testing.T) {
+	uc, in, then := givenListSessionsListsTheLiveSessionsOfTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ListSessions: %v, want a success", err)
+	}
+	then(t, out)
+}
+
 // TestResendVerificationMailsANewLinkToAnUnverifiedAccount is ResendVerification's scenario "mails a new link to an unverified account" (success).
 func TestResendVerificationMailsANewLinkToAnUnverifiedAccount(t *testing.T) {
 	uc, in, then := givenResendVerificationMailsANewLinkToAnUnverifiedAccount(t)
@@ -125,6 +135,25 @@ func TestResetPasswordRefusesAShortPassword(t *testing.T) {
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, account.ErrWeakPassword) {
 		t.Fatalf("ResetPassword: %v, want account.ErrWeakPassword", err)
+	}
+}
+
+// TestRevokeSessionEndsASessionOfTheMember is RevokeSession's scenario "ends a session of the member" (success).
+func TestRevokeSessionEndsASessionOfTheMember(t *testing.T) {
+	uc, in, then := givenRevokeSessionEndsASessionOfTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("RevokeSession: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestRevokeSessionRefusesASessionOfAnotherMember is RevokeSession's scenario "refuses a session of another member" (refusal).
+func TestRevokeSessionRefusesASessionOfAnotherMember(t *testing.T) {
+	uc, in := givenRevokeSessionRefusesASessionOfAnotherMember(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrNoSession) {
+		t.Fatalf("RevokeSession: %v, want account.ErrNoSession", err)
 	}
 }
 
@@ -379,6 +408,11 @@ func (x recordedaccessSessionsV1) DeleteOf(ctx context.Context, userID string, k
 func (x recordedaccessSessionsV1) NewID(ctx context.Context) (string, error) {
 	*x.calls = append(*x.calls, "identity/port/Sessions@v1.NewID")
 	return x.next.NewID(ctx)
+}
+
+func (x recordedaccessSessionsV1) Of(ctx context.Context, userID string) ([]account.Session, error) {
+	*x.calls = append(*x.calls, "identity/port/Sessions@v1.Of")
+	return x.next.Of(ctx, userID)
 }
 
 func (x recordedaccessSessionsV1) Save(ctx context.Context, s account.Session) error {

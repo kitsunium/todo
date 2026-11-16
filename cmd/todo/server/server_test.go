@@ -394,6 +394,32 @@ func TestAMemberSignsInAndOut(t *testing.T) {
 	p.clk.Advance(15*time.Minute + time.Second)
 	anon.call(http.StatusOK, "POST", "/api/auth/login", creds, nil)
 
+	// Her sessions: the one of this client, and the two the browser opened; she
+	// ends one of the others, and nobody ends hers.
+	var list struct {
+		Sessions []struct {
+			ID      string
+			Current bool
+		}
+	}
+	ada.call(http.StatusOK, "GET", "/api/auth/sessions", nil, &list)
+	other := ""
+	for _, s := range list.Sessions {
+		if !s.Current {
+			other = s.ID
+		}
+	}
+	if len(list.Sessions) != 3 || other == "" {
+		t.Fatalf("her sessions: %+v, want three, one of them current", list.Sessions)
+	}
+	bob := p.signUp("Bob", "bob@example.com")
+	bob.call(http.StatusNotFound, "DELETE", "/api/auth/sessions/"+other, nil, nil)
+	ada.call(http.StatusOK, "DELETE", "/api/auth/sessions/"+other, nil, nil)
+	ada.call(http.StatusOK, "GET", "/api/auth/sessions", nil, &list)
+	if len(list.Sessions) != 2 {
+		t.Errorf("her sessions after one was ended: %+v, want two", list.Sessions)
+	}
+
 	ada.call(http.StatusOK, "POST", "/api/auth/logout", nil, nil)
 	ada.call(http.StatusUnauthorized, "GET", "/api/auth/me", nil, nil)
 }

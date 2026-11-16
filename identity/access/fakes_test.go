@@ -113,6 +113,16 @@ func (p sessionsPort) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (p sessionsPort) Of(_ context.Context, userID string) ([]account.Session, error) {
+	var out []account.Session
+	for _, s := range p.sessions {
+		if s.UserID == userID {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
 func (p sessionsPort) DeleteOf(_ context.Context, userID, keep string) error {
 	for id, s := range p.sessions {
 		if s.UserID == userID && id != keep {

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b86d0cd87931d5d99bbe4360b3b902a3632eea398c69f6b97c0556cdb2a00c3c
+// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
 
 // Package vault — The accounts, the sessions and the one-time links in the
 // framework's stores, the mails of an account, the directory the rest of the
@@ -49,8 +49,10 @@ type LinkRecord struct {
 // SessionRecord — A session as the store keeps it, field for field.
 type SessionRecord struct {
 	ID         string    `json:"id" app:"public"`
-	UserID     string    `json:"userId" app:"public"`
+	UserID     string    `json:"userId" app:"personal,subject"`
 	TokenHash  string    `json:"tokenHash" app:"secret"`
+	UserAgent  string    `json:"userAgent" app:"personal"`
+	IP         string    `json:"ip" app:"personal"`
 	CreatedAt  time.Time `json:"createdAt" app:"public"`
 	LastSeenAt time.Time `json:"lastSeenAt" app:"public"`
 	ExpiresAt  time.Time `json:"expiresAt" app:"public"`
@@ -217,6 +219,11 @@ func (self *Sessions) DeleteOf(ctx context.Context, userID string, keep string) 
 // NewID is identity/port/Sessions@v1's.
 func (self *Sessions) NewID(ctx context.Context) (string, error) {
 	return self.newID(ctx)
+}
+
+// Of is identity/port/Sessions@v1's.
+func (self *Sessions) Of(ctx context.Context, userID string) ([]account.Session, error) {
+	return self.of(ctx, userID)
 }
 
 // Save is identity/port/Sessions@v1's.

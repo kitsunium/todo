@@ -54,6 +54,8 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `POST /api/auth/login` | opens a session: `email`, `password`; sets the `todo_session` cookie and answers the same secret as `token` |
 | `POST /api/auth/logout` | ends the caller's session |
 | `GET /api/auth/me` | the caller |
+| `GET /api/auth/sessions` | the caller's open sessions, with the browser and the address each signed in from |
+| `DELETE /api/auth/sessions/{id}` | ends one of the caller's sessions |
 | `GET /api/contacts` | the caller's contacts, the requests they received and those they sent |
 | `POST /api/contacts` | asks the member an `email` belongs to to be a contact |
 | `POST /api/contacts/{id}/accept` `decline` `cancel` | answers a request: its addressee accepts or declines, its requester cancels |
