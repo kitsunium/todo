@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 // Package groupsapi — The HTTP API of a member's groups and invitations, and
 // the questions the rest of the product asks of them.

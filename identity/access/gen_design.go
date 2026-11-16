@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 // Package access — Signing up, signing in and out, and naming the member a
 // session belongs to.
@@ -30,6 +30,13 @@ type AccountsV1 interface {
 	Get(ctx context.Context, id string) (account.Account, bool, error)
 	NewID(ctx context.Context) (string, error)
 	Save(ctx context.Context, a account.Account) error
+}
+
+// AnnouncementsV1 tells the rest of the product what happened to an account,
+// for whoever listens.
+type AnnouncementsV1 interface {
+	// Verified says the address of an account is proven.
+	Verified(ctx context.Context, acc account.Account) error
 }
 
 // ClockV1 tells the time.
@@ -274,17 +281,18 @@ type ResetPasswordOutput struct {
 
 // ResetPasswordHandler runs ResetPassword: its body is the hand-written execute.
 type ResetPasswordHandler struct {
-	secrets   SecretsV1
-	links     LinksV1
-	clock     ClockV1
-	accounts  AccountsV1
-	passwords PasswordsV1
-	sessions  SessionsV1
+	secrets       SecretsV1
+	links         LinksV1
+	clock         ClockV1
+	accounts      AccountsV1
+	passwords     PasswordsV1
+	sessions      SessionsV1
+	announcements AnnouncementsV1
 }
 
 // NewResetPassword builds ResetPassword on what it calls.
-func NewResetPassword(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1, passwords PasswordsV1, sessions SessionsV1) *ResetPasswordHandler {
-	return &ResetPasswordHandler{secrets: secrets, links: links, clock: clock, accounts: accounts, passwords: passwords, sessions: sessions}
+func NewResetPassword(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1, passwords PasswordsV1, sessions SessionsV1, announcements AnnouncementsV1) *ResetPasswordHandler {
+	return &ResetPasswordHandler{secrets: secrets, links: links, clock: clock, accounts: accounts, passwords: passwords, sessions: sessions, announcements: announcements}
 }
 
 // Execute runs ResetPassword.
@@ -422,17 +430,18 @@ type SignUpOutput struct {
 
 // SignUpHandler runs SignUp: its body is the hand-written execute.
 type SignUpHandler struct {
-	accounts  AccountsV1
-	passwords PasswordsV1
-	clock     ClockV1
-	links     LinksV1
-	secrets   SecretsV1
-	courier   CourierV1
+	accounts      AccountsV1
+	passwords     PasswordsV1
+	clock         ClockV1
+	links         LinksV1
+	secrets       SecretsV1
+	courier       CourierV1
+	announcements AnnouncementsV1
 }
 
 // NewSignUp builds SignUp on what it calls.
-func NewSignUp(accounts AccountsV1, passwords PasswordsV1, clock ClockV1, links LinksV1, secrets SecretsV1, courier CourierV1) *SignUpHandler {
-	return &SignUpHandler{accounts: accounts, passwords: passwords, clock: clock, links: links, secrets: secrets, courier: courier}
+func NewSignUp(accounts AccountsV1, passwords PasswordsV1, clock ClockV1, links LinksV1, secrets SecretsV1, courier CourierV1, announcements AnnouncementsV1) *SignUpHandler {
+	return &SignUpHandler{accounts: accounts, passwords: passwords, clock: clock, links: links, secrets: secrets, courier: courier, announcements: announcements}
 }
 
 // Execute runs SignUp.
@@ -464,16 +473,17 @@ type VerifyEmailOutput struct {
 
 // VerifyEmailHandler runs VerifyEmail: its body is the hand-written execute.
 type VerifyEmailHandler struct {
-	secrets  SecretsV1
-	links    LinksV1
-	clock    ClockV1
-	accounts AccountsV1
-	sessions SessionsV1
+	secrets       SecretsV1
+	links         LinksV1
+	clock         ClockV1
+	accounts      AccountsV1
+	sessions      SessionsV1
+	announcements AnnouncementsV1
 }
 
 // NewVerifyEmail builds VerifyEmail on what it calls.
-func NewVerifyEmail(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1, sessions SessionsV1) *VerifyEmailHandler {
-	return &VerifyEmailHandler{secrets: secrets, links: links, clock: clock, accounts: accounts, sessions: sessions}
+func NewVerifyEmail(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1, sessions SessionsV1, announcements AnnouncementsV1) *VerifyEmailHandler {
+	return &VerifyEmailHandler{secrets: secrets, links: links, clock: clock, accounts: accounts, sessions: sessions, announcements: announcements}
 }
 
 // Execute runs VerifyEmail.

@@ -17,7 +17,7 @@ import (
 // link that proves its address mailed. An address that already has an
 // account is answered the same, and its member told someone tried: the
 // answer never says whether an address has an account. Where the deployment
-// trusts addresses, the account is verified at once and no link is mailed.
+// trusts addresses, the account is verified at once, its address announced, and no link is mailed.
 func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOutput, error) {
 	email, err := account.NormalizeEmail(in.Email)
 	if err != nil {
@@ -64,7 +64,7 @@ func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOut
 		return SignUpOutput{}, err
 	}
 	if in.Trusted {
-		return out, nil
+		return out, h.announcements.Verified(ctx, a)
 	}
 	secret, err := issue(ctx, h.links, h.secrets, a.ID, account.PurposeVerify, now, account.VerifyFor)
 	if err != nil {

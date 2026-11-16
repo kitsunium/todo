@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 package access
 
@@ -136,6 +136,16 @@ func TestResetPasswordRefusesAShortPassword(t *testing.T) {
 	if !errors.Is(err, account.ErrWeakPassword) {
 		t.Fatalf("ResetPassword: %v, want account.ErrWeakPassword", err)
 	}
+}
+
+// TestResetPasswordAnnouncesNothingForAnAddressAlreadyProven is ResetPassword's scenario "announces nothing for an address already proven" (success).
+func TestResetPasswordAnnouncesNothingForAnAddressAlreadyProven(t *testing.T) {
+	uc, in, then := givenResetPasswordAnnouncesNothingForAnAddressAlreadyProven(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ResetPassword: %v, want a success", err)
+	}
+	then(t, out)
 }
 
 // TestRevokeSessionEndsASessionOfTheMember is RevokeSession's scenario "ends a session of the member" (success).

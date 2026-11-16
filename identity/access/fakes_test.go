@@ -23,6 +23,7 @@ type world struct {
 	sessions map[string]account.Session
 	links    map[string]account.Link
 	mails    []string // what the courier was asked, "kind to secret"
+	heard    []string // what was announced, "verified address"
 	now      time.Time
 	n        int
 }
@@ -56,13 +57,14 @@ func (w *world) link(a account.Account, purpose, secret string, expires time.Tim
 }
 
 type (
-	linksPort     struct{ *world }
-	courierPort   struct{ *world }
-	accountsPort  struct{ *world }
-	sessionsPort  struct{ *world }
-	passwordsPort struct{ *world }
-	secretsPort   struct{ *world }
-	clockPort     struct{ *world }
+	linksPort         struct{ *world }
+	courierPort       struct{ *world }
+	announcementsPort struct{ *world }
+	accountsPort      struct{ *world }
+	sessionsPort      struct{ *world }
+	passwordsPort     struct{ *world }
+	secretsPort       struct{ *world }
+	clockPort         struct{ *world }
 )
 
 func (p accountsPort) NewID(context.Context) (string, error) {
@@ -187,6 +189,11 @@ func (p courierPort) AlreadyMember(_ context.Context, to account.Account) error 
 	return nil
 }
 
+func (p announcementsPort) Verified(_ context.Context, acc account.Account) error {
+	p.heard = append(p.heard, "verified "+acc.Email)
+	return nil
+}
+
 func (passwordsPort) Hash(_ context.Context, password string) (string, error) {
 	return "hash:" + password, nil
 }
@@ -208,7 +215,7 @@ func (secretsPort) Digest(_ context.Context, secret string) (string, error) {
 func (p clockPort) Now(context.Context) (time.Time, error) { return p.now, nil }
 
 func (w *world) signUp() SignUp {
-	return NewSignUp(accountsPort{w}, passwordsPort{w}, clockPort{w}, linksPort{w}, secretsPort{w}, courierPort{w})
+	return NewSignUp(accountsPort{w}, passwordsPort{w}, clockPort{w}, linksPort{w}, secretsPort{w}, courierPort{w}, announcementsPort{w})
 }
 
 func (w *world) signIn() SignIn {

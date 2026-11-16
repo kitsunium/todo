@@ -54,6 +54,9 @@ func givenSignUpCreatesAVerifiedAccountWhereAddressesAreTrusted(t *testing.T) (S
 	in := SignUpInput{Email: "ada@example.com", Name: "Ada", Password: passphrase, Trusted: true}
 	return w.signUp(), in, func(t *testing.T, out SignUpOutput) {
 		t.Helper()
+		if len(w.heard) != 1 || w.heard[0] != "verified ada@example.com" {
+			t.Errorf("announced %q, want the address proven, once", w.heard)
+		}
 		if !out.Verified || !w.byEmail(t, "ada@example.com").Verified || len(w.links) != 0 || len(w.mails) != 0 {
 			t.Errorf("answer %+v, %d link(s), %d mail(s): want a verified account and nothing mailed", out, len(w.links), len(w.mails))
 		}

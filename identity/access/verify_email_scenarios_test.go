@@ -22,7 +22,7 @@ func unverified(purpose string, expires time.Time) (*world, account.Account) {
 }
 
 func (w *world) verify() VerifyEmail {
-	return NewVerifyEmail(secretsPort{w}, linksPort{w}, clockPort{w}, accountsPort{w}, sessionsPort{w})
+	return NewVerifyEmail(secretsPort{w}, linksPort{w}, clockPort{w}, accountsPort{w}, sessionsPort{w}, announcementsPort{w})
 }
 
 // givenVerifyEmailVerifiesTheAccountOfALink builds VerifyEmail for "verifies the account of a link": the use case, its input, and
@@ -33,6 +33,9 @@ func givenVerifyEmailVerifiesTheAccountOfALink(t *testing.T) (VerifyEmail, Verif
 	uc := w.verify()
 	return uc, VerifyEmailInput{Secret: "secret_a"}, func(t *testing.T, out VerifyEmailOutput) {
 		t.Helper()
+		if len(w.heard) != 1 || w.heard[0] != "verified ada@example.com" {
+			t.Errorf("announced %q, want the address proven, once", w.heard)
+		}
 		if out.Account.ID != a.ID || !w.accounts[a.ID].Verified || len(w.links) != 0 {
 			t.Errorf("the account: %+v, the links left: %d", w.accounts[a.ID], len(w.links))
 		}

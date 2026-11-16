@@ -26,6 +26,18 @@ domains:
                 params: [{name: user, type: string}]
                 results: [{type: string}, {type: bool}]
                 properties: [TheOtherEnd]
+          - name: Invite
+            description: An invitation to someone who has no account yet, kept until their address is proven.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: InviterID, type: string, tag: 'json:"inviterId" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Status, type: string, tag: 'json:"status" app:"public"', description: "Status is pending until the address is proven, joined after."}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+        constants:
+          - {name: InvitePending, type: string, value: '"pending"', description: InvitePending is the status of an invitation whose address has no account yet.}
+          - {name: InviteJoined, type: string, value: '"joined"', description: "InviteJoined is the status of an invitation whose address was proven, and became a request."}
         functions:
           - name: PairOf
             description: PairOf names two members whatever their order.
@@ -38,6 +50,8 @@ domains:
           - {name: ErrSelf, serial: 3, message: a member is not their own contact}
           - {name: ErrAlready, serial: 4, message: "you are already contacts, or a request between you is waiting for an answer"}
           - {name: ErrNotAllowed, serial: 5, message: this request is not yours to answer this way}
+          - {name: ErrBadAddress, serial: 6, message: this is not an email address}
+          - {name: ErrInvited, serial: 7, message: "you already invited this address: its answer is awaited"}
         workflows:
           - name: Requests
             entity: Link
@@ -60,12 +74,21 @@ domains:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
               - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+          - name: Invitation
+            description: An invitation a member sent, as they read it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
           - name: Contact
             description: A link as one of its two members reads it.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: User, type: Person, tag: 'json:"user"'}
               - {name: Since, type: time.Time, tag: 'json:"since" app:"public"'}
+        constants:
+          - {name: KindRequest, type: string, value: '"request"', description: "KindRequest is the answer to a member who was asked to be a contact."}
+          - {name: KindInvite, type: string, value: '"invite"', description: "KindInvite is the answer to an address nobody has, which was invited to sign up."}
         ports:
           - name: Links
             direction: out
@@ -79,6 +102,24 @@ domains:
               - {name: Of, params: [{name: user, type: string}], results: [{type: "[]link.Link"}]}
               - {name: Delete, params: [{name: id, type: string}]}
               - {name: Change, description: "Change applies a change to the link of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and a link that is not there is ErrNotFound.", params: [{name: id, type: string}, {name: change, type: "func(*link.Link) error"}], results: [{type: link.Link}]}
+          - name: Invites
+            direction: out
+            version: 1
+            description: InvitesV1 keeps the invitations to those who have no account yet.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: i, type: link.Invite}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: link.Invite}, {type: bool}]}
+              - {name: ByEmail, description: "ByEmail is every invitation waiting for an address, whoever sent it.", params: [{name: email, type: string}], results: [{type: "[]link.Invite"}]}
+              - {name: Of, description: "Of is the invitations a member sent.", params: [{name: user, type: string}], results: [{type: "[]link.Invite"}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the invitation of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and an invitation that is not there is ErrNotFound.", params: [{name: id, type: string}, {name: change, type: "func(*link.Invite) error"}], results: [{type: link.Invite}]}
+          - name: Inviter
+            direction: out
+            version: 1
+            description: InviterV1 mails an address nobody has the invitation to sign up.
+            methods:
+              - {name: Invite, params: [{name: to, type: string}, {name: by, type: Person}]}
           - name: People
             direction: out
             version: 1
@@ -100,18 +141,23 @@ domains:
               - {name: Now, results: [{type: time.Time}]}
         usecases:
           - name: RequestContact
-            description: RequestContact asks the member an address belongs to to be a contact.
+            description: RequestContact asks the member an address belongs to to be a contact; an address nobody has is invited to sign up instead, and the invitation waits for it.
             input:
               - {name: From, type: string}
               - {name: Email, type: string}
             output:
+              - {name: Kind, type: string, description: "Kind is request when a member was asked, invite when an address nobody has was invited."}
               - {name: Link, type: link.Link}
-            errors: [link.ErrUnknownMember, link.ErrSelf, link.ErrAlready]
-            calls: [contacts/port/People@v1.ByEmail, contacts/port/People@v1.ByID, contacts/port/Links@v1.ByPair, contacts/port/Links@v1.Delete, contacts/port/Clock@v1.Now, contacts/port/Links@v1.NewID, contacts/port/Links@v1.Save, contacts/port/Notices@v1.Tell]
+              - {name: Invitation, type: Invitation}
+            errors: [link.ErrBadAddress, link.ErrSelf, link.ErrAlready, link.ErrInvited]
+            calls: [contacts/port/People@v1.ByEmail, contacts/port/People@v1.ByID, contacts/port/Links@v1.ByPair, contacts/port/Links@v1.Delete, contacts/port/Clock@v1.Now, contacts/port/Links@v1.NewID, contacts/port/Links@v1.Save, contacts/port/Notices@v1.Tell, contacts/port/Invites@v1.Of, contacts/port/Invites@v1.NewID, contacts/port/Invites@v1.Save, contacts/port/Inviter@v1.Invite, contacts/port/Invites@v1.Delete]
             scenarios:
               - {name: asks a member, kind: success}
               - {name: asks again after a refusal, kind: success}
-              - {name: refuses an unknown address, kind: refusal, error: link.ErrUnknownMember}
+              - {name: invites an address nobody has, kind: success}
+              - {name: invites again after a cancellation, kind: success}
+              - {name: refuses an address that is none, kind: refusal, error: link.ErrBadAddress}
+              - {name: refuses an address already invited, kind: refusal, error: link.ErrInvited}
               - {name: refuses oneself, kind: refusal, error: link.ErrSelf}
               - {name: refuses a pair already linked, kind: refusal, error: link.ErrAlready}
           - name: AnswerRequest
@@ -129,6 +175,31 @@ domains:
               - {name: refuses the request of others, kind: refusal, error: link.ErrNotFound}
               - {name: refuses the requester who accepts, kind: refusal, error: link.ErrNotAllowed}
               - {name: refuses a request already answered, kind: refusal, error: link.ErrNotAllowed}
+          - name: CancelInvite
+            description: CancelInvite withdraws an invitation of the member's own, which nobody else may.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            output:
+              - {name: Invitation, type: Invitation}
+            errors: [link.ErrNotFound]
+            calls: [contacts/port/Invites@v1.Get, contacts/port/Invites@v1.Delete]
+            scenarios:
+              - {name: withdraws an invitation, kind: success}
+              - {name: refuses an invitation of others, kind: refusal, error: link.ErrNotFound}
+              - {name: refuses an invitation already joined, kind: refusal, error: link.ErrNotFound}
+          - name: ClaimInvites
+            description: ClaimInvites turns every invitation waiting for an address that was just proven into a request from its inviter to the new member, and marks it joined; a pair already linked and an inviter who is the member are left alone, and claiming twice changes nothing.
+            input:
+              - {name: UserID, type: string}
+              - {name: Email, type: string}
+            calls: [contacts/port/Invites@v1.ByEmail, contacts/port/Links@v1.ByPair, contacts/port/Links@v1.Delete, contacts/port/Clock@v1.Now, contacts/port/Links@v1.NewID, contacts/port/Links@v1.Save, contacts/port/People@v1.ByID, contacts/port/Notices@v1.Tell, contacts/port/Invites@v1.Change]
+            scenarios:
+              - {name: turns invitations into requests, kind: success}
+              - {name: leaves a pair already linked alone, kind: success}
+              - {name: skips an inviter who is the member, kind: success}
+              - {name: claims twice as once, kind: success}
+              - {name: ignores an address nobody invited, kind: success}
           - name: RemoveContact
             description: RemoveContact ends a contact, for either of its two members.
             input:
@@ -140,14 +211,15 @@ domains:
               - {name: ends a contact, kind: success}
               - {name: refuses a contact of others, kind: refusal, error: link.ErrNotFound}
           - name: ListContacts
-            description: ListContacts lists a member's contacts by name, and the requests waiting, those they received and those they sent.
+            description: ListContacts lists a member's contacts by name, the requests waiting, those they received and those they sent, and the invitations still waiting for an account, the newest first.
             input:
               - {name: User, type: string}
             output:
               - {name: Contacts, type: "[]Contact"}
               - {name: Incoming, type: "[]Contact"}
               - {name: Outgoing, type: "[]Contact"}
-            calls: [contacts/port/Links@v1.Of, contacts/port/People@v1.ByID]
+              - {name: Invites, type: "[]Invitation"}
+            calls: [contacts/port/Links@v1.Of, contacts/port/People@v1.ByID, contacts/port/Invites@v1.Of]
             scenarios:
               - {name: lists contacts and requests apart, kind: success}
           - name: AreContacts
@@ -160,11 +232,36 @@ domains:
             calls: [contacts/port/Links@v1.ByPair]
             scenarios:
               - {name: says yes for an accepted link only, kind: success}
+        internals:
+          functions:
+            - name: cleanAddress
+              description: "cleanAddress is an address as the product keeps it, trimmed and in lower case, and whether it is one, by the rule an account's address follows."
+              params: [{name: s, type: "string"}]
+              results: [{type: "string"}, {type: "bool"}]
+            - name: invitationOf
+              description: "invitationOf is an invitation as its inviter reads it."
+              params: [{name: i, type: "link.Invite"}]
+              results: [{type: "Invitation"}]
+          types:
+            - name: ClaimInvitesHandler
+              methods:
+                - name: request
+                  receiver: pointer
+                  description: "request asks the member to be the inviter's contact, as RequestContact does for an address that has an account, and says nothing of a pair that is linked or waiting."
+                  params: [{name: ctx, type: "context.Context"}, {name: from, type: "string"}, {name: to, type: "string"}, {name: now, type: "time.Time"}]
+                  results: [{type: "error"}]
+            - name: RequestContactHandler
+              methods:
+                - name: invite
+                  receiver: pointer
+                  description: "invite keeps an invitation to an address nobody has and mails it."
+                  params: [{name: ctx, type: "context.Context"}, {name: from, type: "string"}, {name: email, type: "string"}]
+                  results: [{type: "RequestContactOutput"}, {type: "error"}]
       - name: linkstore
         role: adapter
         code: 64.8.3
-        uses: [circle, link, vault]
-        description: The links in the framework's store, their events on a topic, the directory asked of the identity, and the framework's clock.
+        uses: [circle, link, vault, post]
+        description: The links and the invitations in the framework's stores, their events on a topic, the directory asked of the identity, and the framework's clock.
         entities:
           - name: Record
             description: A link as the store keeps it, field for field.
@@ -174,6 +271,15 @@ domains:
               - {name: RequesterID, type: string, tag: 'json:"requesterId" app:"public"'}
               - {name: AddresseeID, type: string, tag: 'json:"addresseeId" app:"public"'}
               - {name: State, type: WaitingState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+          - name: InviteRecord
+            description: An invitation as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: InviterID, type: string, tag: 'json:"inviterId" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal,subject"'}
+              - {name: Status, type: string, tag: 'json:"status" app:"public"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
         values:
@@ -205,10 +311,22 @@ domains:
             key: ID
             description: "Every link, keyed by its id; one a pair at most."
             indexes: [{name: by-pair, field: Pair, unique: true}]
+          - name: invites
+            entity: InviteRecord
+            key: ID
+            description: "Every invitation to an address with no account, keyed by its id; one is deleted ninety days after it was sent."
+            indexes: [{name: by-email, field: Email}]
+            deleteAfter: {delay: 2160h, since: CreatedAt}
         adapters:
           - name: Links
             description: Links is Links@v1 on the store "links".
             implements: [contacts/port/Links@v1]
+          - name: Invitations
+            description: Invitations is Invites@v1 on the store "invites".
+            implements: [contacts/port/Invites@v1]
+          - name: Courier
+            description: Courier is Inviter@v1; it writes to an address nobody has the invitation to sign up, in French, and sends it through the product's mailer.
+            implements: [contacts/port/Inviter@v1]
           - name: Directory
             description: Directory is People@v1 on the identity's queries "member" and "member-by-email".
             implements: [contacts/port/People@v1]
@@ -228,10 +346,22 @@ domains:
               description: "recordOf is a link as the store keeps it."
               params: [{name: l, type: "link.Link"}]
               results: [{type: "Record"}]
+            - name: invitesOf
+              description: "invitesOf is the invitations some records keep."
+              params: [{name: rs, type: "[]InviteRecord"}]
+              results: [{type: "[]link.Invite"}]
+            - name: inviteOf
+              description: "inviteOf is the invitation a record keeps."
+              params: [{name: r, type: "InviteRecord"}]
+              results: [{type: "link.Invite"}]
+            - name: inviteRecordOf
+              description: "inviteRecordOf is an invitation as the store keeps it."
+              params: [{name: i, type: "link.Invite"}]
+              results: [{type: "InviteRecord"}]
       - name: contactsapi
         role: presentation
         code: 64.8.4
-        uses: [circle, link]
+        uses: [circle, link, vault]
         description: The HTTP API of a member's contacts, and the question the rest of the product asks of them.
         values:
           - name: AddRequest
@@ -253,21 +383,30 @@ domains:
             description: Whether two members are contacts.
             fields:
               - {name: Yes, type: bool, tag: 'json:"yes" app:"public"'}
+          - name: Outcome
+            description: What a route that asks or cancels did, a request or an invitation.
+            fields:
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is request or invite."}
+              - {name: Request, type: "*link.Link", tag: 'json:"request,omitempty"'}
+              - {name: Invite, type: "*circle.Invitation", tag: 'json:"invite,omitempty"'}
           - name: Listing
-            description: A member's contacts, and the requests waiting.
+            description: A member's contacts, the requests waiting and the invitations still waiting for an account.
             fields:
               - {name: Contacts, type: "[]circle.Contact", tag: 'json:"contacts"'}
               - {name: Incoming, type: "[]circle.Contact", tag: 'json:"incoming"'}
               - {name: Outgoing, type: "[]circle.Contact", tag: 'json:"outgoing"'}
+              - {name: Invites, type: "[]circle.Invitation", tag: 'json:"invites"'}
         queries:
           - {name: are-contacts, input: Pair, output: Verdict, handler: Check, description: "Whether two members are contacts, for the components that share with a contact.", uses: [contacts/usecase/AreContacts], calls: [contacts/usecase/AreContacts]}
         endpoints:
           - {route: "GET /api/contacts", request: NoInput, response: Listing, handler: List, auth: required, uses: [contacts/usecase/ListContacts], calls: [contacts/usecase/ListContacts]}
-          - {route: "POST /api/contacts", request: AddRequest, response: link.Link, handler: Add, rateLimit: {perSecond: 2, burst: 5, per: client}, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}
+          - {route: "POST /api/contacts", request: AddRequest, response: Outcome, handler: Add, rateLimit: {perSecond: 2, burst: 5, per: client}, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}
           - {route: "POST /api/contacts/{id}/accept", request: ByID, response: link.Link, handler: Accept, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
           - {route: "POST /api/contacts/{id}/decline", request: ByID, response: link.Link, handler: Decline, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
-          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: link.Link, handler: Cancel, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: Outcome, handler: Cancel, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest, contacts/usecase/CancelInvite], calls: [contacts/usecase/AnswerRequest, contacts/usecase/CancelInvite]}
           - {route: "DELETE /api/contacts/{id}", request: ByID, response: NoInput, handler: Remove, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/RemoveContact], calls: [contacts/usecase/RemoveContact]}
+        subscriptions:
+          - {name: accounts, topic: identity/topic/accounts, handler: Claim, description: "An address proven: the invitations waiting for it become requests.", uses: [contacts/usecase/ClaimInvites], calls: [contacts/usecase/ClaimInvites]}
         internals:
           functions:
             - name: answer
@@ -279,9 +418,13 @@ domains:
               params: [{name: ctx, type: "context.Context"}]
               results: [{type: "string"}, {type: "error"}]
             - name: refusal
-              description: "refusal is a use case's error as the API answers it: 404 for a link that is not the caller's or an address nobody has, 409 for a pair already linked or a request that cannot be answered this way, 400 for oneself."
+              description: "refusal is a use case's error as the API answers it: 404 for a link that is not the caller's or an address nobody has, 409 for a pair already linked, an address already invited or a request that cannot be answered this way, 400 for oneself or an address that is none."
               params: [{name: err, type: "error"}]
               results: [{type: "error"}]
+            - name: isNotFound
+              description: "isNotFound says whether a refusal answers 404."
+              params: [{name: err, type: "error"}]
+              results: [{type: "bool"}]
     sequences:
       - name: request-contact
         description: A member asks another to be a contact; the other is told.

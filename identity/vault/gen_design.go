@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 // Package vault — The accounts, the sessions and the one-time links in the
 // framework's stores, the mails of an account, the directory the rest of the
@@ -22,6 +22,12 @@ import (
 // errNotImplemented is what a skeleton answers until its body is written:
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 6, 3, 255), "NOT_IMPLEMENTED", "not implemented yet", "vault: a hand-written body is still a skeleton")
+
+const (
+	// KindVerified is the kind of the message that says the address of an account
+	// is proven.
+	KindVerified string = "verified"
+)
 
 // AccountRecord — An account as the store keeps it, field for field.
 type AccountRecord struct {
@@ -56,6 +62,19 @@ type SessionRecord struct {
 	CreatedAt  time.Time `json:"createdAt" app:"public"`
 	LastSeenAt time.Time `json:"lastSeenAt" app:"public"`
 	ExpiresAt  time.Time `json:"expiresAt" app:"public"`
+}
+
+// Announcement — What happened to an account, as the topic carries it to
+// whoever listens.
+type Announcement struct {
+	// ID is the message's own: a listener that is delivered it twice keys what it
+	// writes by it.
+	ID string `json:"id" app:"public"`
+	// Kind is verified: the address of the account is proven.
+	Kind   string    `json:"kind" app:"public"`
+	UserID string    `json:"userId" app:"public"`
+	Email  string    `json:"email" app:"personal"`
+	At     time.Time `json:"at" app:"public"`
 }
 
 // ByEmail — Which address is asked about.
@@ -135,6 +154,23 @@ func (a *Drawer) New(ctx context.Context) (string, string, error) {
 }
 
 var _ access.SecretsV1 = (*Drawer)(nil)
+
+// Herald is Announcements@v1 on the topic "accounts".
+type Herald struct {
+	herald // its own state, hand-written
+}
+
+// NewHerald builds Herald: its body is the hand-written newHerald.
+func NewHerald() *Herald {
+	return newHerald()
+}
+
+// Verified is identity/port/Announcements@v1's.
+func (a *Herald) Verified(ctx context.Context, acc account.Account) error {
+	return a.verified(ctx, acc)
+}
+
+var _ access.AnnouncementsV1 = (*Herald)(nil)
 
 // OneTimeLinks is Links@v1 on the store "links".
 type OneTimeLinks struct {
@@ -322,6 +358,10 @@ var MemberByEmailQuery = Service.Query("member-by-email", Lookup)
 func Lookup(ctx context.Context, in ByEmail) (Member, error) {
 	return lookup(ctx, in)
 }
+
+// AccountsTopic — What happened to the accounts: an address proven,
+// delivered at least once.
+var AccountsTopic = Service.Topic[Announcement]("accounts")
 
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).

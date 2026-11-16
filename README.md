@@ -15,7 +15,10 @@ moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
 is counted every thirty seconds. Two members become contacts by a
 request one sends to the other's address and the other accepts; a request
-nobody answers expires after fourteen days. Members form groups: a group has an owner, admins and members, its owner
+nobody answers expires after fourteen days. An address nobody has is
+invited by mail to sign up instead: the invitation waits, ninety days at most,
+and when the address is proven, whoever signs up with it finds a request from
+each member who invited it. Members form groups: a group has an owner, admins and members, its owner
 and admins invite their contacts, and an invitation nobody answers expires
 after seven days. A member shares a task with a
 contact, who then sees it, edits it and moves it, and may leave it. A task added to a group's
@@ -25,8 +28,7 @@ the tasks of a group deleted go back to their owners' lists. The server serves a
 in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
-lives — mails in two languages and in HTML, invitations of people
-who have no account, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
+lives — mails in two languages and in HTML, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
 module of its own.
 
 ## The design
@@ -34,8 +36,8 @@ module of its own.
 | File | Domain | Holds |
 |---|---|---|
 | `design/product.yaml` | — | the product, its context (a member, an operator, the mail relay) and the binary `todo` with its two process roles, `server` and `load` |
-| `design/identity.yaml` | identity | the account and its lock, the session, four use cases and their five ports, the stores behind them, the HTTP API and the handler that says who calls a route, the sequence `sign-in` |
-| `design/contacts.yaml` | contacts | the link between two members and its request, five use cases and their four ports, the store and the topic behind them, the HTTP API, the sequence `request-contact` |
+| `design/identity.yaml` | identity | the account and its lock, the session, four use cases and their five ports, the stores and the topic `accounts` behind them, the HTTP API and the handler that says who calls a route, the sequence `sign-in` |
+| `design/contacts.yaml` | contacts | the link between two members and its request, seven use cases and their six ports, the stores (links and invitations) and the topic behind them, the subscription to the accounts' announcements, the HTTP API, the sequence `request-contact` |
 | `design/groups.yaml` | groups | the group, its roles and its invitations, the use cases and their ports, the stores and the topic behind them, the HTTP API, the queries the rest of the product asks |
 | `design/tasks.yaml` | tasks | the task and its lifecycle, six use cases and their three ports, the store behind them, the HTTP API, the sequence `complete-task` |
 | `design/activity.yaml` | activity | the feed, written from what the use cases record |
@@ -62,9 +64,10 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `GET /api/auth/me` | the caller |
 | `GET /api/auth/sessions` | the caller's open sessions, with the browser and the address each signed in from |
 | `DELETE /api/auth/sessions/{id}` | ends one of the caller's sessions |
-| `GET /api/contacts` | the caller's contacts, the requests they received and those they sent |
-| `POST /api/contacts` | asks the member an `email` belongs to to be a contact |
-| `POST /api/contacts/{id}/accept` `decline` `cancel` | answers a request: its addressee accepts or declines, its requester cancels |
+| `GET /api/contacts` | the caller's contacts, the requests they received and those they sent, and `invites`, their invitations still waiting for an account, the newest first |
+| `POST /api/contacts` | asks the member an `email` belongs to to be a contact and answers `{"kind":"request","request":{…}}`; an address nobody has is invited to sign up by mail and answers `{"kind":"invite","invite":{"id","email","createdAt"}}`; 400 for an address that is none, 409 for a pair already linked or an address already invited |
+| `POST /api/contacts/{id}/accept` `decline` | answers a request: its addressee accepts or declines |
+| `POST /api/contacts/{id}/cancel` | its requester cancels a request (`kind` request), or a member withdraws an invitation of their own (`kind` invite); 404 for anyone else's |
 | `DELETE /api/contacts/{id}` | ends a contact, for either member |
 | `GET /api/groups` `POST /api/groups` | the caller's groups; creates one: `name`, `color` |
 | `GET` `PATCH` `DELETE /api/groups/{id}` | reads a group, renames or recolours it (owner and admins), deletes it (owner) |

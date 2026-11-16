@@ -11,7 +11,7 @@ import (
 )
 
 // execute is VerifyEmail's body: the link's account is marked verified, the
-// link is spent, and a session is opened for its member: whoever opens the
+// link is spent, the address is announced to whoever listens, and a session is opened for its member: whoever opens the
 // link reads the account's inbox.
 func (h *VerifyEmailHandler) execute(ctx context.Context, in *VerifyEmailInput) (VerifyEmailOutput, error) {
 	l, now, err := redeem(ctx, h.links, h.secrets, h.clock, in.Secret, account.PurposeVerify)
@@ -27,6 +27,10 @@ func (h *VerifyEmailHandler) execute(ctx context.Context, in *VerifyEmailInput) 
 	}
 	a.Verified, a.UpdatedAt = true, now
 	if err := h.accounts.Save(ctx, a); err != nil {
+		return VerifyEmailOutput{}, err
+	}
+	// Told before the link is spent: a failure leaves the link to try again.
+	if err := h.announcements.Verified(ctx, a); err != nil {
 		return VerifyEmailOutput{}, err
 	}
 	if err := h.links.DeleteOf(ctx, a.ID, account.PurposeVerify); err != nil {

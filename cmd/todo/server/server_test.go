@@ -491,13 +491,10 @@ func TestMembersBecomeContacts(t *testing.T) {
 	p := start(t)
 	ada, bob, cy := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com")
 	p.stranger().call(http.StatusUnauthorized, "GET", "/api/contacts", nil, nil)
-	ada.call(http.StatusNotFound, "POST", "/api/contacts", map[string]any{"email": "nobody@example.com"}, nil)
 	ada.call(http.StatusBadRequest, "POST", "/api/contacts", map[string]any{"email": "ada@example.com"}, nil)
+	ada.call(http.StatusBadRequest, "POST", "/api/contacts", map[string]any{"email": "not an address"}, nil)
 
-	var l struct {
-		ID, State string
-	}
-	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "Bob@Example.com"}, &l)
+	l := ada.request("Bob@Example.com")
 	if l.ID == "" || l.State != "pending" {
 		t.Fatalf("the request: %+v", l)
 	}
@@ -645,8 +642,7 @@ func TestAnAddressIsProvenAndAPasswordReset(t *testing.T) {
 func TestATaskIsSharedWithAContact(t *testing.T) {
 	p := start(t)
 	ada, bob, cy := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com")
-	var l struct{ ID string }
-	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "bob@example.com"}, &l)
+	l := ada.request("bob@example.com")
 	bob.call(http.StatusOK, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil)
 
 	type shared struct {
@@ -709,11 +705,30 @@ type groupView struct {
 	}
 }
 
+// requestLink is the request a route that asks a member answers.
+type requestLink struct {
+	ID, State string
+}
+
+// request asks the member an address belongs to to be a contact, and
+// returns the request the route answered.
+func (m *member) request(email string) requestLink {
+	m.p.t.Helper()
+	var out struct {
+		Kind    string
+		Request requestLink
+	}
+	m.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": email}, &out)
+	if out.Kind != "request" {
+		m.p.t.Fatalf("asking %s answered %+v, want a request", email, out)
+	}
+	return out.Request
+}
+
 // befriend makes two members contacts: the first asks, the second accepts.
 func (m *member) befriend(other *member, otherEmail string) {
 	m.p.t.Helper()
-	var l struct{ ID string }
-	m.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": otherEmail}, &l)
+	l := m.request(otherEmail)
 	other.call(http.StatusOK, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil)
 }
 
@@ -1331,4 +1346,122 @@ func TestSignUpsAtTheSameInstantMakeOneAccount(t *testing.T) {
 	p.settle("the two mails", 50*time.Millisecond, func() bool {
 		return len(p.mails("ada@example.com", "Confirmez votre adresse")) == 1 && len(p.mails("ada@example.com", "Vous avez déjà un compte")) == 1
 	})
+}
+
+// invitation is what a route that invites answers, and what a listing keeps.
+type invitation struct {
+	ID, Email, CreatedAt string
+}
+
+// invite invites an address that has no account and returns the invitation
+// the route answered.
+func (m *member) invite(email string) invitation {
+	m.p.t.Helper()
+	var out struct {
+		Kind   string
+		Invite invitation
+	}
+	m.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": email}, &out)
+	if out.Kind != "invite" || out.Invite.ID == "" || out.Invite.Email != strings.ToLower(strings.TrimSpace(email)) || out.Invite.CreatedAt == "" {
+		m.p.t.Fatalf("inviting %s answered %+v, want an invitation", email, out)
+	}
+	return out.Invite
+}
+
+// An address nobody has is invited by mail, once a member; the invitation is
+// listed and may be withdrawn by its member alone. When the address is
+// proven by whoever signs up with it, every invitation still waiting becomes
+// a request to them, from its inviter, and the invitations are gone.
+func TestAStrangerIsInvitedAndJoins(t *testing.T) {
+	p := start(t)
+	ada, bob, cy := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com")
+
+	first := ada.invite(" Zoe@Example.com ")
+	ada.call(http.StatusConflict, "POST", "/api/contacts", map[string]any{"email": "zoe@example.com"}, nil) // already invited
+	p.settle("the invitation mailed", 50*time.Millisecond, func() bool {
+		return len(p.mails("zoe@example.com", "Créez votre compte avec cette adresse")) > 0
+	})
+	if mails := p.mails("zoe@example.com", "Créez votre compte avec cette adresse"); len(mails) != 1 || !strings.Contains(mails[0].Subject, "Ada") || strings.Contains(mails[0].Text, "http") {
+		t.Fatalf("the mails to Zoe: %+v, want one that names Ada and carries no link", mails)
+	}
+
+	type listing struct {
+		Contacts, Incoming, Outgoing []struct {
+			User struct{ ID, Name string }
+		}
+		Invites []invitation
+	}
+	var mine listing
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Invites) != 1 || mine.Invites[0] != first {
+		t.Fatalf("Ada's invitations: %+v, want %+v alone", mine.Invites, first)
+	}
+
+	bob.invite("zoe@example.com")
+	gone := cy.invite("zoe@example.com")
+	bob.call(http.StatusNotFound, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, nil) // not his to cancel
+	var cancelled struct {
+		Kind   string
+		Invite invitation
+	}
+	cy.call(http.StatusOK, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, &cancelled)
+	if cancelled.Kind != "invite" || cancelled.Invite.ID != gone.ID {
+		t.Errorf("the cancellation answered %+v, want the invitation", cancelled)
+	}
+	cy.call(http.StatusNotFound, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, nil) // once only
+	cy.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Invites) != 0 {
+		t.Errorf("Cy still has %+v after withdrawing the invitation", mine.Invites)
+	}
+	cy.invite("zoe@example.com") // and may invite again, then withdraw again
+	cy.call(http.StatusOK, "POST", "/api/contacts/"+cy.firstInvite(t)+"/cancel", nil, nil)
+
+	zoe := p.signUp("Zoe", "zoe@example.com")
+	var hers listing
+	p.settle("two requests for Zoe", 50*time.Millisecond, func() bool {
+		zoe.call(http.StatusOK, "GET", "/api/contacts", nil, &hers)
+		return len(hers.Incoming) >= 2
+	})
+	names := []string{hers.Incoming[0].User.Name, hers.Incoming[1].User.Name}
+	slices.Sort(names)
+	if len(hers.Incoming) != 2 || !slices.Equal(names, []string{"Ada", "Bob"}) || len(hers.Outgoing) != 0 {
+		t.Fatalf("Zoe's requests: %+v, want one from Ada and one from Bob", hers)
+	}
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Invites) != 0 || len(mine.Outgoing) != 1 || mine.Outgoing[0].User.ID != zoe.id {
+		t.Errorf("Ada: %+v, want the invitation gone and a request to Zoe", mine)
+	}
+	cy.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Invites) != 0 || len(mine.Outgoing) != 0 {
+		t.Errorf("Cy: %+v, want no request for an invitation withdrawn", mine)
+	}
+
+	// Zoe is told of each request in her feed, as of any request.
+	var feed struct {
+		Entries []struct{ Kind, Title string }
+	}
+	p.settle("the requests in Zoe's feed", 50*time.Millisecond, func() bool {
+		zoe.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+		return len(feed.Entries) >= 2
+	})
+	for _, e := range feed.Entries {
+		if e.Kind != "contact-requested" || (e.Title != "Ada" && e.Title != "Bob") {
+			t.Errorf("the feed: %+v, want contact-requested by Ada and by Bob", feed.Entries)
+		}
+	}
+
+	// Her address is a member's now: asking it is a request, and a request waiting is a conflict.
+	zoe.call(http.StatusConflict, "POST", "/api/contacts", map[string]any{"email": "ada@example.com"}, nil)
+	cy.request("zoe@example.com")
+}
+
+// firstInvite is the id of the member's only invitation.
+func (m *member) firstInvite(t *testing.T) string {
+	t.Helper()
+	var l struct{ Invites []invitation }
+	m.call(http.StatusOK, "GET", "/api/contacts", nil, &l)
+	if len(l.Invites) != 1 {
+		t.Fatalf("invitations: %+v, want one", l.Invites)
+	}
+	return l.Invites[0].ID
 }

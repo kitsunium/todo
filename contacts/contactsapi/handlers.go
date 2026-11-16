@@ -11,6 +11,7 @@ import (
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/contacts/circle"
 	"github.com/kitsunium/todo/contacts/link"
+	"github.com/kitsunium/todo/identity/vault"
 )
 
 // list is GET /api/contacts's body; what it uses is in wired.
@@ -23,20 +24,25 @@ func list(ctx context.Context, in NoInput) (out Listing, err error) {
 	if err != nil {
 		return Listing{}, err
 	}
-	return Listing{Contacts: res.Contacts, Incoming: res.Incoming, Outgoing: res.Outgoing}, nil
+	return Listing{Contacts: res.Contacts, Incoming: res.Incoming, Outgoing: res.Outgoing, Invites: res.Invites}, nil
 }
 
 // add is POST /api/contacts's body; what it uses is in wired.
-func add(ctx context.Context, in AddRequest) (out link.Link, err error) {
+// It answers a request when the address has an account, an invitation when
+// it has none.
+func add(ctx context.Context, in AddRequest) (out Outcome, err error) {
 	me, err := caller(ctx)
 	if err != nil {
-		return link.Link{}, err
+		return Outcome{}, err
 	}
 	res, err := wired.requestContact.Execute(ctx, circle.RequestContactInput{From: me, Email: in.Email})
 	if err != nil {
-		return link.Link{}, refusal(err)
+		return Outcome{}, refusal(err)
 	}
-	return res.Link, nil
+	if res.Kind == circle.KindInvite {
+		return Outcome{Kind: res.Kind, Invite: &res.Invitation}, nil
+	}
+	return Outcome{Kind: res.Kind, Request: &res.Link}, nil
 }
 
 // accept is POST /api/contacts/{id}/accept's body; what it uses is in wired.
@@ -50,8 +56,43 @@ func decline(ctx context.Context, in ByID) (out link.Link, err error) {
 }
 
 // cancel is POST /api/contacts/{id}/cancel's body; what it uses is in wired.
-func cancel(ctx context.Context, in ByID) (out link.Link, err error) {
-	return answer(ctx, in.ID, link.RequestsOnCancel)
+// The id is a request's, or an invitation's of the caller's: a request that
+// is not found is looked for among the invitations, and one found nowhere
+// is not found.
+func cancel(ctx context.Context, in ByID) (out Outcome, err error) {
+	l, err := answer(ctx, in.ID, link.RequestsOnCancel)
+	if err == nil {
+		return Outcome{Kind: circle.KindRequest, Request: &l}, nil
+	}
+	if !isNotFound(err) {
+		return Outcome{}, err
+	}
+	me, err := caller(ctx)
+	if err != nil {
+		return Outcome{}, err
+	}
+	res, err := wired.cancelInvite.Execute(ctx, circle.CancelInviteInput{User: me, ID: in.ID})
+	if err != nil {
+		return Outcome{}, refusal(err)
+	}
+	return Outcome{Kind: circle.KindInvite, Invite: &res.Invitation}, nil
+}
+
+// isNotFound says whether a refusal answers 404.
+func isNotFound(err error) bool {
+	var refused *app.Error
+	return errors.As(err, &refused) && refused.Code == app.WireNotFound
+}
+
+// claim is the subscription "accounts"'s body: an address proven turns the
+// invitations waiting for it into requests. Every other message is not its
+// business.
+func claim(ctx context.Context, msg vault.Announcement) error {
+	if msg.Kind != vault.KindVerified {
+		return nil
+	}
+	_, err := wired.claimInvites.Execute(ctx, circle.ClaimInvitesInput{UserID: msg.UserID, Email: msg.Email})
+	return err
 }
 
 // remove is DELETE /api/contacts/{id}'s body; what it uses is in wired.
@@ -96,13 +137,20 @@ func caller(ctx context.Context) (string, error) {
 
 // refusal is a use case's error as the API answers it: 404 for a link that
 // is not the caller's or an address nobody has, 409 for a pair already
-// linked or a request that cannot be answered this way, 400 for oneself.
+// linked, an address already invited or a request that cannot be answered
+// this way, 400 for oneself or an address that is none.
 func refusal(err error) error {
 	switch {
 	case errors.Is(err, link.ErrNotFound):
 		return app.NotFound("no such contact")
 	case errors.Is(err, link.ErrUnknownMember):
 		return app.NotFound("nobody has this address")
+	case errors.Is(err, link.ErrBadAddress):
+		e := app.Invalid("the request is invalid")
+		e.Violations = []app.Violation{{Path: "email", Rule: "format", Message: err.Error()}}
+		return e
+	case errors.Is(err, link.ErrInvited):
+		return app.Conflict("you already invited this address: its answer is awaited")
 	case errors.Is(err, link.ErrSelf):
 		e := app.Invalid("the request is invalid")
 		e.Violations = []app.Violation{{Path: "email", Rule: "other", Message: err.Error()}}

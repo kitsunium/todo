@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 // Package circle — Asking a member to be a contact, answering, and listing
 // one's contacts.
@@ -20,11 +20,26 @@ import (
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 8, 2, 255), "NOT_IMPLEMENTED", "not implemented yet", "circle: a hand-written body is still a skeleton")
 
+const (
+	// KindInvite is the answer to an address nobody has, which was invited to sign
+	// up.
+	KindInvite string = "invite"
+	// KindRequest is the answer to a member who was asked to be a contact.
+	KindRequest string = "request"
+)
+
 // Contact — A link as one of its two members reads it.
 type Contact struct {
 	ID    string    `json:"id" app:"public"`
 	User  Person    `json:"user"`
 	Since time.Time `json:"since" app:"public"`
+}
+
+// Invitation — An invitation a member sent, as they read it.
+type Invitation struct {
+	ID        string    `json:"id" app:"public"`
+	Email     string    `json:"email" app:"personal"`
+	CreatedAt time.Time `json:"createdAt" app:"public"`
 }
 
 // Person — A member as a contact sees them.
@@ -37,6 +52,28 @@ type Person struct {
 // ClockV1 tells the time.
 type ClockV1 interface {
 	Now(ctx context.Context) (time.Time, error)
+}
+
+// InviterV1 mails an address nobody has the invitation to sign up.
+type InviterV1 interface {
+	Invite(ctx context.Context, to string, by Person) error
+}
+
+// InvitesV1 keeps the invitations to those who have no account yet.
+type InvitesV1 interface {
+	// ByEmail is every invitation waiting for an address, whoever sent it.
+	ByEmail(ctx context.Context, email string) ([]link.Invite, error)
+	// Change applies a change to the invitation of an id as it is kept at that
+	// instant, alone among the writers of the store, and keeps the result; an
+	// error of the change keeps nothing, and an invitation that is not there is
+	// ErrNotFound.
+	Change(ctx context.Context, id string, change func(*link.Invite) error) (link.Invite, error)
+	Delete(ctx context.Context, id string) error
+	Get(ctx context.Context, id string) (link.Invite, bool, error)
+	NewID(ctx context.Context) (string, error)
+	// Of is the invitations a member sent.
+	Of(ctx context.Context, user string) ([]link.Invite, error)
+	Save(ctx context.Context, i link.Invite) error
 }
 
 // LinksV1 keeps the links.
@@ -135,8 +172,82 @@ func (h *AreContactsHandler) Execute(ctx context.Context, in AreContactsInput) (
 
 var _ AreContacts = (*AreContactsHandler)(nil)
 
-// ListContacts lists a member's contacts by name, and the requests waiting,
-// those they received and those they sent.
+// CancelInvite withdraws an invitation of the member's own, which nobody else
+// may.
+type CancelInvite interface {
+	Execute(ctx context.Context, in CancelInviteInput) (CancelInviteOutput, error)
+}
+
+// CancelInviteInput is CancelInvite's input: a field added breaks no caller.
+type CancelInviteInput struct {
+	User string
+	ID   string
+}
+
+// CancelInviteOutput is CancelInvite's output.
+type CancelInviteOutput struct {
+	Invitation Invitation
+}
+
+// CancelInviteHandler runs CancelInvite: its body is the hand-written execute.
+type CancelInviteHandler struct {
+	invites InvitesV1
+}
+
+// NewCancelInvite builds CancelInvite on what it calls.
+func NewCancelInvite(invites InvitesV1) *CancelInviteHandler {
+	return &CancelInviteHandler{invites: invites}
+}
+
+// Execute runs CancelInvite.
+func (h *CancelInviteHandler) Execute(ctx context.Context, in CancelInviteInput) (CancelInviteOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ CancelInvite = (*CancelInviteHandler)(nil)
+
+// ClaimInvites turns every invitation waiting for an address that was just
+// proven into a request from its inviter to the new member, and marks it
+// joined; a pair already linked and an inviter who is the member are left
+// alone, and claiming twice changes nothing.
+type ClaimInvites interface {
+	Execute(ctx context.Context, in ClaimInvitesInput) (ClaimInvitesOutput, error)
+}
+
+// ClaimInvitesInput is ClaimInvites's input: a field added breaks no caller.
+type ClaimInvitesInput struct {
+	UserID string
+	Email  string
+}
+
+// ClaimInvitesOutput is ClaimInvites's output.
+type ClaimInvitesOutput struct {
+}
+
+// ClaimInvitesHandler runs ClaimInvites: its body is the hand-written execute.
+type ClaimInvitesHandler struct {
+	invites InvitesV1
+	links   LinksV1
+	clock   ClockV1
+	people  PeopleV1
+	notices NoticesV1
+}
+
+// NewClaimInvites builds ClaimInvites on what it calls.
+func NewClaimInvites(invites InvitesV1, links LinksV1, clock ClockV1, people PeopleV1, notices NoticesV1) *ClaimInvitesHandler {
+	return &ClaimInvitesHandler{invites: invites, links: links, clock: clock, people: people, notices: notices}
+}
+
+// Execute runs ClaimInvites.
+func (h *ClaimInvitesHandler) Execute(ctx context.Context, in ClaimInvitesInput) (ClaimInvitesOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ClaimInvites = (*ClaimInvitesHandler)(nil)
+
+// ListContacts lists a member's contacts by name, the requests waiting, those
+// they received and those they sent, and the invitations still waiting for an
+// account, the newest first.
 type ListContacts interface {
 	Execute(ctx context.Context, in ListContactsInput) (ListContactsOutput, error)
 }
@@ -151,17 +262,19 @@ type ListContactsOutput struct {
 	Contacts []Contact
 	Incoming []Contact
 	Outgoing []Contact
+	Invites  []Invitation
 }
 
 // ListContactsHandler runs ListContacts: its body is the hand-written execute.
 type ListContactsHandler struct {
-	links  LinksV1
-	people PeopleV1
+	links   LinksV1
+	people  PeopleV1
+	invites InvitesV1
 }
 
 // NewListContacts builds ListContacts on what it calls.
-func NewListContacts(links LinksV1, people PeopleV1) *ListContactsHandler {
-	return &ListContactsHandler{links: links, people: people}
+func NewListContacts(links LinksV1, people PeopleV1, invites InvitesV1) *ListContactsHandler {
+	return &ListContactsHandler{links: links, people: people, invites: invites}
 }
 
 // Execute runs ListContacts.
@@ -203,7 +316,9 @@ func (h *RemoveContactHandler) Execute(ctx context.Context, in RemoveContactInpu
 
 var _ RemoveContact = (*RemoveContactHandler)(nil)
 
-// RequestContact asks the member an address belongs to to be a contact.
+// RequestContact asks the member an address belongs to to be a contact; an
+// address nobody has is invited to sign up instead, and the invitation waits
+// for it.
 type RequestContact interface {
 	Execute(ctx context.Context, in RequestContactInput) (RequestContactOutput, error)
 }
@@ -216,7 +331,11 @@ type RequestContactInput struct {
 
 // RequestContactOutput is RequestContact's output.
 type RequestContactOutput struct {
-	Link link.Link
+	// Kind is request when a member was asked, invite when an address nobody has
+	// was invited.
+	Kind       string
+	Link       link.Link
+	Invitation Invitation
 }
 
 // RequestContactHandler runs RequestContact: its body is the hand-written execute.
@@ -225,11 +344,13 @@ type RequestContactHandler struct {
 	links   LinksV1
 	clock   ClockV1
 	notices NoticesV1
+	invites InvitesV1
+	inviter InviterV1
 }
 
 // NewRequestContact builds RequestContact on what it calls.
-func NewRequestContact(people PeopleV1, links LinksV1, clock ClockV1, notices NoticesV1) *RequestContactHandler {
-	return &RequestContactHandler{people: people, links: links, clock: clock, notices: notices}
+func NewRequestContact(people PeopleV1, links LinksV1, clock ClockV1, notices NoticesV1, invites InvitesV1, inviter InviterV1) *RequestContactHandler {
+	return &RequestContactHandler{people: people, links: links, clock: clock, notices: notices, invites: invites, inviter: inviter}
 }
 
 // Execute runs RequestContact.

@@ -117,6 +117,12 @@ domains:
               - {name: Verification, params: [{name: to, type: account.Account}, {name: secret, type: string}]}
               - {name: Reset, params: [{name: to, type: account.Account}, {name: secret, type: string}]}
               - {name: AlreadyMember, params: [{name: to, type: account.Account}]}
+          - name: Announcements
+            direction: out
+            version: 1
+            description: AnnouncementsV1 tells the rest of the product what happened to an account, for whoever listens.
+            methods:
+              - {name: Verified, description: "Verified says the address of an account is proven.", params: [{name: acc, type: account.Account}]}
           - name: Passwords
             direction: out
             version: 1
@@ -149,7 +155,7 @@ domains:
               - {name: Email, type: string}
               - {name: Verified, type: bool}
             errors: [account.ErrInvalidEmail, account.ErrWeakPassword, account.ErrNameRequired]
-            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.NewID, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Links@v1.NewID, identity/port/Links@v1.Save, identity/port/Courier@v1.Verification, identity/port/Courier@v1.AlreadyMember]
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.NewID, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Links@v1.NewID, identity/port/Links@v1.Save, identity/port/Courier@v1.Verification, identity/port/Courier@v1.AlreadyMember, identity/port/Announcements@v1.Verified]
             scenarios:
               - {name: creates an account to verify, kind: success}
               - {name: creates a verified account where addresses are trusted, kind: success}
@@ -167,7 +173,7 @@ domains:
               - {name: SessionSecret, type: string}
               - {name: Session, type: account.Session}
             errors: [account.ErrBadLink]
-            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save, identity/port/Announcements@v1.Verified]
             scenarios:
               - {name: verifies the account of a link, kind: success}
               - {name: refuses an expired link, kind: refusal, error: account.ErrBadLink}
@@ -194,11 +200,12 @@ domains:
               - {name: Secret, type: string}
               - {name: Password, type: string}
             errors: [account.ErrBadLink, account.ErrWeakPassword]
-            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Hash, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Sessions@v1.DeleteOf]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Hash, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Sessions@v1.DeleteOf, identity/port/Announcements@v1.Verified]
             scenarios:
               - {name: chooses a new password, kind: success}
               - {name: refuses a link used once, kind: refusal, error: account.ErrBadLink}
               - {name: refuses a short password, kind: refusal, error: account.ErrWeakPassword}
+              - {name: announces nothing for an address already proven, kind: success}
           - name: ChangePassword
             description: ChangePassword replaces a member's password for one who knows the current one, and ends their other sessions.
             input:
@@ -338,9 +345,21 @@ domains:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
               - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+          - name: Announcement
+            description: What happened to an account, as the topic carries it to whoever listens.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"', description: "ID is the message's own: a listener that is delivered it twice keys what it writes by it."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is verified: the address of the account is proven."}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
         queries:
           - {name: member, input: ByID, output: Member, handler: Directory, description: "The directory: a member's address and name by their id, for the components that write to them."}
           - {name: member-by-email, input: ByEmail, output: Member, handler: Lookup, description: "The directory, by address: whose account an address is."}
+        constants:
+          - {name: KindVerified, type: string, value: '"verified"', description: "KindVerified is the kind of the message that says the address of an account is proven."}
+        topics:
+          - {name: accounts, message: Announcement, description: "What happened to the accounts: an address proven, delivered at least once."}
         stores:
           - name: accounts
             entity: AccountRecord
@@ -370,6 +389,9 @@ domains:
             description: Postman is Courier@v1; it writes the mails of an account, in French, and sends them through the product's mailer.
             implements: [identity/port/Courier@v1]
             uses: ["setting:base-url"]
+          - name: Herald
+            description: Herald is Announcements@v1 on the topic "accounts".
+            implements: [identity/port/Announcements@v1]
           - name: Accounts
             description: Accounts is Accounts@v1 on the store "accounts".
             implements: [identity/port/Accounts@v1]

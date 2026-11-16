@@ -16,12 +16,13 @@ import (
 // execute is ListContacts's body: the member's accepted links, the pending
 // ones they received and the pending ones they sent, each with the member
 // at its other end, by name. A link whose other member is gone is left out.
+// The invitations still waiting follow, the newest first.
 func (h *ListContactsHandler) execute(ctx context.Context, in *ListContactsInput) (ListContactsOutput, error) {
 	links, err := h.links.Of(ctx, in.User)
 	if err != nil {
 		return ListContactsOutput{}, err
 	}
-	out := ListContactsOutput{Contacts: []Contact{}, Incoming: []Contact{}, Outgoing: []Contact{}}
+	out := ListContactsOutput{Contacts: []Contact{}, Incoming: []Contact{}, Outgoing: []Contact{}, Invites: []Invitation{}}
 	for _, l := range links {
 		other, mine := l.Other(in.User)
 		if !mine {
@@ -49,5 +50,17 @@ func (h *ListContactsHandler) execute(ctx context.Context, in *ListContactsInput
 			return cmp.Or(cmp.Compare(strings.ToLower(a.User.Name), strings.ToLower(b.User.Name)), cmp.Compare(a.ID, b.ID))
 		})
 	}
+	sent, err := h.invites.Of(ctx, in.User)
+	if err != nil {
+		return ListContactsOutput{}, err
+	}
+	for _, i := range sent {
+		if i.Status == link.InvitePending {
+			out.Invites = append(out.Invites, invitationOf(i))
+		}
+	}
+	slices.SortFunc(out.Invites, func(a, b Invitation) int {
+		return cmp.Or(b.CreatedAt.Compare(a.CreatedAt), cmp.Compare(b.ID, a.ID))
+	})
 	return out, nil
 }

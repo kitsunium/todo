@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 // Package link — The link between two members, and the request that makes
 // it.
@@ -23,6 +23,10 @@ var (
 	// ErrAlready is "you are already contacts, or a request between you is waiting
 	// for an answer".
 	ErrAlready = errs.New(errs.Pack(64, 8, 1, 4), "ALREADY", "you are already contacts, or a request between you is waiting for an answer", "contacts/error/ErrAlready")
+	// ErrBadAddress is "this is not an email address".
+	ErrBadAddress = errs.New(errs.Pack(64, 8, 1, 6), "BAD_ADDRESS", "this is not an email address", "contacts/error/ErrBadAddress")
+	// ErrInvited is "you already invited this address: its answer is awaited".
+	ErrInvited = errs.New(errs.Pack(64, 8, 1, 7), "INVITED", "you already invited this address: its answer is awaited", "contacts/error/ErrInvited")
 	// ErrNotAllowed is "this request is not yours to answer this way".
 	ErrNotAllowed = errs.New(errs.Pack(64, 8, 1, 5), "NOT_ALLOWED", "this request is not yours to answer this way", "contacts/error/ErrNotAllowed")
 	// ErrNotFound is "no such contact".
@@ -32,6 +36,27 @@ var (
 	// ErrUnknownMember is "nobody has this address".
 	ErrUnknownMember = errs.New(errs.Pack(64, 8, 1, 2), "UNKNOWN_MEMBER", "nobody has this address", "contacts/error/ErrUnknownMember")
 )
+
+const (
+	// InviteJoined is the status of an invitation whose address was proven, and
+	// became a request.
+	InviteJoined string = "joined"
+	// InvitePending is the status of an invitation whose address has no account
+	// yet.
+	InvitePending string = "pending"
+)
+
+// Invite — An invitation to someone who has no account yet, kept until their
+// address is proven.
+type Invite struct {
+	ID        string `json:"id" app:"public"`
+	InviterID string `json:"inviterId" app:"public"`
+	Email     string `json:"email" app:"personal"`
+	// Status is pending until the address is proven, joined after.
+	Status    string    `json:"status" app:"public"`
+	CreatedAt time.Time `json:"createdAt" app:"public"`
+	UpdatedAt time.Time `json:"updatedAt" app:"public"`
+}
 
 // Link — A contact request between two members, and the contact it becomes
 // once accepted.

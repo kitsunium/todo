@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:92f401eee68f7ed970fa67dd3972c2db2225ff89c62bf5694e285eed507fe8ce
+// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
 
 package circle
 
@@ -60,6 +60,84 @@ func TestAreContactsSaysYesForAnAcceptedLinkOnly(t *testing.T) {
 	then(t, out)
 }
 
+// TestCancelInviteWithdrawsAnInvitation is CancelInvite's scenario "withdraws an invitation" (success).
+func TestCancelInviteWithdrawsAnInvitation(t *testing.T) {
+	uc, in, then := givenCancelInviteWithdrawsAnInvitation(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("CancelInvite: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestCancelInviteRefusesAnInvitationOfOthers is CancelInvite's scenario "refuses an invitation of others" (refusal).
+func TestCancelInviteRefusesAnInvitationOfOthers(t *testing.T) {
+	uc, in := givenCancelInviteRefusesAnInvitationOfOthers(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, link.ErrNotFound) {
+		t.Fatalf("CancelInvite: %v, want link.ErrNotFound", err)
+	}
+}
+
+// TestCancelInviteRefusesAnInvitationAlreadyJoined is CancelInvite's scenario "refuses an invitation already joined" (refusal).
+func TestCancelInviteRefusesAnInvitationAlreadyJoined(t *testing.T) {
+	uc, in := givenCancelInviteRefusesAnInvitationAlreadyJoined(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, link.ErrNotFound) {
+		t.Fatalf("CancelInvite: %v, want link.ErrNotFound", err)
+	}
+}
+
+// TestClaimInvitesTurnsInvitationsIntoRequests is ClaimInvites's scenario "turns invitations into requests" (success).
+func TestClaimInvitesTurnsInvitationsIntoRequests(t *testing.T) {
+	uc, in, then := givenClaimInvitesTurnsInvitationsIntoRequests(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ClaimInvites: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestClaimInvitesLeavesAPairAlreadyLinkedAlone is ClaimInvites's scenario "leaves a pair already linked alone" (success).
+func TestClaimInvitesLeavesAPairAlreadyLinkedAlone(t *testing.T) {
+	uc, in, then := givenClaimInvitesLeavesAPairAlreadyLinkedAlone(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ClaimInvites: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestClaimInvitesSkipsAnInviterWhoIsTheMember is ClaimInvites's scenario "skips an inviter who is the member" (success).
+func TestClaimInvitesSkipsAnInviterWhoIsTheMember(t *testing.T) {
+	uc, in, then := givenClaimInvitesSkipsAnInviterWhoIsTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ClaimInvites: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestClaimInvitesClaimsTwiceAsOnce is ClaimInvites's scenario "claims twice as once" (success).
+func TestClaimInvitesClaimsTwiceAsOnce(t *testing.T) {
+	uc, in, then := givenClaimInvitesClaimsTwiceAsOnce(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ClaimInvites: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestClaimInvitesIgnoresAnAddressNobodyInvited is ClaimInvites's scenario "ignores an address nobody invited" (success).
+func TestClaimInvitesIgnoresAnAddressNobodyInvited(t *testing.T) {
+	uc, in, then := givenClaimInvitesIgnoresAnAddressNobodyInvited(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ClaimInvites: %v, want a success", err)
+	}
+	then(t, out)
+}
+
 // TestListContactsListsContactsAndRequestsApart is ListContacts's scenario "lists contacts and requests apart" (success).
 func TestListContactsListsContactsAndRequestsApart(t *testing.T) {
 	uc, in, then := givenListContactsListsContactsAndRequestsApart(t)
@@ -109,12 +187,41 @@ func TestRequestContactAsksAgainAfterARefusal(t *testing.T) {
 	then(t, out)
 }
 
-// TestRequestContactRefusesAnUnknownAddress is RequestContact's scenario "refuses an unknown address" (refusal).
-func TestRequestContactRefusesAnUnknownAddress(t *testing.T) {
-	uc, in := givenRequestContactRefusesAnUnknownAddress(t)
+// TestRequestContactInvitesAnAddressNobodyHas is RequestContact's scenario "invites an address nobody has" (success).
+func TestRequestContactInvitesAnAddressNobodyHas(t *testing.T) {
+	uc, in, then := givenRequestContactInvitesAnAddressNobodyHas(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("RequestContact: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestRequestContactInvitesAgainAfterACancellation is RequestContact's scenario "invites again after a cancellation" (success).
+func TestRequestContactInvitesAgainAfterACancellation(t *testing.T) {
+	uc, in, then := givenRequestContactInvitesAgainAfterACancellation(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("RequestContact: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestRequestContactRefusesAnAddressThatIsNone is RequestContact's scenario "refuses an address that is none" (refusal).
+func TestRequestContactRefusesAnAddressThatIsNone(t *testing.T) {
+	uc, in := givenRequestContactRefusesAnAddressThatIsNone(t)
 	_, err := uc.Execute(t.Context(), in)
-	if !errors.Is(err, link.ErrUnknownMember) {
-		t.Fatalf("RequestContact: %v, want link.ErrUnknownMember", err)
+	if !errors.Is(err, link.ErrBadAddress) {
+		t.Fatalf("RequestContact: %v, want link.ErrBadAddress", err)
+	}
+}
+
+// TestRequestContactRefusesAnAddressAlreadyInvited is RequestContact's scenario "refuses an address already invited" (refusal).
+func TestRequestContactRefusesAnAddressAlreadyInvited(t *testing.T) {
+	uc, in := givenRequestContactRefusesAnAddressAlreadyInvited(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, link.ErrInvited) {
+		t.Fatalf("RequestContact: %v, want link.ErrInvited", err)
 	}
 }
 

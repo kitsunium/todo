@@ -22,7 +22,12 @@ func givenListContactsListsContactsAndRequestsApart(t *testing.T) (ListContacts,
 	w.linked("user_ada", "user_dee", link.RequestsPending)
 	w.linked("user_ada", "user_eve", link.RequestsDeclined)
 	w.linked("user_bob", "user_cy", link.RequestsAccepted)
-	return NewListContacts(w, w), ListContactsInput{User: "user_ada"}, func(t *testing.T, out ListContactsOutput) {
+	older, newer := w.invited("user_ada", "old@example.com"), w.invited("user_ada", "new@example.com")
+	w.invited("user_bob", "other@example.com")            // another member's
+	joined := w.invited("user_ada", "joined@example.com") // already joined
+	joined.Status = link.InviteJoined
+	w.invites[joined.ID] = joined
+	return NewListContacts(w, w, w.invitations()), ListContactsInput{User: "user_ada"}, func(t *testing.T, out ListContactsOutput) {
 		t.Helper()
 		one := func(what string, list []Contact, want string) {
 			if len(list) != 1 || list[0].User.ID != want {
@@ -32,5 +37,8 @@ func givenListContactsListsContactsAndRequestsApart(t *testing.T) (ListContacts,
 		one("the contacts", out.Contacts, "user_bob")
 		one("the requests received", out.Incoming, "user_cy")
 		one("the requests sent", out.Outgoing, "user_dee")
+		if len(out.Invites) != 2 || out.Invites[0].ID != newer.ID || out.Invites[1].ID != older.ID || out.Invites[0].Email != "new@example.com" {
+			t.Errorf("the invitations: %+v, want the two waiting ones of Ada, the newest first", out.Invites)
+		}
 	}
 }
