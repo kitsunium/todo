@@ -37,7 +37,7 @@ func (a *Relay) send(ctx context.Context, m reminders.Mail) (err error) {
 		}
 	}
 	return OutboxStore.Put(ctx, Sent{
-		ID: app.NewID("mail"), To: m.To, Subject: m.Subject, Body: m.Body,
+		ID: app.NewID("mail"), UserID: m.UserID, To: m.To, Subject: m.Subject, Body: m.Body,
 		At: app.Now(ctx).UTC().Truncate(time.Millisecond), Relayed: addr != "",
 	})
 }

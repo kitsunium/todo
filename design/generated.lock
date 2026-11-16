@@ -1,11 +1,17 @@
 # Generated from the design: the digest the generated files come from.
 apiVersion: design/v1
-digest: sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+digest: sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 files:
   - activity/feed/gen_design.go
   - cmd/todo/gen_main.go
   - cmd/todo/load/gen_wire.go
   - cmd/todo/server/gen_wire.go
+  - identity/access/gen_design.go
+  - identity/access/gen_design_test.go
+  - identity/account/gen_design.go
+  - identity/account/gen_design_test.go
+  - identity/authapi/gen_design.go
+  - identity/vault/gen_design.go
   - load/driver/gen_design.go
   - load/driver/gen_design_test.go
   - load/httpapi/gen_design.go

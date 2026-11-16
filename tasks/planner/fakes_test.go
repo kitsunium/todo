@@ -11,6 +11,12 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
+// ada owns every task a test makes; bob owns none.
+const (
+	ada = "user_ada"
+	bob = "user_bob"
+)
+
 // epoch is the instant every test starts at.
 var epoch = time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
 
@@ -71,7 +77,7 @@ func (j *memJournal) Record(_ context.Context, kind string, _ task.Task) error {
 
 // open, done and archived are tasks in each state, for a test to adjust.
 func open(id string) task.Task {
-	return task.Task{ID: id, Title: "task " + id, Priority: task.PriorityNormal, State: task.LifecycleOpen, CreatedAt: epoch, UpdatedAt: epoch}
+	return task.Task{ID: id, OwnerID: ada, Title: "task " + id, Priority: task.PriorityNormal, State: task.LifecycleOpen, CreatedAt: epoch, UpdatedAt: epoch}
 }
 
 func done(id string, at time.Time) task.Task {

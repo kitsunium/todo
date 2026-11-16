@@ -1,0 +1,275 @@
+# The identity: accounts, passwords, sessions, and who calls a route.
+apiVersion: design/v2
+domains:
+  - name: identity
+    description: Who the members are, and which of them a request comes from.
+    components:
+      - name: account
+        role: domain
+        code: 64.6.1
+        description: The account, its lock after wrong passwords, and the session.
+        evidence: [legacy-product]
+        entities:
+          - name: Account
+            description: A member of the team, who signs in with an address and a password.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: PasswordHash, type: string, tag: 'json:"-" app:"secret"', description: "PasswordHash is the password, stretched: never the password, never answered."}
+              - {name: FailedLogins, type: int, tag: 'json:"-" app:"public"', description: "FailedLogins counts the wrong passwords in a row."}
+              - {name: LockedUntil, type: time.Time, tag: 'json:"-" app:"public"', description: "LockedUntil is when the lock of too many wrong passwords ends; the zero time when there is none."}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+            methods:
+              - name: Locked
+                description: Locked reports whether the account refuses every password at now.
+                params: [{name: now, type: time.Time}]
+                results: [{type: bool}]
+                properties: [OnlyBeforeItsEnd]
+          - name: Session
+            description: A member signed in, from one browser or one client.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: TokenHash, type: string, tag: 'json:"-" app:"secret"', description: "TokenHash is the SHA-256 of the session's secret: the secret itself is kept nowhere."}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
+              - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+        constants:
+          - {name: MaxFailedLogins, type: int, value: "5", description: MaxFailedLogins is how many wrong passwords in a row lock an account.}
+          - {name: LockFor, type: time.Duration, value: "15 * time.Minute", description: LockFor is how long a locked account refuses every password.}
+          - {name: SessionFor, type: time.Duration, value: "30 * 24 * time.Hour", description: SessionFor is how long a session lives after it was last seen.}
+          - {name: MinPassword, type: int, value: "10", description: MinPassword is the shortest password an account takes.}
+        functions:
+          - name: NormalizeEmail
+            description: NormalizeEmail is an address as the product keeps it, trimmed and in lower case, or ErrInvalidEmail.
+            params: [{name: s, type: string}]
+            results: [{type: string}, {type: error}]
+            properties: [LowerOrRefused]
+        errors:
+          - {name: ErrInvalidEmail, serial: 1, message: this is not an email address}
+          - {name: ErrWeakPassword, serial: 2, message: a password is 10 to 128 characters long}
+          - {name: ErrNameRequired, serial: 3, message: an account needs a name}
+          - {name: ErrEmailTaken, serial: 4, message: this address already has an account}
+          - {name: ErrInvalidCredentials, serial: 5, message: the email address or the password is not right}
+          - {name: ErrLocked, serial: 6, message: "too many wrong passwords: the account is locked for 15 minutes"}
+          - {name: ErrNoSession, serial: 7, message: "the session has expired: sign in again"}
+      - name: access
+        role: application
+        code: 64.6.2
+        uses: [account]
+        description: Signing up, signing in and out, and naming the member a session belongs to.
+        ports:
+          - name: Accounts
+            direction: out
+            version: 1
+            description: AccountsV1 keeps the accounts.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: a, type: account.Account}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: account.Account}, {type: bool}]}
+              - {name: ByEmail, params: [{name: email, type: string}], results: [{type: account.Account}, {type: bool}]}
+          - name: Sessions
+            direction: out
+            version: 1
+            description: SessionsV1 keeps the sessions.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: s, type: account.Session}]}
+              - {name: ByTokenHash, params: [{name: hash, type: string}], results: [{type: account.Session}, {type: bool}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+          - name: Passwords
+            direction: out
+            version: 1
+            description: PasswordsV1 stretches a password and checks one against what was kept.
+            methods:
+              - {name: Hash, params: [{name: password, type: string}], results: [{type: string}]}
+              - {name: Verify, params: [{name: password, type: string}, {name: hash, type: string}], results: [{type: bool}]}
+          - name: Secrets
+            direction: out
+            version: 1
+            description: SecretsV1 makes a session's secret and digests one.
+            methods:
+              - {name: New, results: [{type: string}, {type: string}]}
+              - {name: Digest, params: [{name: secret, type: string}], results: [{type: string}]}
+          - name: Clock
+            direction: out
+            version: 1
+            description: ClockV1 tells the time.
+            methods:
+              - {name: Now, results: [{type: time.Time}]}
+        usecases:
+          - name: SignUp
+            description: SignUp creates an account.
+            input:
+              - {name: Email, type: string}
+              - {name: Name, type: string}
+              - {name: Password, type: string}
+            output:
+              - {name: Account, type: account.Account}
+            errors: [account.ErrInvalidEmail, account.ErrWeakPassword, account.ErrNameRequired, account.ErrEmailTaken]
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.NewID, identity/port/Accounts@v1.Save]
+            scenarios:
+              - {name: creates an account, kind: success}
+              - {name: refuses an invalid address, kind: refusal, error: account.ErrInvalidEmail}
+              - {name: refuses a short password, kind: refusal, error: account.ErrWeakPassword}
+              - {name: refuses a taken address, kind: refusal, error: account.ErrEmailTaken}
+          - name: SignIn
+            description: SignIn opens a session for an address and its password; five wrong passwords in a row lock the account for fifteen minutes.
+            input:
+              - {name: Email, type: string}
+              - {name: Password, type: string}
+            output:
+              - {name: Secret, type: string}
+              - {name: Session, type: account.Session}
+              - {name: Account, type: account.Account}
+            errors: [account.ErrInvalidCredentials, account.ErrLocked]
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Clock@v1.Now, identity/port/Passwords@v1.Verify, identity/port/Accounts@v1.Save, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save]
+            scenarios:
+              - {name: opens a session, kind: success}
+              - {name: refuses a wrong password, kind: refusal, error: account.ErrInvalidCredentials}
+              - {name: refuses an unknown address, kind: refusal, error: account.ErrInvalidCredentials}
+              - {name: refuses a locked account, kind: refusal, error: account.ErrLocked}
+          - name: Authenticate
+            description: Authenticate names the member a session's secret belongs to, and keeps the session alive.
+            input:
+              - {name: Secret, type: string}
+            output:
+              - {name: Session, type: account.Session}
+              - {name: Account, type: account.Account}
+              - {name: Renewed, type: bool}
+            errors: [account.ErrNoSession]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Sessions@v1.ByTokenHash, identity/port/Clock@v1.Now, identity/port/Sessions@v1.Save, identity/port/Accounts@v1.Get]
+            scenarios:
+              - {name: names the member of a live session, kind: success}
+              - {name: refuses an expired session, kind: refusal, error: account.ErrNoSession}
+              - {name: refuses an unknown secret, kind: refusal, error: account.ErrNoSession}
+          - name: SignOut
+            description: SignOut ends a session.
+            input:
+              - {name: SessionID, type: string}
+            calls: [identity/port/Sessions@v1.Delete]
+            scenarios:
+              - {name: ends the session, kind: success}
+      - name: vault
+        role: adapter
+        code: 64.6.3
+        uses: [access, account]
+        description: The accounts and the sessions in the framework's stores, the passwords stretched, the secrets drawn.
+        entities:
+          - name: AccountRecord
+            description: An account as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal,subject"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: PasswordHash, type: string, tag: 'json:"passwordHash" app:"secret"'}
+              - {name: FailedLogins, type: int, tag: 'json:"failedLogins" app:"public"'}
+              - {name: LockedUntil, type: time.Time, tag: 'json:"lockedUntil" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+          - name: SessionRecord
+            description: A session as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: TokenHash, type: string, tag: 'json:"tokenHash" app:"secret"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
+              - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+        stores:
+          - name: accounts
+            entity: AccountRecord
+            key: ID
+            description: "Every account, keyed by its id; one untouched for three years is erased."
+            indexes: [{name: by-email, field: Email, unique: true}]
+            eraseAfter: {delay: 26280h, since: UpdatedAt}
+          - name: sessions
+            entity: SessionRecord
+            key: ID
+            description: "Every session, keyed by its id; one is deleted a day after it expired."
+            indexes: [{name: by-token, field: TokenHash, unique: true}]
+            deleteAfter: {delay: 24h, since: ExpiresAt}
+        adapters:
+          - name: Accounts
+            description: Accounts is Accounts@v1 on the store "accounts".
+            implements: [identity/port/Accounts@v1]
+          - name: Sessions
+            description: Sessions is Sessions@v1 on the store "sessions".
+            implements: [identity/port/Sessions@v1]
+          - name: Stretcher
+            description: Stretcher is Passwords@v1 on the SDK's PBKDF2-SHA256.
+            implements: [identity/port/Passwords@v1]
+          - name: Drawer
+            description: Drawer is Secrets@v1, 256 random bits a secret, SHA-256 its digest.
+            implements: [identity/port/Secrets@v1]
+          - name: WallClock
+            description: WallClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
+            implements: [identity/port/Clock@v1]
+      - name: authapi
+        role: presentation
+        code: 64.6.4
+        uses: [access, account]
+        description: The HTTP API of the accounts, and the handler that says who calls a route.
+        values:
+          - name: Credentials
+            description: What a request proves its member with, the session cookie of a browser or the same secret as a bearer token.
+            fields:
+              - {name: Cookie, type: string, tag: 'cookie:"todo_session"'}
+              - {name: Authorization, type: string, tag: 'header:"Authorization"'}
+          - name: Principal
+            description: What the handler says of the caller.
+            fields:
+              - {name: SessionID, type: string, tag: 'json:"sessionId" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+          - name: SignUpRequest
+            description: What a stranger sends to become a member.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+          - name: SignInRequest
+            description: An address and its password.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+          - name: Profile
+            description: A member, as the API answers them.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+          - name: SignedIn
+            description: A session just opened, the member and the secret a client that keeps no cookie sends back as a bearer token.
+            fields:
+              - {name: User, type: Profile, tag: 'json:"user"'}
+              - {name: Token, type: string, tag: 'json:"token" app:"secret"'}
+          - name: NoInput
+            description: A request, or an answer, that says nothing.
+        constants:
+          - {name: CookieName, type: string, value: '"todo_session"', description: CookieName is the cookie a browser keeps its session's secret in.}
+        auth:
+          name: session
+          credentials: Credentials
+          data: Principal
+          handler: Authenticate
+          uses: [identity/usecase/Authenticate]
+          calls: [identity/usecase/Authenticate]
+        endpoints:
+          - {route: "POST /api/auth/signup", request: SignUpRequest, response: Profile, handler: SignUp, uses: [identity/usecase/SignUp], calls: [identity/usecase/SignUp]}
+          - {route: "POST /api/auth/login", request: SignInRequest, response: SignedIn, handler: SignIn, uses: [identity/usecase/SignIn], calls: [identity/usecase/SignIn]}
+          - {route: "POST /api/auth/logout", request: NoInput, response: NoInput, handler: SignOut, auth: required, uses: [identity/usecase/SignOut], calls: [identity/usecase/SignOut]}
+          - {route: "GET /api/auth/me", request: NoInput, response: Profile, handler: Me, auth: required}
+    sequences:
+      - name: sign-in
+        description: A member signs in; a session is opened.
+        start: identity/usecase/SignIn
+        steps:
+          - call: identity/port/Accounts@v1.ByEmail
+          - call: identity/port/Clock@v1.Now
+          - call: identity/port/Passwords@v1.Verify
+          - call: identity/port/Secrets@v1.New
+          - call: identity/port/Sessions@v1.NewID
+          - call: identity/port/Sessions@v1.Save

@@ -17,11 +17,11 @@ func givenAddTaskAddsAnOpenTask(t *testing.T) (AddTask, AddTaskInput, func(*test
 	t.Helper()
 	store, journal := newMemTasks(), &memJournal{}
 	due := epoch.Add(48 * 3600e9)
-	in := AddTaskInput{Title: "  write the design  ", Priority: "High", Assignee: "ada@example.com", Due: due}
+	in := AddTaskInput{Owner: ada, Title: "  write the design  ", Priority: "High", Assignee: "ada@example.com", Due: due}
 	return NewAddTask(fixedClock(epoch), store, journal), in, func(t *testing.T, out AddTaskOutput) {
 		t.Helper()
 		got := out.Task
-		if got.ID == "" || got.Title != "write the design" || got.Priority != task.PriorityHigh || got.State != task.LifecycleOpen {
+		if got.ID == "" || got.OwnerID != ada || got.Title != "write the design" || got.Priority != task.PriorityHigh || got.State != task.LifecycleOpen {
 			t.Errorf("the task added: %+v", got)
 		}
 		if !got.CreatedAt.Equal(epoch) || !got.UpdatedAt.Equal(epoch) || !got.Due.Equal(due) || !got.DoneAt.IsZero() {

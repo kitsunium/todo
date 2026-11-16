@@ -19,8 +19,10 @@ func givenListTasksListsTheMostUrgentFirst(t *testing.T) (ListTasks, ListTasksIn
 	low.Priority, high.Priority = task.PriorityLow, task.PriorityHigh
 	soon.Due, later.Due = epoch.Add(3600e9), epoch.Add(2*3600e9)
 	gone.State = task.LifecycleArchived
-	uc := NewListTasks(newMemTasks(low, soon, later, high, gone))
-	return uc, ListTasksInput{}, func(t *testing.T, out ListTasksOutput) {
+	other := open("task_of_bob")
+	other.OwnerID = bob
+	uc := NewListTasks(newMemTasks(low, soon, later, high, gone, other))
+	return uc, ListTasksInput{Owner: ada}, func(t *testing.T, out ListTasksOutput) {
 		t.Helper()
 		var got []string
 		for _, x := range out.Tasks {
@@ -29,7 +31,7 @@ func givenListTasksListsTheMostUrgentFirst(t *testing.T) (ListTasks, ListTasksIn
 		if want := []string{"task_high", "task_soon", "task_later", "task_low"}; !slices.Equal(got, want) {
 			t.Errorf("the list: %q, want %q", got, want)
 		}
-		archived, err := uc.Execute(t.Context(), ListTasksInput{State: "archived"})
+		archived, err := uc.Execute(t.Context(), ListTasksInput{Owner: ada, State: "archived"})
 		if err != nil || len(archived.Tasks) != 1 || archived.Tasks[0].ID != "task_gone" {
 			t.Errorf("the archived tasks: %+v (%v), want task_gone alone", archived.Tasks, err)
 		}

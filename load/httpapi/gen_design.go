@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package httpapi — The server's HTTP API, called over the network.
 //
@@ -38,6 +38,11 @@ func (a *Client) Activity(ctx context.Context) (int, error) {
 // Add is load/port/API@v1's.
 func (a *Client) Add(ctx context.Context, title string, priority string, assignee string, due time.Time) (string, error) {
 	return a.add(ctx, title, priority, assignee, due)
+}
+
+// Enter is load/port/API@v1's.
+func (a *Client) Enter(ctx context.Context, email string, name string, passphrase string) error {
+	return a.enter(ctx, email, name, passphrase)
 }
 
 // List is load/port/API@v1's.

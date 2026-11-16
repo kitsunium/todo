@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +22,7 @@ import (
 type client struct {
 	targetSetting *app.Setting[string]
 	http          *http.Client
+	token         string // the session's secret, once entered
 }
 
 // newClient is NewClient's body.
@@ -51,6 +52,34 @@ func (a *Client) add(ctx context.Context, title string, priority string, assigne
 	return added.ID, err
 }
 
+// enter is Client.Enter's body: the member signs up, which an address that
+// already has an account refuses with a 409 this ignores, then signs in and
+// keeps the session's secret for every call after.
+func (a *Client) enter(ctx context.Context, email string, name string, passphrase string) (err error) {
+	creds := map[string]any{"email": email, "name": name, "password": passphrase}
+	var status *statusError
+	if err := a.call(ctx, http.MethodPost, "/api/auth/signup", creds, nil); err != nil && !(errors.As(err, &status) && status.code == http.StatusConflict) {
+		return err
+	}
+	var in struct {
+		Token string `json:"token"`
+	}
+	delete(creds, "name") // a request is decoded strictly: signing in takes no name
+	if err := a.call(ctx, http.MethodPost, "/api/auth/login", creds, &in); err != nil {
+		return err
+	}
+	a.token = in.Token
+	return nil
+}
+
+// statusError is an answer that is not a 2xx.
+type statusError struct {
+	method, path, status string
+	code                 int
+}
+
+func (e *statusError) Error() string { return e.method + " " + e.path + ": " + e.status }
+
 // list is Client.List's body: how many tasks the list answers.
 func (a *Client) list(ctx context.Context) (r0 int, err error) {
 	var list struct {
@@ -75,7 +104,8 @@ func (a *Client) stats(ctx context.Context) (r0 int, err error) {
 }
 
 // call sends one request to the server target names and decodes its answer
-// into out; an answer that is not a 2xx is an error that says its status.
+// into out; an answer that is not a 2xx is a statusError. Once entered, every
+// request carries the session's secret as a bearer token.
 func (a *Client) call(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -92,6 +122,9 @@ func (a *Client) call(ctx context.Context, method, path string, in, out any) err
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if a.token != "" {
+		req.Header.Set("Authorization", "Bearer "+a.token)
+	}
 	resp, err := a.http.Do(req)
 	if err != nil {
 		return err
@@ -102,7 +135,7 @@ func (a *Client) call(ctx context.Context, method, path string, in, out any) err
 		return err
 	}
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("%s %s: %s", method, path, resp.Status)
+		return &statusError{method: method, path: path, status: resp.Status, code: resp.StatusCode}
 	}
 	if out == nil {
 		return nil

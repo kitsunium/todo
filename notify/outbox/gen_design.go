@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package outbox — The mails sent, kept, handed to the SMTP relay when one
 // is named, their HTTP read, and the log of the reminders.
@@ -30,6 +30,7 @@ type Reminded struct {
 // Sent — A mail the product sent.
 type Sent struct {
 	ID      string    `json:"id" app:"public"`
+	UserID  string    `json:"userId" app:"public"`
 	To      string    `json:"to" app:"personal,subject"`
 	Subject string    `json:"subject" app:"public"`
 	Body    string    `json:"body" app:"public"`
@@ -39,7 +40,7 @@ type Sent struct {
 	Relayed bool `json:"relayed" app:"public"`
 }
 
-// Mails — The mails sent, newest first.
+// Mails — The mails sent on a member's behalf, newest first.
 type Mails struct {
 	Mails []Sent `json:"mails"`
 }
@@ -107,7 +108,7 @@ var OutboxStore = Service.Store("outbox", func(e Sent) string { return e.ID },
 // RemindedStore — The tasks already reminded of.
 var RemindedStore = Service.Store("reminded", func(e Reminded) string { return e.TaskID })
 
-var _ = Service.Endpoint("GET /api/outbox", Kept)
+var _ = Service.Endpoint("GET /api/outbox", Kept, app.Auth())
 
 // Kept serves GET /api/outbox: its body is the hand-written kept.
 func Kept(ctx context.Context, in NoInput) (Mails, error) {

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 package planner
 
@@ -103,6 +103,15 @@ func TestMoveTaskCompletesAnOpenTask(t *testing.T) {
 // TestMoveTaskRefusesAnUnknownTask is MoveTask's scenario "refuses an unknown task" (refusal).
 func TestMoveTaskRefusesAnUnknownTask(t *testing.T) {
 	uc, in := givenMoveTaskRefusesAnUnknownTask(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("MoveTask: %v, want task.ErrNotFound", err)
+	}
+}
+
+// TestMoveTaskRefusesTheTaskOfAnotherMember is MoveTask's scenario "refuses the task of another member" (refusal).
+func TestMoveTaskRefusesTheTaskOfAnotherMember(t *testing.T) {
+	uc, in := givenMoveTaskRefusesTheTaskOfAnotherMember(t)
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, task.ErrNotFound) {
 		t.Fatalf("MoveTask: %v, want task.ErrNotFound", err)

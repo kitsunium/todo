@@ -18,11 +18,18 @@ var (
 	assignees  = []string{"Ada", "ada@example.com", "Grace", ""}
 )
 
-// execute is Drive's body: one call of the API per tick, Rate ticks a
+// The load's own member: it signs up the first time, and signs in.
+const (
+	member     = "load@example.com"
+	passphrase = "a load that only adds tasks"
+)
+
+// execute is Drive's body: it enters as the load's member, then makes one call of the API per tick, Rate ticks a
 // second, until For has passed or the context ends. The calls go round in
 // six steps — add a task, list them, complete the oldest one added, read
 // the feed, read the vital signs, then archive or reopen that task — so the
-// first round makes every call of the API whatever For is. A call that
+// first round makes every call of the API whatever For is. Entering that
+// fails is counted like any call: every call after it is then refused. A call that
 // fails is counted and the load goes on.
 func (h *DriveHandler) execute(ctx context.Context, in *DriveInput) (DriveOutput, error) {
 	if in.Rate <= 0 {
@@ -38,6 +45,7 @@ func (h *DriveHandler) execute(ctx context.Context, in *DriveInput) (DriveOutput
 	tick := time.NewTicker(time.Second / time.Duration(in.Rate))
 	defer tick.Stop()
 	deadline := time.Now().Add(in.For)
+	count(h.api.Enter(ctx, member, "Load", passphrase))
 	var added []string // the tasks added and not yet moved to their end
 	for n := 0; ; n++ {
 		round := n / 6

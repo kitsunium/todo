@@ -7,14 +7,16 @@ the SDK's framework
 ([`github.com/kitsunium/sdk/framework/app`](https://github.com/kitsunium/sdk))
 and imports the SDK alone.
 
-A member adds tasks with a priority, an assignee and a due date, and moves
-them through their lifecycle: open, done, archived. Every move lands in an
+A member signs up with an address and a password, signs in, and has a task
+list of their own. They add tasks with a priority, an assignee and a due date, and moves
+them through their lifecycle: open, done, archived. Every move lands in their
 activity feed. A task done for a day is archived on its own, whoever a task
 due within a day is assigned to gets one reminder by mail, and the task list
 is counted every thirty seconds.
 
-The former todo — accounts, contacts, groups, shared tasks and its web app,
-written on the framework by hand — is kept whole in [`legacy/`](legacy/), a Go
+The former todo, written on the framework by hand, is where the rest still
+lives — address verification and password reset by mail, contacts, groups,
+shared tasks, the web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
 module of its own.
 
 ## The design
@@ -22,6 +24,7 @@ module of its own.
 | File | Domain | Holds |
 |---|---|---|
 | `design/product.yaml` | — | the product, its context (a member, an operator, the mail relay) and the binary `todo` with its two process roles, `server` and `load` |
+| `design/identity.yaml` | identity | the account and its lock, the session, four use cases and their five ports, the stores behind them, the HTTP API and the handler that says who calls a route, the sequence `sign-in` |
 | `design/tasks.yaml` | tasks | the task and its lifecycle, six use cases and their three ports, the store behind them, the HTTP API, the sequence `complete-task` |
 | `design/activity.yaml` | activity | the feed, written from what the use cases record |
 | `design/notify.yaml` | notify | the reminders, the outbox and its SMTP connection, the sequence `remind-due` |
@@ -35,15 +38,27 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 
 | Route | Does |
 |---|---|
+| `POST /api/auth/signup` | creates an account: `email`, `name`, `password` (10 to 128 characters) |
+| `POST /api/auth/login` | opens a session: `email`, `password`; sets the `todo_session` cookie and answers the same secret as `token` |
+| `POST /api/auth/logout` | ends the caller's session |
+| `GET /api/auth/me` | the caller |
 | `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `assignee`, `due` (RFC 3339) |
-| `GET /api/tasks` | lists the tasks not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
+| `GET /api/tasks` | lists the caller's tasks not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
 | `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |
-| `GET /api/activity` | the feed, newest first; `?limit=N` |
-| `GET /api/outbox` | the mails sent, newest first |
+| `GET /api/activity` | the caller's feed, newest first; `?limit=N` |
+| `GET /api/outbox` | the mails sent on the caller's behalf, newest first |
 | `GET /api/stats` | the latest sample of the task list and the recent history |
 
+Every route but the first two and `/api/stats` asks for a member: the
+session cookie, or `Authorization: Bearer <token>`; without one it answers
+401. A member sees their own tasks, feed and mails, and another member's
+task is answered as if it did not exist.
+
 A request the API refuses says why: 400 with the field at fault, 404 for a
-task that does not exist, 409 for a move the task's state does not allow.
+task that does not exist, 409 for a move the task's state does not allow or
+an address already taken, 401 `invalid_credentials` for a wrong password or
+an unknown address alike, 403 `account_locked` for fifteen minutes after
+five wrong passwords in a row.
 
 ## Run it
 
@@ -66,14 +81,17 @@ interface, so a deployment names its address. Its data lives in
 
 What the stores keep of a person has an end: a task's assignee is erased a
 year after the task was last written, a feed entry is deleted after ninety
-days, a mail after thirty.
+days, a mail after thirty, an account untouched for three years is erased,
+and a session is deleted a day after it expired. A password is kept
+stretched (PBKDF2-SHA256), a session's secret as its SHA-256.
 
 `go run ./cmd/todo config` prints every setting and where its value comes
 from.
 
 ## Drive a load
 
-The binary's second role calls a running server's API — it adds tasks,
+The binary's second role calls a running server's API — it signs up and in
+as a member of its own, `load@example.com`, adds tasks,
 completes, archives and reopens them, and reads the list, the feed and the
 vital signs — so that there is something to watch:
 
@@ -94,6 +112,7 @@ gofmt -l .
 ```
 
 The use cases are tested by the scenarios the design names, on ports in
-memory; the two sequences by the order of their calls; the task's rules by
-properties. `cmd/todo/server` runs the whole server role in memory, over
-HTTP, on a clock the test moves.
+memory; the three sequences by the order of their calls; the task's and the
+account's rules by properties. `cmd/todo/server` runs the whole server role
+in memory, over HTTP, on a clock the test moves, and the load role against
+it.

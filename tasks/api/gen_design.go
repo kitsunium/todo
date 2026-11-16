@@ -1,8 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
-// Package api — The HTTP API of the tasks, and the job that archives what
-// was done long ago.
+// Package api — The HTTP API of a member's tasks, and the job that archives
+// what was done long ago.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -47,48 +47,48 @@ type TaskList struct {
 }
 
 // Service is api's framework service: what it declares, drawn and run.
-var Service = app.NewService("api", "The HTTP API of the tasks, and the job that archives what was done long ago.")
+var Service = app.NewService("api", "The HTTP API of a member's tasks, and the job that archives what was done long ago.")
 
 // ArchiveAfterSetting — How long a done task stays listed before it is
 // archived.
 var ArchiveAfterSetting = Service.Setting[time.Duration]("archive-after", 24*time.Hour)
 
-var _ = Service.Endpoint("POST /api/tasks", Add)
+var _ = Service.Endpoint("POST /api/tasks", Add, app.Auth())
 
 // Add serves POST /api/tasks: its body is the hand-written add.
 func Add(ctx context.Context, in AddRequest) (task.Task, error) {
 	return add(ctx, in)
 }
 
-var _ = Service.Endpoint("GET /api/tasks", List)
+var _ = Service.Endpoint("GET /api/tasks", List, app.Auth())
 
 // List serves GET /api/tasks: its body is the hand-written list.
 func List(ctx context.Context, in ListRequest) (TaskList, error) {
 	return list(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/tasks/{id}/complete", Complete)
+var _ = Service.Endpoint("POST /api/tasks/{id}/complete", Complete, app.Auth())
 
 // Complete serves POST /api/tasks/{id}/complete: its body is the hand-written complete.
 func Complete(ctx context.Context, in ByID) (task.Task, error) {
 	return complete(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/tasks/{id}/reopen", Reopen)
+var _ = Service.Endpoint("POST /api/tasks/{id}/reopen", Reopen, app.Auth())
 
 // Reopen serves POST /api/tasks/{id}/reopen: its body is the hand-written reopen.
 func Reopen(ctx context.Context, in ByID) (task.Task, error) {
 	return reopen(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/tasks/{id}/archive", Archive)
+var _ = Service.Endpoint("POST /api/tasks/{id}/archive", Archive, app.Auth())
 
 // Archive serves POST /api/tasks/{id}/archive: its body is the hand-written archive.
 func Archive(ctx context.Context, in ByID) (task.Task, error) {
 	return archive(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/tasks/{id}/restore", Restore)
+var _ = Service.Endpoint("POST /api/tasks/{id}/restore", Restore, app.Auth())
 
 // Restore serves POST /api/tasks/{id}/restore: its body is the hand-written restore.
 func Restore(ctx context.Context, in ByID) (task.Task, error) {

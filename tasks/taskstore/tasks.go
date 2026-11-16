@@ -60,7 +60,7 @@ func (a *Tasks) save(ctx context.Context, t task.Task) (err error) {
 // toRecord is a task as the store keeps it.
 func toRecord(t task.Task) Record {
 	return Record{
-		ID: t.ID, Title: t.Title, Notes: t.Notes, Priority: string(t.Priority), Assignee: t.Assignee,
+		ID: t.ID, OwnerID: t.OwnerID, Title: t.Title, Notes: t.Notes, Priority: string(t.Priority), Assignee: t.Assignee,
 		Due: t.Due, State: string(t.State), CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt, DoneAt: t.DoneAt,
 	}
 }
@@ -68,7 +68,7 @@ func toRecord(t task.Task) Record {
 // fromRecord is the task a record keeps.
 func fromRecord(r Record) task.Task {
 	return task.Task{
-		ID: r.ID, Title: r.Title, Notes: r.Notes, Priority: task.Priority(r.Priority), Assignee: r.Assignee,
+		ID: r.ID, OwnerID: r.OwnerID, Title: r.Title, Notes: r.Notes, Priority: task.Priority(r.Priority), Assignee: r.Assignee,
 		Due: r.Due, State: task.LifecycleState(r.State), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, DoneAt: r.DoneAt,
 	}
 }

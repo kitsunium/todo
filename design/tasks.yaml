@@ -15,6 +15,7 @@ domains:
             description: Something to do, for someone, by a date.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"', description: "OwnerID is the member whose task it is: who added it, and the only one who sees it."}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: Priority, tag: 'json:"priority" app:"public"'}
@@ -91,8 +92,9 @@ domains:
               - {name: Record, params: [{name: kind, type: string}, {name: t, type: task.Task}]}
         usecases:
           - name: AddTask
-            description: AddTask adds an open task.
+            description: AddTask adds an open task to its owner's list.
             input:
+              - {name: Owner, type: string}
               - {name: Title, type: string}
               - {name: Notes, type: string}
               - {name: Priority, type: string}
@@ -108,8 +110,9 @@ domains:
               - {name: refuses a long title, kind: refusal, error: task.ErrTitleTooLong}
               - {name: refuses an unknown priority, kind: refusal, error: task.ErrUnknownPriority}
           - name: MoveTask
-            description: MoveTask moves a task through its lifecycle by one event (complete, reopen, archive, restore).
+            description: MoveTask moves a task of its owner through its lifecycle by one event (complete, reopen, archive, restore); another member's task is not found.
             input:
+              - {name: Owner, type: string}
               - {name: ID, type: string}
               - {name: Event, type: string}
             output:
@@ -119,10 +122,12 @@ domains:
             scenarios:
               - {name: completes an open task, kind: success}
               - {name: refuses an unknown task, kind: refusal, error: task.ErrNotFound}
+              - {name: refuses the task of another member, kind: refusal, error: task.ErrNotFound}
               - {name: refuses to archive an open task, kind: refusal, error: task.ErrNotAllowed}
           - name: ListTasks
-            description: ListTasks lists the tasks of a state, or every task not archived, the most urgent first.
+            description: ListTasks lists a member's tasks of a state, or every one not archived, the most urgent first.
             input:
+              - {name: Owner, type: string}
               - {name: State, type: string}
             output:
               - {name: Tasks, type: "[]task.Task"}
@@ -166,6 +171,7 @@ domains:
             description: A task as the store keeps it, field for field.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"'}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
@@ -192,7 +198,7 @@ domains:
         role: presentation
         code: 64.1.4
         uses: [planner, task]
-        description: The HTTP API of the tasks, and the job that archives what was done long ago.
+        description: The HTTP API of a member's tasks, and the job that archives what was done long ago.
         values:
           - name: AddRequest
             description: What a member sends to add a task.
@@ -217,12 +223,12 @@ domains:
         settings:
           - {name: archive-after, type: duration, default: 24h, description: How long a done task stays listed before it is archived.}
         endpoints:
-          - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
-          - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
-          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
+          - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
+          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
         jobs:
           - {name: archive-done, every: 1m, handler: Sweep, description: Archives the tasks done for longer than archive-after., uses: [tasks/usecase/ArchiveDone, "setting:archive-after"], calls: [tasks/usecase/ArchiveDone]}
     sequences:

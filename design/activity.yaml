@@ -2,7 +2,7 @@
 apiVersion: design/v2
 domains:
   - name: activity
-    description: What happened to the tasks, newest first.
+    description: What happened to a member's tasks, newest first.
     components:
       - name: feed
         role: adapter
@@ -16,6 +16,7 @@ domains:
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: Seq, type: int64, tag: 'json:"seq" app:"public"', description: "Seq orders the entries: each is one above the entry written before it."}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"', description: "UserID is the member whose feed the entry is in: the task's owner."}
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
@@ -43,4 +44,4 @@ domains:
             description: Feed is Journal@v1 on the store "entries"; it keeps the latest Keep entries.
             implements: [tasks/port/Journal@v1]
         endpoints:
-          - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent}
+          - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent, auth: required}

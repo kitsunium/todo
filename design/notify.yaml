@@ -14,6 +14,7 @@ domains:
           - name: Mail
             description: A mail, as plain text.
             fields:
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"', description: "UserID is the member on whose behalf the mail is sent: the task's owner."}
               - {name: To, type: string, tag: 'json:"to" app:"personal"'}
               - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
               - {name: Body, type: string, tag: 'json:"body" app:"public"'}
@@ -52,6 +53,7 @@ domains:
             description: A mail the product sent.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
               - {name: To, type: string, tag: 'json:"to" app:"personal,subject"'}
               - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
               - {name: Body, type: string, tag: 'json:"body" app:"public"'}
@@ -64,7 +66,7 @@ domains:
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
         values:
           - name: Mails
-            description: The mails sent, newest first.
+            description: The mails sent on a member's behalf, newest first.
             fields:
               - {name: Mails, type: "[]Sent", tag: 'json:"mails"'}
           - name: NoInput
@@ -90,7 +92,7 @@ domains:
             description: Ledger is ReminderLog@v1 on the store "reminded".
             implements: [notify/port/ReminderLog@v1]
         endpoints:
-          - {route: "GET /api/outbox", request: NoInput, response: Mails, handler: Kept}
+          - {route: "GET /api/outbox", request: NoInput, response: Mails, handler: Kept, auth: required}
       - name: watch
         role: presentation
         code: 64.3.3

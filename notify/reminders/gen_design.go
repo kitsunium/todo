@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package reminders — Who is reminded of what, and what that needs.
 //
@@ -21,6 +21,8 @@ var errNotImplemented = errs.New(errs.Pack(64, 3, 1, 255), "NOT_IMPLEMENTED", "n
 
 // Mail — A mail, as plain text.
 type Mail struct {
+	// UserID is the member on whose behalf the mail is sent: the task's owner.
+	UserID  string `json:"userId" app:"public"`
 	To      string `json:"to" app:"personal"`
 	Subject string `json:"subject" app:"public"`
 	Body    string `json:"body" app:"public"`

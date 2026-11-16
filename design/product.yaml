@@ -42,7 +42,7 @@ binaries:
       - name: server
         profile: server
         description: Serves the HTTP API, keeps the stores, archives what was done long ago, samples the vital signs and sends the reminders.
-        mounts: [taskstore, api, feed, outbox, watch, census]
+        mounts: [vault, authapi, taskstore, api, feed, outbox, watch, census]
       - name: load
         command: load
         profile: cli

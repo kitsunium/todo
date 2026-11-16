@@ -19,7 +19,7 @@ func givenSequenceCompleteTask(t *testing.T, rec sequenceRecorder) func(context.
 		rec.RecordPlannerJournalV1(&memJournal{}),
 	)
 	return func(ctx context.Context) error {
-		_, err := uc.Execute(ctx, MoveTaskInput{ID: "task_a", Event: "complete"})
+		_, err := uc.Execute(ctx, MoveTaskInput{Owner: ada, ID: "task_a", Event: "complete"})
 		return err
 	}
 }

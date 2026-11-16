@@ -8,11 +8,17 @@ import (
 	"cmp"
 	"context"
 	"slices"
+
+	"github.com/kitsunium/sdk/framework/app"
 )
 
-// kept is GET /api/outbox's body: every mail sent, the newest first.
+// kept is GET /api/outbox's body: every mail sent on the caller's behalf, the newest first.
 func kept(ctx context.Context, in NoInput) (out Mails, err error) {
-	all, err := OutboxStore.List(ctx)
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return Mails{}, app.Unauthenticated("sign in first")
+	}
+	all, err := OutboxStore.Filter(ctx, func(m Sent) bool { return m.UserID == string(uid) })
 	if err != nil {
 		return Mails{}, err
 	}

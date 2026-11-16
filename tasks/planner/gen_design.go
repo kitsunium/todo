@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -37,13 +37,14 @@ type TaskStoreV1 interface {
 	Save(ctx context.Context, t task.Task) error
 }
 
-// AddTask adds an open task.
+// AddTask adds an open task to its owner's list.
 type AddTask interface {
 	Execute(ctx context.Context, in AddTaskInput) (AddTaskOutput, error)
 }
 
 // AddTaskInput is AddTask's input: a field added breaks no caller.
 type AddTaskInput struct {
+	Owner    string
 	Title    string
 	Notes    string
 	Priority string
@@ -177,14 +178,15 @@ func (h *DueSoonHandler) Execute(ctx context.Context, in DueSoonInput) (DueSoonO
 
 var _ DueSoon = (*DueSoonHandler)(nil)
 
-// ListTasks lists the tasks of a state, or every task not archived, the most
-// urgent first.
+// ListTasks lists a member's tasks of a state, or every one not archived, the
+// most urgent first.
 type ListTasks interface {
 	Execute(ctx context.Context, in ListTasksInput) (ListTasksOutput, error)
 }
 
 // ListTasksInput is ListTasks's input: a field added breaks no caller.
 type ListTasksInput struct {
+	Owner string
 	State string
 }
 
@@ -210,14 +212,15 @@ func (h *ListTasksHandler) Execute(ctx context.Context, in ListTasksInput) (List
 
 var _ ListTasks = (*ListTasksHandler)(nil)
 
-// MoveTask moves a task through its lifecycle by one event (complete, reopen,
-// archive, restore).
+// MoveTask moves a task of its owner through its lifecycle by one event
+// (complete, reopen, archive, restore); another member's task is not found.
 type MoveTask interface {
 	Execute(ctx context.Context, in MoveTaskInput) (MoveTaskOutput, error)
 }
 
 // MoveTaskInput is MoveTask's input: a field added breaks no caller.
 type MoveTaskInput struct {
+	Owner string
 	ID    string
 	Event string
 }

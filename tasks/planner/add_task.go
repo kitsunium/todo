@@ -13,7 +13,7 @@ import (
 )
 
 // execute is AddTask's body: the title and the priority are checked, then
-// the task is kept open and the journal told.
+// the task is kept open on its owner's list and the journal told.
 func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTaskOutput, error) {
 	title := strings.TrimSpace(in.Title)
 	switch {
@@ -35,7 +35,7 @@ func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTask
 		return AddTaskOutput{}, err
 	}
 	t := task.Task{
-		ID: id, Title: title, Notes: strings.TrimSpace(in.Notes), Priority: priority,
+		ID: id, OwnerID: in.Owner, Title: title, Notes: strings.TrimSpace(in.Notes), Priority: priority,
 		Assignee: strings.TrimSpace(in.Assignee), Due: in.Due, State: task.LifecycleInitial,
 		CreatedAt: now, UpdatedAt: now,
 	}

@@ -16,19 +16,27 @@ import (
 
 // add is POST /api/tasks's body; what it uses is in wired.
 func add(ctx context.Context, in AddRequest) (out task.Task, err error) {
+	owner, err := caller(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
 	res, err := wired.addTask.Execute(ctx, planner.AddTaskInput{
-		Title: in.Title, Notes: in.Notes, Priority: in.Priority, Assignee: in.Assignee, Due: in.Due,
+		Owner: owner, Title: in.Title, Notes: in.Notes, Priority: in.Priority, Assignee: in.Assignee, Due: in.Due,
 	})
 	if err != nil {
 		return task.Task{}, refusal(err)
 	}
-	logger.Info(ctx, app.Log(ctx), "task added", logger.String("task", res.Task.ID), logger.String("priority", string(res.Task.Priority)))
+	logger.Info(ctx, app.Log(ctx), "task added", logger.String("task", res.Task.ID), logger.String("user", owner), logger.String("priority", string(res.Task.Priority)))
 	return res.Task, nil
 }
 
 // list is GET /api/tasks's body; what it uses is in wired.
 func list(ctx context.Context, in ListRequest) (out TaskList, err error) {
-	res, err := wired.listTasks.Execute(ctx, planner.ListTasksInput{State: in.State})
+	owner, err := caller(ctx)
+	if err != nil {
+		return TaskList{}, err
+	}
+	res, err := wired.listTasks.Execute(ctx, planner.ListTasksInput{Owner: owner, State: in.State})
 	if err != nil {
 		return TaskList{}, refusal(err)
 	}
@@ -69,11 +77,26 @@ func sweep(ctx context.Context) error {
 
 // move runs MoveTask for one of the four routes that move a task.
 func move(ctx context.Context, id string, event task.LifecycleEvent) (task.Task, error) {
-	res, err := wired.moveTask.Execute(ctx, planner.MoveTaskInput{ID: id, Event: string(event)})
+	owner, err := caller(ctx)
+	if err != nil {
+		return task.Task{}, err
+	}
+	res, err := wired.moveTask.Execute(ctx, planner.MoveTaskInput{Owner: owner, ID: id, Event: string(event)})
 	if err != nil {
 		return task.Task{}, refusal(err)
 	}
 	return res.Task, nil
+}
+
+// caller is the member the request comes from. Every route that calls it
+// asks for one, so a request without is refused before it gets here: this
+// covers a call made in process.
+func caller(ctx context.Context) (string, error) {
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return "", app.Unauthenticated("sign in first")
+	}
+	return string(uid), nil
 }
 
 // refusal is a use case's error as the API answers it: 404 for a task that

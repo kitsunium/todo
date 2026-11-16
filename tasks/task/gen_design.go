@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package task — The task, its priority and its lifecycle.
 //
@@ -44,7 +44,10 @@ const (
 
 // Task — Something to do, for someone, by a date.
 type Task struct {
-	ID       string   `json:"id" app:"public"`
+	ID string `json:"id" app:"public"`
+	// OwnerID is the member whose task it is: who added it, and the only one who
+	// sees it.
+	OwnerID  string   `json:"ownerId" app:"public"`
 	Title    string   `json:"title" app:"public"`
 	Notes    string   `json:"notes" app:"public"`
 	Priority Priority `json:"priority" app:"public"`

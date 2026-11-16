@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package taskstore — The tasks in the framework's store, and the
 // framework's clock.
@@ -25,6 +25,7 @@ var errNotImplemented = errs.New(errs.Pack(64, 1, 3, 255), "NOT_IMPLEMENTED", "n
 // Record — A task as the store keeps it, field for field.
 type Record struct {
 	ID        string    `json:"id" app:"public"`
+	OwnerID   string    `json:"ownerId" app:"public"`
 	Title     string    `json:"title" app:"public"`
 	Notes     string    `json:"notes" app:"public"`
 	Priority  string    `json:"priority" app:"public"`

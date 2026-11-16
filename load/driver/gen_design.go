@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package driver — What a load does, and the API it needs.
 //
@@ -27,13 +27,14 @@ var (
 type APIV1 interface {
 	Activity(ctx context.Context) (int, error)
 	Add(ctx context.Context, title string, priority string, assignee string, due time.Time) (string, error)
+	Enter(ctx context.Context, email string, name string, passphrase string) error
 	List(ctx context.Context) (int, error)
 	Move(ctx context.Context, id string, event string) error
 	Stats(ctx context.Context) (int, error)
 }
 
-// Drive adds tasks, moves them through their lifecycle and reads the lists, at
-// a rate, for a duration.
+// Drive signs in as the load's own member, then adds tasks, moves them through
+// their lifecycle and reads the lists, at a rate, for a duration.
 type Drive interface {
 	Execute(ctx context.Context, in DriveInput) (DriveOutput, error)
 }

@@ -18,6 +18,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | Path | Component (role) | Holds |
 |---|---|---|
 | `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
+| `identity/account` | account (domain) | `Account` and its lock, `Session`, `NormalizeEmail`, the errors |
+| `identity/access` | access (application) | the use cases `SignUp` `SignIn` `Authenticate` `SignOut`, the ports `Accounts` `Sessions` `Passwords` `Secrets` `Clock` |
+| `identity/vault` | vault (adapter) | the stores `accounts` and `sessions` with their indexes, `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
+| `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session` |
 | `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
 | `tasks/planner` | planner (application) | the use cases `AddTask` `MoveTask` `ListTasks` `ArchiveDone` `CountTasks` `DueSoon`, the ports `TaskStore` `Clock` `Journal`; `lifecycle.go` is what they share |
 | `tasks/taskstore` | taskstore (adapter) | the store `tasks`, `Tasks` and `AppClock` |
@@ -56,6 +60,15 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 - **A store holds an entity of its own component**: `taskstore.Record`
   is `task.Task` as the store keeps it, field for field. Add a field to
   both, and to `toRecord` and `fromRecord`.
+- **Who calls is the framework's to say**: a route that needs a member
+  says `auth: required` in the design, and its handler reads
+  `app.UserID(ctx)`. A use case takes the owner as an input and never trusts
+  an id alone: another member's task is `ErrNotFound`, never a 403.
+- **A secret is never kept, answered or logged**: a password is stretched
+  by `Stretcher`, a session's secret kept as its SHA-256, and both fields
+  are tagged `app:"secret"`. An unknown address and a wrong password are
+  answered alike, and cost the same time (`Stretcher.verify` on an empty
+  hash).
 - **Time is the framework's**: `app.Now(ctx)`, in UTC, to the millisecond
   (`AppClock`, and the adapters that stamp a record). A test moves it.
 - **Ask "is there one?" with `Filter`, not `Get`**: a missing key is a
@@ -70,6 +83,8 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   check", "the dev tool". The product imports the SDK only.
 - The server role's App is named `server`, the load's `load`: their
   settings are `SERVER_<NAME>` and `LOAD_<NAME>`.
+- **A request is decoded strictly**: a member the route does not declare
+  is a 400. A client sends each route its own fields.
 
 ## Develop
 

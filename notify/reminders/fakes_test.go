@@ -42,5 +42,5 @@ func (m *memMailer) Send(_ context.Context, mail Mail) error {
 
 // dueTask is an open task due in an hour, assigned to assignee.
 func dueTask(id, assignee string) task.Task {
-	return task.Task{ID: id, Title: "ship\nthe  release", Assignee: assignee, State: task.LifecycleOpen, Due: epoch.Add(time.Hour)}
+	return task.Task{ID: id, OwnerID: "user_ada", Title: "ship\nthe  release", Assignee: assignee, State: task.LifecycleOpen, Due: epoch.Add(time.Hour)}
 }

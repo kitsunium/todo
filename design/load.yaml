@@ -17,6 +17,7 @@ domains:
             version: 1
             description: APIV1 is the server's HTTP API, as the load calls it.
             methods:
+              - {name: Enter, params: [{name: email, type: string}, {name: name, type: string}, {name: passphrase, type: string}]}
               - {name: Add, params: [{name: title, type: string}, {name: priority, type: string}, {name: assignee, type: string}, {name: due, type: time.Time}], results: [{type: string}]}
               - {name: Move, params: [{name: id, type: string}, {name: event, type: string}]}
               - {name: List, results: [{type: int}]}
@@ -24,7 +25,7 @@ domains:
               - {name: Stats, results: [{type: int}]}
         usecases:
           - name: Drive
-            description: Drive adds tasks, moves them through their lifecycle and reads the lists, at a rate, for a duration.
+            description: Drive signs in as the load's own member, then adds tasks, moves them through their lifecycle and reads the lists, at a rate, for a duration.
             input:
               - {name: For, type: time.Duration}
               - {name: Rate, type: int}
@@ -32,7 +33,7 @@ domains:
               - {name: Requests, type: int}
               - {name: Failures, type: int}
             errors: [ErrNoRate]
-            calls: [load/port/API@v1.Add, load/port/API@v1.Move, load/port/API@v1.List, load/port/API@v1.Activity, load/port/API@v1.Stats]
+            calls: [load/port/API@v1.Enter, load/port/API@v1.Add, load/port/API@v1.Move, load/port/API@v1.List, load/port/API@v1.Activity, load/port/API@v1.Stats]
             scenarios:
               - {name: drives every call of the api, kind: success}
               - {name: refuses a rate of zero, kind: refusal, error: ErrNoRate}

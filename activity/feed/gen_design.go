@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
+// design:digest sha256:e049376e6f3e39ba5615be3b676d6ca97a5b1068d722cafef1679ea63a05c50d
 
 // Package feed — The feed, written from what the tasks' use cases record,
 // and its HTTP read.
@@ -32,6 +32,8 @@ type Entry struct {
 	ID string `json:"id" app:"public"`
 	// Seq orders the entries: each is one above the entry written before it.
 	Seq int64 `json:"seq" app:"public"`
+	// UserID is the member whose feed the entry is in: the task's owner.
+	UserID string `json:"userId" app:"public"`
 	// Kind is added, or the lifecycle event that moved the task.
 	Kind     string    `json:"kind" app:"public"`
 	TaskID   string    `json:"taskId" app:"public"`
@@ -76,7 +78,7 @@ var EntriesStore = Service.Store("entries", func(e Entry) string { return e.ID }
 	app.DeleteAfter[Entry](time.Duration(7776000000000000) /* 2160h */, func(e Entry) (time.Time, bool) { return e.At, !e.At.IsZero() }),
 )
 
-var _ = Service.Endpoint("GET /api/activity", Recent)
+var _ = Service.Endpoint("GET /api/activity", Recent, app.Auth())
 
 // Recent serves GET /api/activity: its body is the hand-written recent.
 func Recent(ctx context.Context, in PageRequest) (Page, error) {
