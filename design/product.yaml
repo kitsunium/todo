@@ -1,0 +1,43 @@
+# The todo: a task list for a team, served over HTTP by one process, with a
+# second process role that drives a load against it.
+apiVersion: design/v2
+project:
+  module: github.com/kitsunium/todo
+  name: todo
+  type: product
+product:
+  name: todo
+  module: github.com/kitsunium/todo
+  version: v0.3.0
+  closed: true
+context:
+  actors:
+    - name: member
+      description: A person of the team, who adds tasks, moves them through their lifecycle and reads what happened, through the HTTP API.
+    - name: operator
+      description: Runs the binary, reads its vital signs and drives a load against a running server from a terminal.
+  systems:
+    - name: mail-relay
+      description: The SMTP relay the reminders are handed to, when the deployment names one.
+evidence:
+  - name: owner-2026-11-16
+    kind: decision
+    date: 2026-11-16
+    note: The todo is reopened as a product written design first, on the SDK's current framework; the former framework-style product is kept beside it, in legacy/, a module of its own.
+  - name: legacy-product
+    kind: observed
+    path: legacy/README.md
+    note: The former todo, whose task lifecycle, reminders, activity feed and vital signs this design keeps.
+binaries:
+  - name: todo
+    description: The todo, as one executable, its server and the load it can drive against one.
+    roles:
+      - name: server
+        profile: server
+        description: Serves the HTTP API, keeps the stores, archives what was done long ago, samples the vital signs and sends the reminders.
+        mounts: [taskstore, api, feed, outbox, watch, census]
+      - name: load
+        command: load
+        profile: cli
+        description: Drives a load against a running server over its HTTP API, then exits.
+        mounts: [httpapi, loadcli]

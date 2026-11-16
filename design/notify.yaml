@@ -1,0 +1,106 @@
+# The reminders: a mail to whoever a task due soon is assigned to, once.
+apiVersion: design/v2
+domains:
+  - name: notify
+    description: The mails the product sends, the reminders of what is due soon.
+    components:
+      - name: reminders
+        role: application
+        code: 64.3.1
+        uses: [planner, task]
+        description: Who is reminded of what, and what that needs.
+        evidence: [legacy-product]
+        values:
+          - name: Mail
+            description: A mail, as plain text.
+            fields:
+              - {name: To, type: string, tag: 'json:"to" app:"personal"'}
+              - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
+              - {name: Body, type: string, tag: 'json:"body" app:"public"'}
+        ports:
+          - name: Mailer
+            direction: out
+            version: 1
+            description: MailerV1 sends a mail.
+            methods:
+              - {name: Send, params: [{name: m, type: Mail}]}
+          - name: ReminderLog
+            direction: out
+            version: 1
+            description: ReminderLogV1 remembers which tasks were reminded of, so each is once.
+            methods:
+              - {name: Seen, params: [{name: taskID, type: string}], results: [{type: bool}]}
+              - {name: Mark, params: [{name: taskID, type: string}]}
+        usecases:
+          - name: RemindDue
+            description: RemindDue mails whoever an open task due within a delay is assigned to, once per task.
+            input:
+              - {name: Within, type: time.Duration}
+            output:
+              - {name: Sent, type: int}
+            calls: [tasks/usecase/DueSoon, notify/port/ReminderLog@v1.Seen, notify/port/Mailer@v1.Send, notify/port/ReminderLog@v1.Mark]
+            scenarios:
+              - {name: mails each task due soon once, kind: success}
+              - {name: skips a task assigned to no address, kind: success}
+      - name: outbox
+        role: adapter
+        code: 64.3.2
+        uses: [reminders]
+        description: The mails sent, kept, handed to the SMTP relay when one is named, their HTTP read, and the log of the reminders.
+        entities:
+          - name: Sent
+            description: A mail the product sent.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: To, type: string, tag: 'json:"to" app:"personal"'}
+              - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
+              - {name: Body, type: string, tag: 'json:"body" app:"public"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+              - {name: Relayed, type: bool, tag: 'json:"relayed" app:"public"', description: "Relayed says the mail was handed to the relay; false when the deployment names none."}
+          - name: Reminded
+            description: A task its assignee was reminded of.
+            fields:
+              - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        values:
+          - name: Mails
+            description: The mails sent, newest first.
+            fields:
+              - {name: Mails, type: "[]Sent", tag: 'json:"mails"'}
+          - name: NoInput
+            description: A request that says nothing.
+        settings:
+          - {name: smtp-addr, type: string, default: "", description: "The SMTP relay's host and port; empty, the mails are kept and not relayed."}
+          - {name: mail-from, type: string, default: "todo@localhost", description: The address the mails come from.}
+        stores:
+          - {name: outbox, entity: Sent, key: ID, description: "Every mail sent, keyed by a time-ordered id."}
+          - {name: reminded, entity: Reminded, key: TaskID, description: The tasks already reminded of.}
+        adapters:
+          - name: Relay
+            description: Relay is Mailer@v1; it keeps the mail in the store "outbox" and hands it to the relay smtp-addr names.
+            implements: [notify/port/Mailer@v1]
+            uses: ["setting:smtp-addr", "setting:mail-from"]
+            connections:
+              - {name: smtp-submission, description: "The server hands each reminder to the deployment's SMTP relay.", transport: tcp, side: dials, port: 587, to: "system:mail-relay", security: starttls, frames: [Mail]}
+          - name: Ledger
+            description: Ledger is ReminderLog@v1 on the store "reminded".
+            implements: [notify/port/ReminderLog@v1]
+        endpoints:
+          - {route: "GET /api/outbox", request: NoInput, response: Mails, handler: Kept}
+      - name: watch
+        role: presentation
+        code: 64.3.3
+        uses: [reminders]
+        description: The job that sends the reminders.
+        settings:
+          - {name: remind-within, type: duration, default: 24h, description: How long before its due date a task's assignee is reminded.}
+        jobs:
+          - {name: remind-due, every: 1m, handler: Remind, description: Reminds the assignees of the tasks due within remind-within., uses: [notify/usecase/RemindDue, "setting:remind-within"], calls: [notify/usecase/RemindDue]}
+    sequences:
+      - name: remind-due
+        description: The server reminds an assignee of a task due soon.
+        start: notify/usecase/RemindDue
+        steps:
+          - call: notify/port/ReminderLog@v1.Seen
+          - call: notify/port/Mailer@v1.Send
+          - call: notify/port/ReminderLog@v1.Mark

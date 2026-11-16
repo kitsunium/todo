@@ -1,0 +1,95 @@
+# todo
+
+A task list for a team, served over HTTP by one process — and a product
+written design first: `design/` says its structure, a generator writes the
+shells from it, and the bodies beside them are written by hand. It runs on
+the SDK's framework
+([`github.com/kitsunium/sdk/framework/app`](https://github.com/kitsunium/sdk))
+and imports the SDK alone.
+
+A member adds tasks with a priority, an assignee and a due date, and moves
+them through their lifecycle: open, done, archived. Every move lands in an
+activity feed. A task done for a day is archived on its own, whoever a task
+due within a day is assigned to gets one reminder by mail, and the task list
+is counted every thirty seconds.
+
+The former todo — accounts, contacts, groups, shared tasks and its web app,
+written on the framework by hand — is kept whole in [`legacy/`](legacy/), a Go
+module of its own.
+
+## The design
+
+| File | Domain | Holds |
+|---|---|---|
+| `design/product.yaml` | — | the product, its context (a member, an operator, the mail relay) and the binary `todo` with its two process roles, `server` and `load` |
+| `design/tasks.yaml` | tasks | the task and its lifecycle, six use cases and their three ports, the store behind them, the HTTP API, the sequence `complete-task` |
+| `design/activity.yaml` | activity | the feed, written from what the use cases record |
+| `design/notify.yaml` | notify | the reminders, the outbox and its SMTP connection, the sequence `remind-due` |
+| `design/stats.yaml` | stats | the vital signs, sampled by a job |
+| `design/load.yaml` | load | a load driven against a running server over its HTTP API |
+
+Each component of the design is a Go package, `<domain>/<component>`, whose
+`gen_*.go` files are generated and never edited; `cmd/todo` is the binary.
+
+## The API
+
+| Route | Does |
+|---|---|
+| `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `assignee`, `due` (RFC 3339) |
+| `GET /api/tasks` | lists the tasks not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
+| `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |
+| `GET /api/activity` | the feed, newest first; `?limit=N` |
+| `GET /api/outbox` | the mails sent, newest first |
+| `GET /api/stats` | the latest sample of the task list and the recent history |
+
+A request the API refuses says why: 400 with the field at fault, 404 for a
+task that does not exist, 409 for a move the task's state does not allow.
+
+## Run it
+
+```sh
+SERVER_ENV=dev go run ./cmd/todo            # http://127.0.0.1:4000
+SERVER_ADDR=127.0.0.1:8080 go run ./cmd/todo
+```
+
+The server listens where `SERVER_ADDR` says. In dev it defaults to
+`127.0.0.1:4000`; in production the framework's default is `:4000`, every
+interface, so a deployment names its address. Its data lives in
+`SERVER_DATA_DIR`.
+
+| Setting | Default | Says |
+|---|---|---|
+| `SERVER_ARCHIVE_AFTER` | `24h` | how long a done task stays listed before it is archived |
+| `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's assignee is reminded |
+| `SERVER_SMTP_ADDR` | empty | the SMTP relay's host and port (587, STARTTLS when the relay offers it); empty, the mails are kept in the outbox and not relayed |
+| `SERVER_MAIL_FROM` | `todo@localhost` | the address the mails come from |
+
+`go run ./cmd/todo config` prints every setting and where its value comes
+from.
+
+## Drive a load
+
+The binary's second role calls a running server's API — it adds tasks,
+completes, archives and reopens them, and reads the list, the feed and the
+vital signs — so that there is something to watch:
+
+```sh
+LOAD_TARGET=127.0.0.1:4000 go run ./cmd/todo load -for 2m -rate 5
+```
+
+`-for` is how long it lasts (default 30s), `-rate` how many calls a second
+(default 5). It prints how many calls it made and how many failed, and exits
+1 when some did.
+
+## Test it
+
+```sh
+go build ./... && go vet ./...
+go test -race ./...
+gofmt -l .
+```
+
+The use cases are tested by the scenarios the design names, on ports in
+memory; the two sequences by the order of their calls; the task's rules by
+properties. `cmd/todo/server` runs the whole server role in memory, over
+HTTP, on a clock the test moves.

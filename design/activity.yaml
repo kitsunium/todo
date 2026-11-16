@@ -1,0 +1,41 @@
+# The activity: what happened to the tasks, as a feed.
+apiVersion: design/v2
+domains:
+  - name: activity
+    description: What happened to the tasks, newest first.
+    components:
+      - name: feed
+        role: adapter
+        code: 64.2.1
+        uses: [planner, task]
+        description: The feed, written from what the tasks' use cases record, and its HTTP read.
+        evidence: [legacy-product]
+        entities:
+          - name: Entry
+            description: One thing that happened to a task.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
+              - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
+              - {name: Title, type: string, tag: 'json:"title" app:"public"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        values:
+          - name: Page
+            description: The latest entries, newest first.
+            fields:
+              - {name: Entries, type: "[]Entry", tag: 'json:"entries"'}
+          - name: PageRequest
+            description: How many entries to read.
+            fields:
+              - {name: Limit, type: int, tag: 'query:"limit"'}
+        constants:
+          - {name: Keep, type: int, value: "200", description: Keep is how many entries the feed keeps.}
+        stores:
+          - {name: entries, entity: Entry, key: ID, description: "The feed's entries, keyed by a time-ordered id."}
+        adapters:
+          - name: Feed
+            description: Feed is Journal@v1 on the store "entries"; it keeps the latest Keep entries.
+            implements: [tasks/port/Journal@v1]
+        endpoints:
+          - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent}

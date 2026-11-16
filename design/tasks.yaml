@@ -1,0 +1,232 @@
+# The tasks: what a task is, what the team does with one, where they are
+# kept and the HTTP API in front of them.
+apiVersion: design/v2
+domains:
+  - name: tasks
+    description: What the team has to do, who does it and by when.
+    components:
+      - name: task
+        role: domain
+        code: 64.1.1
+        description: The task, its priority and its lifecycle.
+        evidence: [legacy-product]
+        entities:
+          - name: Task
+            description: Something to do, for someone, by a date.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Title, type: string, tag: 'json:"title" app:"public"'}
+              - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
+              - {name: Priority, type: Priority, tag: 'json:"priority" app:"public"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"', description: "Assignee is who does the task, as the team names them; an address gets the reminders."}
+              - {name: Due, type: time.Time, tag: 'json:"due" app:"public"', description: "Due is when the task is due; the zero time when it has no date."}
+              - {name: State, type: LifecycleState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+              - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"', description: "DoneAt is when the task was last completed; the zero time while it is open."}
+            methods:
+              - name: Overdue
+                description: Overdue reports whether the task is still open after its due date.
+                params: [{name: now, type: time.Time}]
+                results: [{type: bool}]
+                properties: [NeverWhenDone]
+        values:
+          - name: Priority
+            description: How urgent a task is.
+            underlying: string
+        constants:
+          - {name: MaxTitle, type: int, value: "120", description: MaxTitle is the longest title a task takes.}
+          - {name: PriorityLow, type: Priority, value: '"low"', description: PriorityLow is what can wait.}
+          - {name: PriorityNormal, type: Priority, value: '"normal"', description: PriorityNormal is the priority of a task that names none.}
+          - {name: PriorityHigh, type: Priority, value: '"high"', description: PriorityHigh is what comes first.}
+        functions:
+          - name: ParsePriority
+            description: ParsePriority reads a priority as a member writes it; an empty one is normal.
+            params: [{name: s, type: string}]
+            results: [{type: Priority}, {type: error}]
+            properties: [KnownOrRefused]
+        errors:
+          - {name: ErrEmptyTitle, serial: 1, message: a task needs a title}
+          - {name: ErrTitleTooLong, serial: 2, message: a title is 120 characters at most}
+          - {name: ErrNotFound, serial: 3, message: no such task}
+          - {name: ErrUnknownPriority, serial: 4, message: "a priority is low, normal or high"}
+          - {name: ErrNotAllowed, serial: 5, message: the task cannot make this move from the state it is in}
+        workflows:
+          - name: Lifecycle
+            entity: Task
+            description: A task is open, then done, then archived; a done one reopens, an archived one is restored.
+            states: [open, done, archived]
+            initial: open
+            transitions:
+              - {event: complete, from: [open], to: done}
+              - {event: reopen, from: [done], to: open}
+              - {event: archive, from: [done], to: archived}
+              - {event: restore, from: [archived], to: open}
+      - name: planner
+        role: application
+        code: 64.1.2
+        uses: [task]
+        description: What the team does with tasks, and what that needs.
+        ports:
+          - name: TaskStore
+            direction: out
+            version: 1
+            description: TaskStoreV1 keeps the tasks.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: t, type: task.Task}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: task.Task}]}
+              - {name: List, results: [{type: "[]task.Task"}]}
+          - name: Clock
+            direction: out
+            version: 1
+            description: ClockV1 tells the time.
+            methods:
+              - {name: Now, results: [{type: time.Time}]}
+          - name: Journal
+            direction: out
+            version: 1
+            description: JournalV1 is told what happened to a task, for whoever keeps a feed of it.
+            methods:
+              - {name: Record, params: [{name: kind, type: string}, {name: t, type: task.Task}]}
+        usecases:
+          - name: AddTask
+            description: AddTask adds an open task.
+            input:
+              - {name: Title, type: string}
+              - {name: Notes, type: string}
+              - {name: Priority, type: string}
+              - {name: Assignee, type: string}
+              - {name: Due, type: time.Time}
+            output:
+              - {name: Task, type: task.Task}
+            errors: [task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority]
+            calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            scenarios:
+              - {name: adds an open task, kind: success}
+              - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
+              - {name: refuses a long title, kind: refusal, error: task.ErrTitleTooLong}
+              - {name: refuses an unknown priority, kind: refusal, error: task.ErrUnknownPriority}
+          - name: MoveTask
+            description: MoveTask moves a task through its lifecycle by one event (complete, reopen, archive, restore).
+            input:
+              - {name: ID, type: string}
+              - {name: Event, type: string}
+            output:
+              - {name: Task, type: task.Task}
+            errors: [task.ErrNotFound, task.ErrNotAllowed]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            scenarios:
+              - {name: completes an open task, kind: success}
+              - {name: refuses an unknown task, kind: refusal, error: task.ErrNotFound}
+              - {name: refuses to archive an open task, kind: refusal, error: task.ErrNotAllowed}
+          - name: ListTasks
+            description: ListTasks lists the tasks of a state, or every task not archived, the most urgent first.
+            input:
+              - {name: State, type: string}
+            output:
+              - {name: Tasks, type: "[]task.Task"}
+            calls: [tasks/port/TaskStore@v1.List]
+            scenarios:
+              - {name: lists the most urgent first, kind: success}
+          - name: ArchiveDone
+            description: ArchiveDone archives the tasks done for longer than a delay.
+            input:
+              - {name: After, type: time.Duration}
+            output:
+              - {name: Archived, type: int}
+            calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            scenarios:
+              - {name: archives what was done long ago, kind: success}
+          - name: CountTasks
+            description: CountTasks counts the tasks per state, and the open ones past their due date.
+            output:
+              - {name: Counts, type: "map[string]int"}
+              - {name: Total, type: int}
+              - {name: Overdue, type: int}
+            calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List]
+            scenarios:
+              - {name: counts every state, kind: success}
+          - name: DueSoon
+            description: DueSoon lists the open tasks due within a delay, the soonest first.
+            input:
+              - {name: Within, type: time.Duration}
+            output:
+              - {name: Tasks, type: "[]task.Task"}
+            calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List]
+            scenarios:
+              - {name: lists the open tasks due soon, kind: success}
+      - name: taskstore
+        role: adapter
+        code: 64.1.3
+        uses: [planner, task]
+        description: The tasks in the framework's store, and the framework's clock.
+        entities:
+          - name: Record
+            description: A task as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Title, type: string, tag: 'json:"title" app:"public"'}
+              - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
+              - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
+              - {name: State, type: string, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+              - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"'}
+        stores:
+          - {name: tasks, entity: Record, key: ID, description: "Every task, keyed by its id."}
+        adapters:
+          - name: Tasks
+            description: Tasks is TaskStore@v1 on the store "tasks".
+            implements: [tasks/port/TaskStore@v1]
+          - name: AppClock
+            description: AppClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
+            implements: [tasks/port/Clock@v1]
+      - name: api
+        role: presentation
+        code: 64.1.4
+        uses: [planner, task]
+        description: The HTTP API of the tasks, and the job that archives what was done long ago.
+        values:
+          - name: AddRequest
+            description: What a member sends to add a task.
+            fields:
+              - {name: Title, type: string, tag: 'json:"title" app:"public"'}
+              - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
+              - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
+          - name: ByID
+            description: The task a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+          - name: ListRequest
+            description: Which tasks to list.
+            fields:
+              - {name: State, type: string, tag: 'query:"state"'}
+          - name: TaskList
+            description: The tasks asked for.
+            fields:
+              - {name: Tasks, type: "[]task.Task", tag: 'json:"tasks"'}
+        settings:
+          - {name: archive-after, type: duration, default: 24h, description: How long a done task stays listed before it is archived.}
+        endpoints:
+          - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
+          - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
+          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+        jobs:
+          - {name: archive-done, every: 1m, handler: Sweep, description: Archives the tasks done for longer than archive-after., uses: [tasks/usecase/ArchiveDone, "setting:archive-after"], calls: [tasks/usecase/ArchiveDone]}
+    sequences:
+      - name: complete-task
+        description: A member completes a task; the feed is told.
+        start: tasks/usecase/MoveTask
+        steps:
+          - call: tasks/port/TaskStore@v1.Get
+          - call: tasks/port/Clock@v1.Now
+          - call: tasks/port/TaskStore@v1.Save
+          - call: tasks/port/Journal@v1.Record

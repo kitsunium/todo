@@ -1,0 +1,53 @@
+// Written once from the design; this file is yours. The shells in
+// gen_design.go delegate to what it holds; a body that still answers
+// errNotImplemented is a stub.
+
+package planner
+
+import (
+	"context"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/kitsunium/todo/tasks/task"
+)
+
+// execute is AddTask's body: the title and the priority are checked, then
+// the task is kept open and the journal told.
+func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTaskOutput, error) {
+	title := strings.TrimSpace(in.Title)
+	switch {
+	case title == "":
+		return AddTaskOutput{}, task.ErrEmptyTitle
+	case utf8.RuneCountInString(title) > task.MaxTitle:
+		return AddTaskOutput{}, task.ErrTitleTooLong
+	}
+	priority, err := task.ParsePriority(in.Priority)
+	if err != nil {
+		return AddTaskOutput{}, err
+	}
+	now, err := h.clock.Now(ctx)
+	if err != nil {
+		return AddTaskOutput{}, err
+	}
+	id, err := h.taskStore.NewID(ctx)
+	if err != nil {
+		return AddTaskOutput{}, err
+	}
+	t := task.Task{
+		ID: id, Title: title, Notes: strings.TrimSpace(in.Notes), Priority: priority,
+		Assignee: strings.TrimSpace(in.Assignee), Due: in.Due, State: task.LifecycleInitial,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := h.taskStore.Save(ctx, t); err != nil {
+		return AddTaskOutput{}, err
+	}
+	if err := h.journal.Record(ctx, kindAdded, t); err != nil {
+		return AddTaskOutput{}, err
+	}
+	return AddTaskOutput{Task: t}, nil
+}
+
+// kindAdded is what the journal is told of a task just added; a move is
+// told by its lifecycle event.
+const kindAdded = "added"

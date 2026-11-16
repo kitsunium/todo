@@ -1,0 +1,23 @@
+# Generated from the design: the digest the generated files come from.
+apiVersion: design/v1
+digest: sha256:dc285aa32ac01223bd5391a33797b47de4d8712905df70ac47be37ef24229ff4
+files:
+  - activity/feed/gen_design.go
+  - cmd/todo/gen_main.go
+  - cmd/todo/load/gen_wire.go
+  - cmd/todo/server/gen_wire.go
+  - load/driver/gen_design.go
+  - load/driver/gen_design_test.go
+  - load/httpapi/gen_design.go
+  - load/loadcli/gen_design.go
+  - notify/outbox/gen_design.go
+  - notify/reminders/gen_design.go
+  - notify/reminders/gen_design_test.go
+  - notify/watch/gen_design.go
+  - stats/census/gen_design.go
+  - tasks/api/gen_design.go
+  - tasks/planner/gen_design.go
+  - tasks/planner/gen_design_test.go
+  - tasks/task/gen_design.go
+  - tasks/task/gen_design_test.go
+  - tasks/taskstore/gen_design.go

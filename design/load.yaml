@@ -1,0 +1,59 @@
+# The load: requests driven against a running server, so that its runtime
+# moves.
+apiVersion: design/v2
+domains:
+  - name: load
+    description: A load driven against a running server over its HTTP API.
+    components:
+      - name: driver
+        role: application
+        code: 64.5.1
+        description: What a load does, and the API it needs.
+        errors:
+          - {name: ErrNoRate, serial: 1, message: a load needs a rate above zero}
+        ports:
+          - name: API
+            direction: out
+            version: 1
+            description: APIV1 is the server's HTTP API, as the load calls it.
+            methods:
+              - {name: Add, params: [{name: title, type: string}, {name: priority, type: string}, {name: assignee, type: string}, {name: due, type: time.Time}], results: [{type: string}]}
+              - {name: Move, params: [{name: id, type: string}, {name: event, type: string}]}
+              - {name: List, results: [{type: int}]}
+              - {name: Activity, results: [{type: int}]}
+              - {name: Stats, results: [{type: int}]}
+        usecases:
+          - name: Drive
+            description: Drive adds tasks, moves them through their lifecycle and reads the lists, at a rate, for a duration.
+            input:
+              - {name: For, type: time.Duration}
+              - {name: Rate, type: int}
+            output:
+              - {name: Requests, type: int}
+              - {name: Failures, type: int}
+            errors: [ErrNoRate]
+            calls: [load/port/API@v1.Add, load/port/API@v1.Move, load/port/API@v1.List, load/port/API@v1.Activity, load/port/API@v1.Stats]
+            scenarios:
+              - {name: drives every call of the api, kind: success}
+              - {name: refuses a rate of zero, kind: refusal, error: ErrNoRate}
+      - name: httpapi
+        role: adapter
+        code: 64.5.2
+        uses: [driver]
+        description: The server's HTTP API, called over the network.
+        settings:
+          - {name: target, type: string, default: "127.0.0.1:4000", description: The host and port of the server the load is driven against.}
+        adapters:
+          - name: Client
+            description: Client is API@v1 over HTTP, on the address target names.
+            implements: [load/port/API@v1]
+            uses: ["setting:target"]
+            connections:
+              - {name: api, description: "The load calls the server's HTTP API, on loopback by default.", transport: tcp, side: dials, port: 4000, to: "role:todo/server", security: none}
+      - name: loadcli
+        role: presentation
+        code: 64.5.3
+        uses: [driver]
+        description: The command that drives the load.
+        clis:
+          - {name: run, default: true, doc: "drives a load against the server: -for DURATION (default 30s), -rate N a second (default 5)", handler: Run, uses: [load/usecase/Drive], calls: [load/usecase/Drive]}
