@@ -21,10 +21,9 @@
   server on 4000. The server's own listening socket is the framework's, no
   adapter's, so the design declares none for it.
 - `product.yaml` holds the deployment: the node `host` runs the server
-  role, `workstation` the load, and the link `load-to-api` carries the
-  connection `api` between them. A node runs a role of the product, so the
-  mail relay, a system of the context, is no node: the connection
-  `smtp-submission` has no link yet.
+  role, `workstation` the load, and `mail-relay`, a system of the context,
+  stands at the end of a link. Each link carries a declared connection:
+  `load-to-api` carries `api`, `mail` carries `smtp-submission`.
 - One component declares the authentication (`auth`, in `authapi`); a
   route that needs a member says `auth: required`.
 - A port's parameter is never named `a`: it is the receiver's name in the

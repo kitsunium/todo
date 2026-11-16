@@ -24,8 +24,11 @@ deployment:
   nodes:
     - {name: host, description: The machine that serves the API., runs: [todo/server]}
     - {name: workstation, description: "The operator's machine, where the load command is run by hand.", runs: [todo/load]}
+  systems:
+    - {name: mail-relay, description: The SMTP relay of the deployment; none is named in dev.}
   links:
     - {name: load-to-api, description: "The load calls the server's HTTP API.", connection: api, between: [workstation, host]}
+    - {name: mail, description: The server hands each reminder to the relay., connection: smtp-submission, between: [host, mail-relay]}
 evidence:
   - name: owner-2026-11-16
     kind: decision
