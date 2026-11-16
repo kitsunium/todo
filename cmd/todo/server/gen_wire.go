@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0c616a2ddc211ada253896609000dcaab6758455e2991084b86e140dd79690fe
+// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -15,6 +15,9 @@ import (
 	"github.com/kitsunium/todo/contacts/circle"
 	"github.com/kitsunium/todo/contacts/contactsapi"
 	"github.com/kitsunium/todo/contacts/linkstore"
+	"github.com/kitsunium/todo/groups/groupsapi"
+	"github.com/kitsunium/todo/groups/groupstore"
+	"github.com/kitsunium/todo/groups/roster"
 	"github.com/kitsunium/todo/identity/access"
 	"github.com/kitsunium/todo/identity/authapi"
 	"github.com/kitsunium/todo/identity/vault"
@@ -35,8 +38,8 @@ import (
 //go:embed config
 var configFiles embed.FS
 
-// App is role server: the framework App of vault, authapi, linkstore, contactsapi, taskstore, api, feed, post, outbox, watch, census, site, profile server.
-var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, taskstore.Service, api.Service, feed.Service, post.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer), app.ConfigFiles(configFiles))
+// App is role server: the framework App of vault, authapi, linkstore, contactsapi, groupstore, groupsapi, taskstore, api, feed, post, outbox, watch, census, site, profile server.
+var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, groupstore.Service, groupsapi.Service, taskstore.Service, api.Service, feed.Service, post.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer), app.ConfigFiles(configFiles))
 
 // Build is what the binary's build says: its variables, set by -ldflags -X.
 type Build struct {
@@ -71,6 +74,24 @@ func Wire(ctx context.Context, build Build) {
 	answerRequest := circle.NewAnswerRequest(links, linkstoreWallClock, directory, announcer)
 	removeContact := circle.NewRemoveContact(links)
 	areContacts := circle.NewAreContacts(links)
+	groups := groupstore.NewGroups()
+	groupstoreDirectory := groupstore.NewDirectory()
+	listGroups := roster.NewListGroups(groups, groupstoreDirectory)
+	groupstoreWallClock := groupstore.NewWallClock()
+	createGroup := roster.NewCreateGroup(groupstoreWallClock, groups, groupstoreDirectory)
+	getGroup := roster.NewGetGroup(groups, groupstoreDirectory)
+	editGroup := roster.NewEditGroup(groups, groupstoreWallClock, groupstoreDirectory)
+	invitations := groupstore.NewInvitations()
+	groupstoreAnnouncer := groupstore.NewAnnouncer()
+	deleteGroup := roster.NewDeleteGroup(groups, invitations, groupstoreDirectory, groupstoreAnnouncer)
+	friends := groupstore.NewFriends()
+	invite := roster.NewInvite(groups, friends, invitations, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
+	listInvitations := roster.NewListInvitations(invitations, groups, groupstoreDirectory)
+	answerInvitation := roster.NewAnswerInvitation(invitations, groupstoreWallClock, groups, groupstoreDirectory, groupstoreAnnouncer)
+	removeMember := roster.NewRemoveMember(groups, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
+	setRole := roster.NewSetRole(groups, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
+	roleOf := roster.NewRoleOf(groups)
+	memberships := roster.NewMemberships(groups)
 	appClock := taskstore.NewAppClock()
 	tasks := taskstore.NewTasks()
 	taskstoreAnnouncer := taskstore.NewAnnouncer()
@@ -79,8 +100,8 @@ func Wire(ctx context.Context, build Build) {
 	getTask := planner.NewGetTask(tasks)
 	editTask := planner.NewEditTask(tasks, appClock, taskstoreAnnouncer)
 	deleteTask := planner.NewDeleteTask(tasks, taskstoreAnnouncer)
-	friends := taskstore.NewFriends()
-	shareTask := planner.NewShareTask(tasks, friends, appClock, taskstoreAnnouncer)
+	taskstoreFriends := taskstore.NewFriends()
+	shareTask := planner.NewShareTask(tasks, taskstoreFriends, appClock, taskstoreAnnouncer)
 	unshareTask := planner.NewUnshareTask(tasks, appClock)
 	moveTask := planner.NewMoveTask(tasks, appClock, taskstoreAnnouncer)
 	countTasks := planner.NewCountTasks(appClock, tasks)
@@ -93,6 +114,8 @@ func Wire(ctx context.Context, build Build) {
 	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, listSessions, revokeSession, authenticate)
 	linkstore.Wire()
 	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact, areContacts)
+	groupstore.Wire()
+	groupsapi.Wire(listGroups, createGroup, getGroup, editGroup, deleteGroup, invite, listInvitations, answerInvitation, removeMember, setRole, roleOf, memberships)
 	taskstore.Wire()
 	api.Wire(addTask, listTasks, getTask, editTask, deleteTask, shareTask, unshareTask, moveTask, countTasks)
 	feed.Wire()

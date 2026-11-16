@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0c616a2ddc211ada253896609000dcaab6758455e2991084b86e140dd79690fe
+// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
 
 // Package taskstore — The tasks in the framework's store, the archiving of
 // what was done long ago, their events on a topic, and the framework's clock.

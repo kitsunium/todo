@@ -12,6 +12,7 @@ import (
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/contacts/linkstore"
+	"github.com/kitsunium/todo/groups/groupstore"
 	"github.com/kitsunium/todo/tasks/taskstore"
 )
 
@@ -66,6 +67,12 @@ func record(ctx context.Context, msg taskstore.Event) error {
 // in the feed of the member it is told to, titled with who did it.
 func recordContact(ctx context.Context, msg linkstore.Event) error {
 	return write(ctx, Entry{ID: msg.ID, UserID: msg.UserID, Kind: msg.Kind, Title: msg.ActorName, At: msg.At})
+}
+
+// recordGroup is the subscription "groups"'s body: one entry a message, in
+// the feed of the member it is told to, titled with the group's name.
+func recordGroup(ctx context.Context, msg groupstore.Event) error {
+	return write(ctx, Entry{ID: msg.ID, UserID: msg.UserID, Kind: msg.Kind, Title: msg.GroupName, At: msg.At})
 }
 
 // write keeps an entry, keyed by its event's id (and its reader, when an

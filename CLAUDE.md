@@ -26,11 +26,15 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `contacts/circle` | circle (application) | the use cases `RequestContact` `AnswerRequest` `RemoveContact` `ListContacts` `AreContacts`, the ports `Links` `People` `Notices` `Clock` |
 | `contacts/linkstore` | linkstore (adapter) | the store `links`, its workflow `Waiting` (a request expires after fourteen days), the topic `events`, `Links`, `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
 | `contacts/contactsapi` | contactsapi (presentation) | the routes of `/api/contacts`, the query `are-contacts` |
+| `groups/team` | team (domain) | `Group` (with its `Membership`s and `Role`), `Invitation`, the `Inviting` workflow, `Manages` `CleanName` `ColorFor` `ParseRole` `Ranked`, the errors |
+| `groups/roster` | roster (application) | the use cases `CreateGroup` `EditGroup` `DeleteGroup` `ListGroups` `GetGroup` `Invite` `AnswerInvitation` `ListInvitations` `RemoveMember` `SetRole` `RoleOf` `Memberships`, the ports `Groups` `Invitations` `People` `Circle` `Notices` `Clock`; `present.go` is what the views share |
+| `groups/groupstore` | groupstore (adapter) | the stores `groups` and `invitations`, the workflow `Lapsing` (an invitation expires after a week), the topic `events`, `Groups`, `Invitations`, `Directory` (asks the identity's query), `Friends` (asks the contacts' query), `Announcer` (one event for each member told), `WallClock` |
+| `groups/groupsapi` | groupsapi (presentation) | the routes of `/api/groups` and `/api/invitations`, the queries `role` and `memberships` |
 | `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
 | `tasks/planner` | planner (application) | the use cases `AddTask` `GetTask` `EditTask` `DeleteTask` `MoveTask` `ShareTask` `UnshareTask` `ListTasks` `CountTasks` `DueSoon`, the ports `TaskStore` `Circle` `Clock` `Journal`; `lifecycle.go` is what they share |
 | `tasks/taskstore` | taskstore (adapter) | the store `tasks`, its workflow `Shelf` (a done task is archived after `archive-after`), the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes), `Friends` (their `Circle`, which asks the contacts' query) and `AppClock` |
 | `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census` |
-| `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks` and `contacts` to their events, `GET /api/activity` |
+| `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks`, `contacts` and `groups` to their events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
 | `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through, `Carrier` (the reminders' `Mailer`, its SMTP connection declared in the design) |
 | `notify/outbox` | outbox (adapter) | the store `reminded`, `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger` |

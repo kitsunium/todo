@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -696,4 +697,246 @@ func TestATaskIsSharedWithAContact(t *testing.T) {
 	bob.call(http.StatusNotFound, "GET", "/api/tasks/"+tk.ID, nil, nil)
 	ada.call(http.StatusOK, "DELETE", "/api/tasks/"+tk.ID, nil, nil)
 	ada.call(http.StatusNotFound, "GET", "/api/tasks/"+tk.ID, nil, nil)
+}
+
+// groupView is a group as the API answers it.
+type groupView struct {
+	ID, Name, Color, Role string
+	Members               []struct {
+		User struct{ ID, Name string }
+		Role string
+	}
+}
+
+// befriend makes two members contacts: the first asks, the second accepts.
+func (m *member) befriend(other *member, otherEmail string) {
+	m.p.t.Helper()
+	var l struct{ ID string }
+	m.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": otherEmail}, &l)
+	other.call(http.StatusOK, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil)
+}
+
+// roles are who is in a group and what each is, by name.
+func (g groupView) roles() map[string]string {
+	out := map[string]string{}
+	for _, m := range g.Members {
+		out[m.User.Name] = m.Role
+	}
+	return out
+}
+
+// Members form a group: its creator owns it, invites only their contacts, an
+// invitation is answered by its invitee alone, roles bound what each may do,
+// members leave or are removed, each is told in their feed, and an
+// invitation nobody answers for a week expires.
+func TestMembersFormAGroup(t *testing.T) {
+	p := start(t)
+	ada, bob, cy, dee := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com"), p.signUp("Dee", "dee@example.com")
+	p.stranger().call(http.StatusUnauthorized, "GET", "/api/groups", nil, nil)
+	p.stranger().call(http.StatusUnauthorized, "GET", "/api/invitations", nil, nil)
+
+	// A group is created by a name of one line and a color of the palette, or none.
+	ada.call(http.StatusBadRequest, "POST", "/api/groups", map[string]any{"name": "  "}, nil)
+	ada.call(http.StatusBadRequest, "POST", "/api/groups", map[string]any{"name": "a\nb"}, nil)
+	ada.call(http.StatusBadRequest, "POST", "/api/groups", map[string]any{"name": "Core", "color": "chartreuse"}, nil)
+	var g groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": " Core ", "color": "blue"}, &g)
+	if g.ID == "" || g.Name != "Core" || g.Color != "blue" || g.Role != "owner" || !maps.Equal(g.roles(), map[string]string{"Ada": "owner"}) {
+		t.Fatalf("the group created: %+v", g)
+	}
+	var picked groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Side"}, &picked)
+	if picked.Color == "" {
+		t.Errorf("a group with no color has one picked from its name: %+v", picked)
+	}
+	bob.call(http.StatusNotFound, "GET", "/api/groups/"+g.ID, nil, nil) // not in it: as if there were none
+	var list struct{ Groups []groupView }
+	ada.call(http.StatusOK, "GET", "/api/groups", nil, &list)
+	if len(list.Groups) != 2 || list.Groups[0].Name != "Core" || list.Groups[1].Name != "Side" {
+		t.Errorf("Ada's groups: %+v, want Core then Side", list.Groups)
+	}
+	bob.call(http.StatusOK, "GET", "/api/groups", nil, &list)
+	if len(list.Groups) != 0 {
+		t.Errorf("Bob's groups: %+v, want none", list.Groups)
+	}
+
+	// Only a contact is invited, once, and only the invitee answers.
+	ada.befriend(bob, "bob@example.com")
+	ada.befriend(cy, "cy@example.com")
+	invite := func(by *member, group string, who *member, status int) (inv struct {
+		ID, State string
+		Group     struct{ ID, Name string }
+		Inviter   struct{ Name string }
+		Invitee   struct{ Name string }
+	}) {
+		t.Helper()
+		by.call(status, "POST", "/api/groups/"+group+"/invitations", map[string]any{"userId": who.id}, &inv)
+		return inv
+	}
+	invite(ada, g.ID, dee, http.StatusForbidden) // no contact of hers
+	invite(ada, g.ID, ada, http.StatusConflict)  // already in
+	invite(bob, g.ID, cy, http.StatusNotFound)   // not in the group yet
+	ada.call(http.StatusBadRequest, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{}, nil)
+	inv := invite(ada, g.ID, bob, http.StatusOK)
+	if inv.ID == "" || inv.State != "pending" || inv.Group.Name != "Core" || inv.Inviter.Name != "Ada" || inv.Invitee.Name != "Bob" {
+		t.Fatalf("the invitation: %+v", inv)
+	}
+	invite(ada, g.ID, bob, http.StatusConflict) // already waiting
+
+	var invitations struct {
+		Invitations []struct {
+			ID, State string
+			Group     struct{ ID, Name string }
+			Inviter   struct{ Name string }
+		}
+	}
+	bob.call(http.StatusOK, "GET", "/api/invitations", nil, &invitations)
+	if len(invitations.Invitations) != 1 || invitations.Invitations[0].ID != inv.ID || invitations.Invitations[0].Group.Name != "Core" || invitations.Invitations[0].Inviter.Name != "Ada" {
+		t.Fatalf("Bob's invitations: %+v", invitations.Invitations)
+	}
+	cy.call(http.StatusOK, "GET", "/api/invitations", nil, &invitations)
+	if len(invitations.Invitations) != 0 {
+		t.Errorf("Cy sees the invitation of Bob: %+v", invitations.Invitations)
+	}
+	cy.call(http.StatusNotFound, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+	ada.call(http.StatusNotFound, "POST", "/api/invitations/"+inv.ID+"/decline", nil, nil)
+	bob.call(http.StatusNotFound, "POST", "/api/invitations/invitation_nobody/accept", nil, nil)
+	bob.call(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/accept", nil, &g)
+	if g.Role != "member" || !maps.Equal(g.roles(), map[string]string{"Ada": "owner", "Bob": "member"}) {
+		t.Fatalf("the group Bob joined: %+v", g)
+	}
+	bob.call(http.StatusConflict, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+	bob.call(http.StatusConflict, "POST", "/api/invitations/"+inv.ID+"/decline", nil, nil)
+
+	// A declined invitation keeps nobody out of a later one.
+	inv = invite(ada, g.ID, cy, http.StatusOK)
+	cy.call(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/decline", nil, nil)
+	cy.call(http.StatusNotFound, "GET", "/api/groups/"+g.ID, nil, nil)
+	cy.call(http.StatusConflict, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+	inv = invite(ada, g.ID, cy, http.StatusOK)
+	cy.call(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/accept", nil, &g)
+	if !maps.Equal(g.roles(), map[string]string{"Ada": "owner", "Bob": "member", "Cy": "member"}) {
+		t.Fatalf("the group Cy joined: %+v", g)
+	}
+	if g.Members[0].User.Name != "Ada" || g.Members[1].User.Name != "Bob" || g.Members[2].User.Name != "Cy" {
+		t.Errorf("the members are ranked, the owner first, then by when they joined: %+v", g.Members)
+	}
+
+	// What a role may do: a member edits nothing, the owner alone gives roles,
+	// the owner's own never changes, an admin runs the group.
+	bob.call(http.StatusForbidden, "PATCH", "/api/groups/"+g.ID, map[string]any{"name": "Mine"}, nil)
+	bob.call(http.StatusForbidden, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{"userId": dee.id}, nil)
+	bob.call(http.StatusForbidden, "PATCH", "/api/groups/"+g.ID+"/members/"+cy.id, map[string]any{"role": "admin"}, nil)
+	dee.call(http.StatusNotFound, "PATCH", "/api/groups/"+g.ID, map[string]any{"name": "Mine"}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/groups/"+g.ID, map[string]any{"name": " "}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/groups/"+g.ID, map[string]any{"color": ""}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/groups/"+g.ID, map[string]any{"color": "chartreuse"}, nil)
+	ada.call(http.StatusOK, "PATCH", "/api/groups/"+g.ID, map[string]any{"name": "Platform"}, &g)
+	if g.Name != "Platform" || g.Color != "blue" || len(g.Members) != 3 {
+		t.Errorf("a rename leaves the rest: %+v", g)
+	}
+	ada.call(http.StatusBadRequest, "PATCH", "/api/groups/"+g.ID+"/members/"+bob.id, map[string]any{"role": "owner"}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/groups/"+g.ID+"/members/"+bob.id, map[string]any{}, nil)
+	ada.call(http.StatusForbidden, "PATCH", "/api/groups/"+g.ID+"/members/"+ada.id, map[string]any{"role": "member"}, nil)
+	ada.call(http.StatusNotFound, "PATCH", "/api/groups/"+g.ID+"/members/"+dee.id, map[string]any{"role": "admin"}, nil)
+	ada.call(http.StatusOK, "PATCH", "/api/groups/"+g.ID+"/members/"+bob.id, map[string]any{"role": "admin"}, &g)
+	if !maps.Equal(g.roles(), map[string]string{"Ada": "owner", "Bob": "admin", "Cy": "member"}) {
+		t.Fatalf("the roles after Bob is made an admin: %+v", g)
+	}
+	bob.call(http.StatusOK, "PATCH", "/api/groups/"+g.ID, map[string]any{"color": "red"}, &g)
+	if g.Color != "red" || g.Role != "admin" {
+		t.Errorf("the group an admin recolored: %+v", g)
+	}
+	bob.befriend(dee, "dee@example.com")
+	inv = invite(bob, g.ID, dee, http.StatusOK) // an admin invites
+	dee.call(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/accept", nil, &g)
+	if g.Role != "member" || len(g.Members) != 4 {
+		t.Fatalf("the group Dee joined: %+v", g)
+	}
+
+	// Who may remove whom: nobody removes the owner, an admin only members,
+	// anyone but the owner leaves, and the owner deletes the group instead.
+	bob.call(http.StatusForbidden, "DELETE", "/api/groups/"+g.ID+"/members/"+ada.id, nil, nil)
+	cy.call(http.StatusForbidden, "DELETE", "/api/groups/"+g.ID+"/members/"+bob.id, nil, nil)
+	ada.call(http.StatusConflict, "DELETE", "/api/groups/"+g.ID+"/members/"+ada.id, nil, nil)
+	ada.call(http.StatusNotFound, "DELETE", "/api/groups/"+g.ID+"/members/user_nobody", nil, nil)
+	p.stranger().call(http.StatusUnauthorized, "DELETE", "/api/groups/"+g.ID+"/members/"+cy.id, nil, nil)
+	bob.call(http.StatusOK, "DELETE", "/api/groups/"+g.ID+"/members/"+dee.id, nil, nil) // removed
+	dee.call(http.StatusNotFound, "GET", "/api/groups/"+g.ID, nil, nil)
+	cy.call(http.StatusOK, "DELETE", "/api/groups/"+g.ID+"/members/"+cy.id, nil, nil) // leaves
+	cy.call(http.StatusNotFound, "GET", "/api/groups/"+g.ID, nil, nil)
+	ada.call(http.StatusOK, "GET", "/api/groups/"+g.ID, nil, &g)
+	if !maps.Equal(g.roles(), map[string]string{"Ada": "owner", "Bob": "admin"}) {
+		t.Errorf("the group after Dee was removed and Cy left: %+v", g)
+	}
+
+	// Each member is told what concerns them, and not what they did themselves.
+	kindsIn := func(m *member, want ...string) []string {
+		t.Helper()
+		var kinds []string
+		p.settle("the group entries in a feed", 50*time.Millisecond, func() bool {
+			var feed struct {
+				Entries []struct{ Kind, Title string }
+			}
+			m.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+			kinds = kinds[:0]
+			for _, e := range feed.Entries {
+				if strings.HasPrefix(e.Kind, "group-") {
+					kinds = append(kinds, e.Kind+" "+e.Title)
+				}
+			}
+			return len(kinds) >= len(want)
+		})
+		slices.Sort(kinds)
+		slices.Sort(want)
+		return kinds
+	}
+	check := func(who string, got []string, want ...string) {
+		t.Helper()
+		if !slices.Equal(got, want) {
+			t.Errorf("%s's feed: %q, want %q", who, got, want)
+		}
+	}
+	adaTold := []string{"group-joined Core", "group-joined Core", "group-joined Platform", "group-removed Platform", "group-left Platform"}
+	check("Ada", kindsIn(ada, adaTold...), "group-joined Core", "group-joined Core", "group-joined Platform", "group-left Platform", "group-removed Platform")
+	check("Dee", kindsIn(dee, "group-invited Platform", "group-removed Platform"), "group-invited Platform", "group-removed Platform")
+	check("Bob", kindsIn(bob, "group-invited Core", "group-joined Core", "group-joined Platform", "group-left Platform", "group-role Platform"),
+		"group-invited Core", "group-joined Core", "group-joined Platform", "group-left Platform", "group-role Platform")
+
+	// A group is deleted by its owner alone, and the invitations into it go
+	// with it.
+	side := picked.ID
+	inv = invite(ada, side, bob, http.StatusOK)
+	bob.call(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+	inv = invite(ada, side, cy, http.StatusOK) // waits when the group goes
+	bob.call(http.StatusForbidden, "DELETE", "/api/groups/"+g.ID, nil, nil)
+	dee.call(http.StatusNotFound, "DELETE", "/api/groups/"+g.ID, nil, nil)
+	bob.call(http.StatusForbidden, "DELETE", "/api/groups/"+side, nil, nil)
+	ada.call(http.StatusOK, "DELETE", "/api/groups/"+side, nil, nil)
+	ada.call(http.StatusNotFound, "GET", "/api/groups/"+side, nil, nil)
+	cy.call(http.StatusNotFound, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+	cy.call(http.StatusOK, "GET", "/api/invitations", nil, &invitations)
+	if len(invitations.Invitations) != 0 {
+		t.Errorf("the invitations into a deleted group: %+v", invitations.Invitations)
+	}
+	p.settle("the deletion in Bob's feed", 50*time.Millisecond, func() bool {
+		var feed struct {
+			Entries []struct{ Kind, Title string }
+		}
+		bob.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+		return len(feed.Entries) > 0 && feed.Entries[0].Kind == "group-deleted" && feed.Entries[0].Title == "Side"
+	})
+
+	// An invitation nobody answers for a week expires, and may be sent anew.
+	inv = invite(bob, g.ID, dee, http.StatusOK)
+	invitedAt := p.clk.Now()
+	p.settle("the invitation expired", 24*time.Hour, func() bool {
+		dee.call(http.StatusOK, "GET", "/api/invitations", nil, &invitations)
+		return len(invitations.Invitations) == 0
+	})
+	if got := p.clk.Now().Sub(invitedAt); got < 7*24*time.Hour || got > 9*24*time.Hour {
+		t.Errorf("the invitation expired after %s, want a week", got)
+	}
+	dee.call(http.StatusConflict, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+	invite(bob, g.ID, dee, http.StatusOK)
 }

@@ -7,8 +7,8 @@ domains:
       - name: feed
         role: adapter
         code: 64.2.1
-        uses: [taskstore, linkstore]
-        description: The feed, written from the events of the tasks and of the contacts, and its HTTP read.
+        uses: [taskstore, linkstore, groupstore]
+        description: The feed, written from the events of the tasks, of the contacts and of the groups, and its HTTP read.
         evidence: [legacy-product]
         entities:
           - name: Entry
@@ -17,9 +17,9 @@ domains:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: Seq, type: int64, tag: 'json:"seq" app:"public"', description: "Seq orders the entries: each is one above the entry written before it."}
               - {name: UserID, type: string, tag: 'json:"userId" app:"public"', description: "UserID is the member whose feed the entry is in: the task's owner."}
-              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added or the lifecycle event that moved a task, contact-requested or contact-accepted for a contact."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added or the lifecycle event that moved a task, contact-requested or contact-accepted for a contact, group-invited, group-joined, group-left, group-removed, group-role or group-deleted for a group."}
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
-              - {name: Title, type: string, tag: 'json:"title" app:"personal"', description: "Title is the task's title, or the name of the member a contact entry is about."}
+              - {name: Title, type: string, tag: 'json:"title" app:"personal"', description: "Title is the task's title, the name of the member a contact entry is about, or the name of the group a group entry is about."}
               - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal,subject"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
         values:
@@ -42,6 +42,7 @@ domains:
         subscriptions:
           - {name: tasks, topic: tasks/topic/events, handler: Record}
           - {name: contacts, topic: contacts/topic/events, handler: RecordContact}
+          - {name: groups, topic: groups/topic/events, handler: RecordGroup}
         endpoints:
           - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent, auth: required}
         internals:

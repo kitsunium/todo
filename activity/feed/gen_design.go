@@ -1,8 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:0c616a2ddc211ada253896609000dcaab6758455e2991084b86e140dd79690fe
+// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
 
-// Package feed — The feed, written from the events of the tasks and of the
-// contacts, and its HTTP read.
+// Package feed — The feed, written from the events of the tasks, of the
+// contacts and of the groups, and its HTTP read.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -15,6 +15,7 @@ import (
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
 	"github.com/kitsunium/todo/contacts/linkstore"
+	"github.com/kitsunium/todo/groups/groupstore"
 	"github.com/kitsunium/todo/tasks/taskstore"
 )
 
@@ -35,11 +36,12 @@ type Entry struct {
 	// UserID is the member whose feed the entry is in: the task's owner.
 	UserID string `json:"userId" app:"public"`
 	// Kind is added or the lifecycle event that moved a task, contact-requested or
-	// contact-accepted for a contact.
+	// contact-accepted for a contact, group-invited, group-joined, group-left,
+	// group-removed, group-role or group-deleted for a group.
 	Kind   string `json:"kind" app:"public"`
 	TaskID string `json:"taskId" app:"public"`
-	// Title is the task's title, or the name of the member a contact entry is
-	// about.
+	// Title is the task's title, the name of the member a contact entry is about,
+	// or the name of the group a group entry is about.
 	Title    string    `json:"title" app:"personal"`
 	Assignee string    `json:"assignee" app:"personal,subject"`
 	At       time.Time `json:"at" app:"public"`
@@ -56,7 +58,7 @@ type PageRequest struct {
 }
 
 // Service is feed's framework service: what it declares, drawn and run.
-var Service = app.NewService("feed", "The feed, written from the events of the tasks and of the contacts, and its HTTP read.")
+var Service = app.NewService("feed", "The feed, written from the events of the tasks, of the contacts and of the groups, and its HTTP read.")
 
 // EntriesStore — The feed's entries, keyed by the id of the event each one
 // tells; an entry is deleted ninety days after it was written.
@@ -85,6 +87,14 @@ var _ = Service.Subscribe("contacts", linkstore.EventsTopic, RecordContact)
 // body is the hand-written recordContact, which is idempotent.
 func RecordContact(ctx context.Context, msg linkstore.Event) error {
 	return recordContact(ctx, msg)
+}
+
+var _ = Service.Subscribe("groups", groupstore.EventsTopic, RecordGroup)
+
+// RecordGroup takes each message of the topic "events", at least once: its
+// body is the hand-written recordGroup, which is idempotent.
+func RecordGroup(ctx context.Context, msg groupstore.Event) error {
+	return recordGroup(ctx, msg)
 }
 
 // wired is what the handlers' twins reach, set by the role that mounts
