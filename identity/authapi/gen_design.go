@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:dd6d9d76cd70cb3afe4d348b4ed0e2bdf2f8aa9f13db84b61b2cb1c34cdd43a0
+// design:digest sha256:620afbb2962f72a1a0c57e91267127ee1982802bbd70150e8fa1d8268bc9f808
 
 // Package authapi — The HTTP API of the accounts, and the handler that says
 // who calls a route.
@@ -73,21 +73,21 @@ type SignedIn struct {
 // Service is authapi's framework service: what it declares, drawn and run.
 var Service = app.NewService("authapi", "The HTTP API of the accounts, and the handler that says who calls a route.")
 
-var _ = Service.Endpoint("POST /api/auth/signup", SignUp)
+var _ = Service.Endpoint("POST /api/auth/signup", SignUp, app.RateLimitPerClient(2, 5))
 
 // SignUp serves POST /api/auth/signup: its body is the hand-written signUp.
 func SignUp(ctx context.Context, in SignUpRequest) (Profile, error) {
 	return signUp(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/auth/login", SignIn)
+var _ = Service.Endpoint("POST /api/auth/login", SignIn, app.RateLimitPerClient(2, 5))
 
 // SignIn serves POST /api/auth/login: its body is the hand-written signIn.
 func SignIn(ctx context.Context, in SignInRequest) (SignedIn, error) {
 	return signIn(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/auth/logout", SignOut, app.Auth())
+var _ = Service.Endpoint("POST /api/auth/logout", SignOut, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // SignOut serves POST /api/auth/logout: its body is the hand-written signOut.
 func SignOut(ctx context.Context, in NoInput) (NoInput, error) {

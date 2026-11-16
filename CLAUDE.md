@@ -102,6 +102,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   that changes shape changes `app.js` in the same commit.
 - The server role's App is named `server`, the load's `load`: their
   settings are `SERVER_<NAME>` and `LOAD_<NAME>`.
+- **A route that writes says its limit in the design** (`rateLimit`, per
+  client): 2 a second, burst 5, where a stranger makes the product work
+  (sign-up, sign-in, a contact request), 10 and 20 elsewhere. The buckets
+  refill on the framework's clock: a test's client moves it on a 429.
 - **A request is decoded strictly**: a member the route does not declare
   is a 400. A client sends each route its own fields.
 

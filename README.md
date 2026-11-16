@@ -62,6 +62,11 @@ session cookie, or `Authorization: Bearer <token>`; without one it answers
 401. A member sees their own tasks, feed and mails, and another member's
 task is answered as if it did not exist.
 
+Every route that writes is limited per client — the member, or the address
+of a stranger: two calls a second with a burst of five for signing up,
+signing in and asking for a contact, ten a second with a burst of twenty
+for the rest. A call over the limit is answered 429.
+
 A request the API refuses says why: 400 with the field at fault, 404 for a
 task that does not exist, 409 for a move the task's state does not allow or
 an address already taken, 401 `invalid_credentials` for a wrong password or

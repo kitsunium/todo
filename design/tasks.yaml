@@ -277,12 +277,12 @@ domains:
         queries:
           - {name: census, input: NoInput, output: Census, handler: Count, description: "The census: how many tasks there are per state, for the components that watch the list.", uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
         endpoints:
-          - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
+          - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
           - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
-          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
         jobs:
           - {name: archive-done, every: 1m, handler: Sweep, description: Archives the tasks done for longer than archive-after., uses: [tasks/usecase/ArchiveDone, "setting:archive-after"], calls: [tasks/usecase/ArchiveDone]}
         internals:

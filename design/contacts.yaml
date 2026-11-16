@@ -237,11 +237,11 @@ domains:
               - {name: Outgoing, type: "[]circle.Contact", tag: 'json:"outgoing"'}
         endpoints:
           - {route: "GET /api/contacts", request: NoInput, response: Listing, handler: List, auth: required, uses: [contacts/usecase/ListContacts], calls: [contacts/usecase/ListContacts]}
-          - {route: "POST /api/contacts", request: AddRequest, response: link.Link, handler: Add, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}
-          - {route: "POST /api/contacts/{id}/accept", request: ByID, response: link.Link, handler: Accept, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
-          - {route: "POST /api/contacts/{id}/decline", request: ByID, response: link.Link, handler: Decline, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
-          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: link.Link, handler: Cancel, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
-          - {route: "DELETE /api/contacts/{id}", request: ByID, response: NoInput, handler: Remove, auth: required, uses: [contacts/usecase/RemoveContact], calls: [contacts/usecase/RemoveContact]}
+          - {route: "POST /api/contacts", request: AddRequest, response: link.Link, handler: Add, rateLimit: {perSecond: 2, burst: 5, per: client}, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}
+          - {route: "POST /api/contacts/{id}/accept", request: ByID, response: link.Link, handler: Accept, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "POST /api/contacts/{id}/decline", request: ByID, response: link.Link, handler: Decline, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: link.Link, handler: Cancel, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "DELETE /api/contacts/{id}", request: ByID, response: NoInput, handler: Remove, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/RemoveContact], calls: [contacts/usecase/RemoveContact]}
         internals:
           functions:
             - name: answer

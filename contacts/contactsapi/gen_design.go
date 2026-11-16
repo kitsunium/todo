@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:dd6d9d76cd70cb3afe4d348b4ed0e2bdf2f8aa9f13db84b61b2cb1c34cdd43a0
+// design:digest sha256:620afbb2962f72a1a0c57e91267127ee1982802bbd70150e8fa1d8268bc9f808
 
 // Package contactsapi — The HTTP API of a member's contacts.
 //
@@ -51,35 +51,35 @@ func List(ctx context.Context, in NoInput) (Listing, error) {
 	return list(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/contacts", Add, app.Auth())
+var _ = Service.Endpoint("POST /api/contacts", Add, app.Auth(), app.RateLimitPerClient(2, 5))
 
 // Add serves POST /api/contacts: its body is the hand-written add.
 func Add(ctx context.Context, in AddRequest) (link.Link, error) {
 	return add(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/contacts/{id}/accept", Accept, app.Auth())
+var _ = Service.Endpoint("POST /api/contacts/{id}/accept", Accept, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Accept serves POST /api/contacts/{id}/accept: its body is the hand-written accept.
 func Accept(ctx context.Context, in ByID) (link.Link, error) {
 	return accept(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/contacts/{id}/decline", Decline, app.Auth())
+var _ = Service.Endpoint("POST /api/contacts/{id}/decline", Decline, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Decline serves POST /api/contacts/{id}/decline: its body is the hand-written decline.
 func Decline(ctx context.Context, in ByID) (link.Link, error) {
 	return decline(ctx, in)
 }
 
-var _ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, app.Auth())
+var _ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Cancel serves POST /api/contacts/{id}/cancel: its body is the hand-written cancel.
 func Cancel(ctx context.Context, in ByID) (link.Link, error) {
 	return cancel(ctx, in)
 }
 
-var _ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, app.Auth())
+var _ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Remove serves DELETE /api/contacts/{id}: its body is the hand-written remove.
 func Remove(ctx context.Context, in ByID) (NoInput, error) {

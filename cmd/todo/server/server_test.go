@@ -88,6 +88,12 @@ func (p *product) signUp(name, email string) *member {
 
 // call sends one request, checks its status and decodes its answer into out.
 func (m *member) call(status int, method, path string, in, out any) http.Header {
+	m.p.t.Helper()
+	return m.retry(0, status, method, path, in, out)
+}
+
+// retry is call, after retries refusals of the rate limiter.
+func (m *member) retry(retries, status int, method, path string, in, out any) http.Header {
 	p := m.p
 	p.t.Helper()
 	var body io.Reader
@@ -114,6 +120,14 @@ func (m *member) call(status int, method, path string, in, out any) http.Header 
 	}
 	raw, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusTooManyRequests && status != http.StatusTooManyRequests && retries < 60 {
+		// The limits are real and a test goes fast: the buckets refill on the
+		// product's clock, so a refusal moves it by what one token costs the
+		// slowest bucket, and the request is sent again.
+		p.clk.Advance(500 * time.Millisecond)
+		time.Sleep(2 * time.Millisecond)
+		return m.retry(retries+1, status, method, path, in, out)
+	}
 	if resp.StatusCode != status {
 		p.t.Fatalf("%s %s: %d %s, want %d", method, path, resp.StatusCode, raw, status)
 	}
@@ -455,4 +469,32 @@ func TestMembersBecomeContacts(t *testing.T) {
 		t.Errorf("Ada still has %+v after Bob ended the contact", mine.Contacts)
 	}
 	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "bob@example.com"}, nil) // and may ask again
+}
+
+// Signing in is limited per client: a burst of five, then two a second on
+// the product's clock. The sixth attempt in a row is refused with a 429,
+// and one more is served once the clock has moved.
+func TestSigningInIsRateLimited(t *testing.T) {
+	p := start(t)
+	attempt := func() int {
+		t.Helper()
+		resp, err := http.Post(p.url+"/api/auth/login", "application/json", strings.NewReader(`{"email":"nobody@example.com","password":"whatever it is"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	for i := range 5 {
+		if code := attempt(); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: %d, want 401", i+1, code)
+		}
+	}
+	if code := attempt(); code != http.StatusTooManyRequests {
+		t.Fatalf("the sixth attempt in a row: %d, want 429", code)
+	}
+	p.clk.Advance(time.Second)
+	if code := attempt(); code != http.StatusUnauthorized {
+		t.Errorf("a second later: %d, want 401 again", code)
+	}
 }

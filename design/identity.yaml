@@ -283,9 +283,9 @@ domains:
           uses: [identity/usecase/Authenticate]
           calls: [identity/usecase/Authenticate]
         endpoints:
-          - {route: "POST /api/auth/signup", request: SignUpRequest, response: Profile, handler: SignUp, uses: [identity/usecase/SignUp], calls: [identity/usecase/SignUp]}
-          - {route: "POST /api/auth/login", request: SignInRequest, response: SignedIn, handler: SignIn, uses: [identity/usecase/SignIn], calls: [identity/usecase/SignIn]}
-          - {route: "POST /api/auth/logout", request: NoInput, response: NoInput, handler: SignOut, auth: required, uses: [identity/usecase/SignOut], calls: [identity/usecase/SignOut]}
+          - {route: "POST /api/auth/signup", request: SignUpRequest, response: Profile, handler: SignUp, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/SignUp], calls: [identity/usecase/SignUp]}
+          - {route: "POST /api/auth/login", request: SignInRequest, response: SignedIn, handler: SignIn, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/SignIn], calls: [identity/usecase/SignIn]}
+          - {route: "POST /api/auth/logout", request: NoInput, response: NoInput, handler: SignOut, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [identity/usecase/SignOut], calls: [identity/usecase/SignOut]}
           - {route: "GET /api/auth/me", request: NoInput, response: Profile, handler: Me, auth: required}
         internals:
           functions:
