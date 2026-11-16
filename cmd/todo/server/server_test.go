@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -41,11 +42,11 @@ type product struct {
 
 // start wires the role as the binary does and runs its App until the test
 // ends.
-func start(t *testing.T) *product {
+func start(t *testing.T, opts ...app.AppOption) *product {
 	t.Helper()
 	clk := clock.NewManualClock(epoch)
 	server.Wire(t.Context(), server.Build{})
-	a := server.App.With(app.InMemory(), app.Listen("127.0.0.1:0"), app.Env(app.EnvDev), app.Logs(io.Discard), app.Clock(clk))
+	a := server.App.With(append([]app.AppOption{app.InMemory(), app.Listen("127.0.0.1:0"), app.Env(app.EnvDev), app.Logs(io.Discard), app.Clock(clk)}, opts...)...)
 	if err := a.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +74,33 @@ func (p *product) stranger() *member { return &member{p: p} }
 // passphrase is every test member's.
 const passphrase = "correct horse battery"
 
-// signUp makes an account and signs it in.
+// secretIn is the one-time secret of a link.
+var secretIn = regexp.MustCompile(`token=([A-Za-z0-9_-]+)`)
+
+// link waits for a mail to addr whose text holds want, and returns the
+// secret of the link in the newest one.
+func (p *product) link(addr, want string) string {
+	p.t.Helper()
+	var found []model.MailMessage
+	p.settle("a mail to "+addr+" with "+want, 50*time.Millisecond, func() bool {
+		found = p.mails(addr, want)
+		return len(found) > 0
+	})
+	match := secretIn.FindStringSubmatch(found[len(found)-1].Text)
+	if match == nil {
+		p.t.Fatalf("no link with a token in %q", found[len(found)-1].Text)
+	}
+	return match[1]
+}
+
+// signUp makes an account, proves its address with the link it is mailed,
+// and signs it in.
 func (p *product) signUp(name, email string) *member {
 	p.t.Helper()
 	m := p.stranger()
 	creds := map[string]any{"email": email, "name": name, "password": passphrase}
 	m.call(http.StatusOK, "POST", "/api/auth/signup", creds, nil)
+	m.call(http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": p.link(strings.ToLower(email), "Confirmez votre adresse")}, nil)
 	var in struct {
 		Token string `json:"token"`
 		User  struct {
@@ -202,7 +224,7 @@ func TestATaskGoesThroughItsLifecycle(t *testing.T) {
 
 	var moved taskView
 	ada.call(http.StatusOK, "POST", "/api/tasks/"+added.ID+"/complete", nil, &moved)
-	if moved.State != "done" || !moved.DoneAt.Equal(epoch) {
+	if moved.State != "done" || moved.DoneAt.Before(epoch) || moved.DoneAt.After(epoch.Add(time.Minute)) { // the clock moved a little while the mails went
 		t.Fatalf("the task completed: %+v", moved)
 	}
 	ada.call(http.StatusOK, "POST", "/api/tasks/"+added.ID+"/reopen", nil, &moved)
@@ -313,7 +335,15 @@ func TestAMemberSignsInAndOut(t *testing.T) {
 	p := start(t)
 	anon := p.stranger()
 	ada := p.signUp("Ada Lovelace", "Ada@Example.com")
-	anon.call(http.StatusConflict, "POST", "/api/auth/signup", map[string]any{"email": "ada@example.com", "name": "Ada", "password": passphrase}, nil)
+	// An address that has an account is answered like a new one, and its member told.
+	var again struct{ Email, Status string }
+	anon.call(http.StatusOK, "POST", "/api/auth/signup", map[string]any{"email": "ada@example.com", "name": "Someone", "password": "another passphrase"}, &again)
+	if again.Email != "ada@example.com" || again.Status != "verification_sent" {
+		t.Errorf("signing up twice answers %+v, want what a new address gets", again)
+	}
+	p.settle("the mail that says so", 50*time.Millisecond, func() bool {
+		return len(p.mails("ada@example.com", "Vous avez déjà un compte")) == 1
+	})
 	anon.call(http.StatusBadRequest, "POST", "/api/auth/signup", map[string]any{"email": "grace@example.com", "name": "Grace", "password": "short"}, nil)
 	anon.call(http.StatusBadRequest, "POST", "/api/auth/signup", map[string]any{"email": "not an address", "name": "Grace", "password": passphrase}, nil)
 
@@ -361,7 +391,7 @@ func TestAMemberSignsInAndOut(t *testing.T) {
 // member and one round makes every call of the API, none refused (its exit
 // status says so).
 func TestTheLoadDrivesTheServer(t *testing.T) {
-	p := start(t)
+	p := start(t, app.Set("verify-addresses", false)) // the load reads no mail: its server trusts addresses
 	loadrole.Wire(t.Context(), loadrole.Build{})
 	a := loadrole.App.With(app.Set("target", strings.TrimPrefix(p.url, "http://")))
 	if code := a.Main(t.Context(), []string{"-for", "0s", "-rate", "200"}); code != 0 {
@@ -506,4 +536,53 @@ func TestSigningInIsRateLimited(t *testing.T) {
 	if code := attempt(); code != http.StatusUnauthorized {
 		t.Errorf("a second later: %d, want 401 again", code)
 	}
+}
+
+// An account signs nobody in until its address is proven by the link it was
+// mailed; a member who forgot their password chooses a new one by a link
+// that works once, which ends their sessions; and one who knows theirs
+// changes it.
+func TestAnAddressIsProvenAndAPasswordReset(t *testing.T) {
+	p := start(t)
+	anon := p.stranger()
+	creds := map[string]any{"email": "ada@example.com", "password": passphrase}
+	anon.call(http.StatusOK, "POST", "/api/auth/signup", map[string]any{"email": "ada@example.com", "name": "Ada", "password": passphrase}, nil)
+	anon.call(http.StatusForbidden, "POST", "/api/auth/login", creds, nil) // email_unverified
+	first := p.link("ada@example.com", "Confirmez votre adresse")
+	anon.call(http.StatusOK, "POST", "/api/auth/verify/resend", map[string]any{"email": "ada@example.com"}, nil)
+	var second string
+	p.settle("a second link", 50*time.Millisecond, func() bool {
+		second = p.link("ada@example.com", "Confirmez votre adresse")
+		return second != first
+	})
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/verify", map[string]any{"token": first}, nil) // replaced by the second
+	anon.call(http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": second}, nil)
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/verify", map[string]any{"token": second}, nil) // works once
+
+	var in struct{ Token string }
+	anon.call(http.StatusOK, "POST", "/api/auth/login", creds, &in)
+	ada := &member{p: p, token: in.Token}
+	ada.call(http.StatusOK, "GET", "/api/auth/me", nil, nil)
+
+	// Forgotten: the same answer for an address nobody has, a link for Ada.
+	anon.call(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "nobody@example.com"}, nil)
+	anon.call(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "Ada@example.com"}, nil)
+	reset := p.link("ada@example.com", "Choisissez un nouveau mot de passe")
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/password/reset", map[string]any{"token": reset, "password": "short"}, nil)
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/verify", map[string]any{"token": reset}, nil) // a reset link verifies nothing
+	renewed := map[string]any{"email": "ada@example.com", "password": "a brand new passphrase"}
+	anon.call(http.StatusOK, "POST", "/api/auth/password/reset", map[string]any{"token": reset, "password": renewed["password"]}, nil)
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/password/reset", map[string]any{"token": reset, "password": "yet another passphrase"}, nil)
+	ada.call(http.StatusUnauthorized, "GET", "/api/auth/me", nil, nil) // her session ended with the reset
+	anon.call(http.StatusUnauthorized, "POST", "/api/auth/login", creds, nil)
+	anon.call(http.StatusOK, "POST", "/api/auth/login", renewed, &in)
+	ada.token = in.Token
+
+	// Changed: by who knows the current one, and the other sessions end.
+	anon.call(http.StatusOK, "POST", "/api/auth/login", renewed, &in)
+	elsewhere := &member{p: p, token: in.Token}
+	ada.call(http.StatusUnauthorized, "POST", "/api/auth/password", map[string]any{"current": "not the right one", "password": "one more passphrase"}, nil)
+	ada.call(http.StatusOK, "POST", "/api/auth/password", map[string]any{"current": renewed["password"], "password": "one more passphrase"}, nil)
+	ada.call(http.StatusOK, "GET", "/api/auth/me", nil, nil)
+	elsewhere.call(http.StatusUnauthorized, "GET", "/api/auth/me", nil, nil)
 }

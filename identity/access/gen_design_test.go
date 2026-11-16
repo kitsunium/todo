@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
 package access
 
@@ -41,6 +41,93 @@ func TestAuthenticateRefusesAnUnknownSecret(t *testing.T) {
 	}
 }
 
+// TestChangePasswordReplacesThePassword is ChangePassword's scenario "replaces the password" (success).
+func TestChangePasswordReplacesThePassword(t *testing.T) {
+	uc, in, then := givenChangePasswordReplacesThePassword(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ChangePassword: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestChangePasswordRefusesAWrongCurrentPassword is ChangePassword's scenario "refuses a wrong current password" (refusal).
+func TestChangePasswordRefusesAWrongCurrentPassword(t *testing.T) {
+	uc, in := givenChangePasswordRefusesAWrongCurrentPassword(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrInvalidCredentials) {
+		t.Fatalf("ChangePassword: %v, want account.ErrInvalidCredentials", err)
+	}
+}
+
+// TestForgotPasswordMailsTheLinkToAMember is ForgotPassword's scenario "mails the link to a member" (success).
+func TestForgotPasswordMailsTheLinkToAMember(t *testing.T) {
+	uc, in, then := givenForgotPasswordMailsTheLinkToAMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ForgotPassword: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestForgotPasswordSaysNothingOfAnUnknownAddress is ForgotPassword's scenario "says nothing of an unknown address" (success).
+func TestForgotPasswordSaysNothingOfAnUnknownAddress(t *testing.T) {
+	uc, in, then := givenForgotPasswordSaysNothingOfAnUnknownAddress(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ForgotPassword: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestResendVerificationMailsANewLinkToAnUnverifiedAccount is ResendVerification's scenario "mails a new link to an unverified account" (success).
+func TestResendVerificationMailsANewLinkToAnUnverifiedAccount(t *testing.T) {
+	uc, in, then := givenResendVerificationMailsANewLinkToAnUnverifiedAccount(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ResendVerification: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestResendVerificationSaysNothingOfAnUnknownAddress is ResendVerification's scenario "says nothing of an unknown address" (success).
+func TestResendVerificationSaysNothingOfAnUnknownAddress(t *testing.T) {
+	uc, in, then := givenResendVerificationSaysNothingOfAnUnknownAddress(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ResendVerification: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestResetPasswordChoosesANewPassword is ResetPassword's scenario "chooses a new password" (success).
+func TestResetPasswordChoosesANewPassword(t *testing.T) {
+	uc, in, then := givenResetPasswordChoosesANewPassword(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ResetPassword: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestResetPasswordRefusesALinkUsedOnce is ResetPassword's scenario "refuses a link used once" (refusal).
+func TestResetPasswordRefusesALinkUsedOnce(t *testing.T) {
+	uc, in := givenResetPasswordRefusesALinkUsedOnce(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrBadLink) {
+		t.Fatalf("ResetPassword: %v, want account.ErrBadLink", err)
+	}
+}
+
+// TestResetPasswordRefusesAShortPassword is ResetPassword's scenario "refuses a short password" (refusal).
+func TestResetPasswordRefusesAShortPassword(t *testing.T) {
+	uc, in := givenResetPasswordRefusesAShortPassword(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrWeakPassword) {
+		t.Fatalf("ResetPassword: %v, want account.ErrWeakPassword", err)
+	}
+}
+
 // TestSignInOpensASession is SignIn's scenario "opens a session" (success).
 func TestSignInOpensASession(t *testing.T) {
 	uc, in, then := givenSignInOpensASession(t)
@@ -78,6 +165,15 @@ func TestSignInRefusesALockedAccount(t *testing.T) {
 	}
 }
 
+// TestSignInRefusesAnUnverifiedAccount is SignIn's scenario "refuses an unverified account" (refusal).
+func TestSignInRefusesAnUnverifiedAccount(t *testing.T) {
+	uc, in := givenSignInRefusesAnUnverifiedAccount(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrUnverified) {
+		t.Fatalf("SignIn: %v, want account.ErrUnverified", err)
+	}
+}
+
 // TestSignOutEndsTheSession is SignOut's scenario "ends the session" (success).
 func TestSignOutEndsTheSession(t *testing.T) {
 	uc, in, then := givenSignOutEndsTheSession(t)
@@ -88,9 +184,29 @@ func TestSignOutEndsTheSession(t *testing.T) {
 	then(t, out)
 }
 
-// TestSignUpCreatesAnAccount is SignUp's scenario "creates an account" (success).
-func TestSignUpCreatesAnAccount(t *testing.T) {
-	uc, in, then := givenSignUpCreatesAnAccount(t)
+// TestSignUpCreatesAnAccountToVerify is SignUp's scenario "creates an account to verify" (success).
+func TestSignUpCreatesAnAccountToVerify(t *testing.T) {
+	uc, in, then := givenSignUpCreatesAnAccountToVerify(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("SignUp: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestSignUpCreatesAVerifiedAccountWhereAddressesAreTrusted is SignUp's scenario "creates a verified account where addresses are trusted" (success).
+func TestSignUpCreatesAVerifiedAccountWhereAddressesAreTrusted(t *testing.T) {
+	uc, in, then := givenSignUpCreatesAVerifiedAccountWhereAddressesAreTrusted(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("SignUp: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestSignUpAnswersATakenAddressAlike is SignUp's scenario "answers a taken address alike" (success).
+func TestSignUpAnswersATakenAddressAlike(t *testing.T) {
+	uc, in, then := givenSignUpAnswersATakenAddressAlike(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("SignUp: %v, want a success", err)
@@ -116,12 +232,31 @@ func TestSignUpRefusesAShortPassword(t *testing.T) {
 	}
 }
 
-// TestSignUpRefusesATakenAddress is SignUp's scenario "refuses a taken address" (refusal).
-func TestSignUpRefusesATakenAddress(t *testing.T) {
-	uc, in := givenSignUpRefusesATakenAddress(t)
+// TestVerifyEmailVerifiesTheAccountOfALink is VerifyEmail's scenario "verifies the account of a link" (success).
+func TestVerifyEmailVerifiesTheAccountOfALink(t *testing.T) {
+	uc, in, then := givenVerifyEmailVerifiesTheAccountOfALink(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("VerifyEmail: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestVerifyEmailRefusesAnExpiredLink is VerifyEmail's scenario "refuses an expired link" (refusal).
+func TestVerifyEmailRefusesAnExpiredLink(t *testing.T) {
+	uc, in := givenVerifyEmailRefusesAnExpiredLink(t)
 	_, err := uc.Execute(t.Context(), in)
-	if !errors.Is(err, account.ErrEmailTaken) {
-		t.Fatalf("SignUp: %v, want account.ErrEmailTaken", err)
+	if !errors.Is(err, account.ErrBadLink) {
+		t.Fatalf("VerifyEmail: %v, want account.ErrBadLink", err)
+	}
+}
+
+// TestVerifyEmailRefusesALinkOfAnotherPurpose is VerifyEmail's scenario "refuses a link of another purpose" (refusal).
+func TestVerifyEmailRefusesALinkOfAnotherPurpose(t *testing.T) {
+	uc, in := givenVerifyEmailRefusesALinkOfAnotherPurpose(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrBadLink) {
+		t.Fatalf("VerifyEmail: %v, want account.ErrBadLink", err)
 	}
 }
 
@@ -234,6 +369,11 @@ func (x recordedaccessSessionsV1) ByTokenHash(ctx context.Context, hash string) 
 func (x recordedaccessSessionsV1) Delete(ctx context.Context, id string) error {
 	*x.calls = append(*x.calls, "identity/port/Sessions@v1.Delete")
 	return x.next.Delete(ctx, id)
+}
+
+func (x recordedaccessSessionsV1) DeleteOf(ctx context.Context, userID string, keep string) error {
+	*x.calls = append(*x.calls, "identity/port/Sessions@v1.DeleteOf")
+	return x.next.DeleteOf(ctx, userID, keep)
 }
 
 func (x recordedaccessSessionsV1) NewID(ctx context.Context) (string, error) {

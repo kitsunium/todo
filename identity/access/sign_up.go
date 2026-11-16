@@ -7,17 +7,16 @@ package access
 import (
 	"context"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/kitsunium/todo/identity/account"
 )
 
-// maxPassword is the longest password an account takes: stretching one
-// costs time in proportion to nothing a caller should choose.
-const maxPassword = 128
-
 // execute is SignUp's body: the address, the name and the password are
-// checked, then the account is kept with its password stretched.
+// checked, then the account is kept with its password stretched, and the
+// link that proves its address mailed. An address that already has an
+// account is answered the same, and its member told someone tried: the
+// answer never says whether an address has an account. Where the deployment
+// trusts addresses, the account is verified at once and no link is mailed.
 func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOutput, error) {
 	email, err := account.NormalizeEmail(in.Email)
 	if err != nil {
@@ -27,17 +26,20 @@ func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOut
 	if name == "" {
 		return SignUpOutput{}, account.ErrNameRequired
 	}
-	if n := utf8.RuneCountInString(in.Password); n < account.MinPassword || n > maxPassword {
+	if !acceptable(in.Password) {
 		return SignUpOutput{}, account.ErrWeakPassword
 	}
-	if _, taken, err := h.accounts.ByEmail(ctx, email); err != nil {
-		return SignUpOutput{}, err
-	} else if taken {
-		return SignUpOutput{}, account.ErrEmailTaken
-	}
-	hash, err := h.passwords.Hash(ctx, in.Password)
+	out := SignUpOutput{Email: email, Verified: in.Trusted}
+	existing, taken, err := h.accounts.ByEmail(ctx, email)
 	if err != nil {
 		return SignUpOutput{}, err
+	}
+	hash, err := h.passwords.Hash(ctx, in.Password) // stretched either way: a taken address costs the same time
+	if err != nil {
+		return SignUpOutput{}, err
+	}
+	if taken {
+		return out, h.courier.AlreadyMember(ctx, existing)
 	}
 	now, err := h.clock.Now(ctx)
 	if err != nil {
@@ -47,9 +49,16 @@ func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOut
 	if err != nil {
 		return SignUpOutput{}, err
 	}
-	a := account.Account{ID: id, Email: email, Name: name, PasswordHash: hash, CreatedAt: now, UpdatedAt: now}
+	a := account.Account{ID: id, Email: email, Name: name, PasswordHash: hash, Verified: in.Trusted, CreatedAt: now, UpdatedAt: now}
 	if err := h.accounts.Save(ctx, a); err != nil {
 		return SignUpOutput{}, err
 	}
-	return SignUpOutput{Account: a}, nil
+	if in.Trusted {
+		return out, nil
+	}
+	secret, err := issue(ctx, h.links, h.secrets, a.ID, account.PurposeVerify, now, account.VerifyFor)
+	if err != nil {
+		return SignUpOutput{}, err
+	}
+	return out, h.courier.Verification(ctx, a, secret)
 }

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -40,9 +40,16 @@ func Wire(ctx context.Context, build Build) {
 	accounts := vault.NewAccounts()
 	stretcher := vault.NewStretcher()
 	wallClock := vault.NewWallClock()
-	signUp := access.NewSignUp(accounts, stretcher, wallClock)
+	oneTimeLinks := vault.NewOneTimeLinks()
 	drawer := vault.NewDrawer()
+	postman := vault.NewPostman(vault.BaseUrlSetting)
+	signUp := access.NewSignUp(accounts, stretcher, wallClock, oneTimeLinks, drawer, postman)
+	verifyEmail := access.NewVerifyEmail(drawer, oneTimeLinks, wallClock, accounts)
+	resendVerification := access.NewResendVerification(accounts, wallClock, oneTimeLinks, drawer, postman)
+	forgotPassword := access.NewForgotPassword(accounts, wallClock, oneTimeLinks, drawer, postman)
 	sessions := vault.NewSessions()
+	resetPassword := access.NewResetPassword(drawer, oneTimeLinks, wallClock, accounts, stretcher, sessions)
+	changePassword := access.NewChangePassword(accounts, stretcher, wallClock, sessions)
 	signIn := access.NewSignIn(accounts, wallClock, stretcher, drawer, sessions)
 	signOut := access.NewSignOut(sessions)
 	authenticate := access.NewAuthenticate(drawer, sessions, wallClock, accounts)
@@ -68,7 +75,7 @@ func Wire(ctx context.Context, build Build) {
 	carrier := post.NewCarrier()
 	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, carrier)
 	vault.Wire()
-	authapi.Wire(signUp, signIn, signOut, authenticate)
+	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, authenticate)
 	linkstore.Wire()
 	contactsapi.Wire(listContacts, requestContact, answerRequest, removeContact)
 	taskstore.Wire()

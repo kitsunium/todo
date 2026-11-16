@@ -21,18 +21,20 @@ const passphrase = "correct horse battery"
 type world struct {
 	accounts map[string]account.Account
 	sessions map[string]account.Session
+	links    map[string]account.Link
+	mails    []string // what the courier was asked, "kind to secret"
 	now      time.Time
 	n        int
 }
 
 func newWorld() *world {
-	return &world{accounts: map[string]account.Account{}, sessions: map[string]account.Session{}, now: epoch}
+	return &world{accounts: map[string]account.Account{}, sessions: map[string]account.Session{}, links: map[string]account.Link{}, now: epoch}
 }
 
-// member adds an account with the test passphrase.
+// member adds a verified account with the test passphrase.
 func (w *world) member(email string) account.Account {
 	w.n++
-	a := account.Account{ID: "user_" + strconv.Itoa(w.n), Email: email, Name: "Ada", PasswordHash: "hash:" + passphrase, CreatedAt: w.now, UpdatedAt: w.now}
+	a := account.Account{ID: "user_" + strconv.Itoa(w.n), Email: email, Name: "Ada", PasswordHash: "hash:" + passphrase, Verified: true, CreatedAt: w.now, UpdatedAt: w.now}
 	w.accounts[a.ID] = a
 	return a
 }
@@ -45,7 +47,17 @@ func (w *world) session(a account.Account, secret string, seen time.Time) accoun
 	return s
 }
 
+// link gives a member a one-time link of a purpose whose secret is secret.
+func (w *world) link(a account.Account, purpose, secret string, expires time.Time) account.Link {
+	w.n++
+	l := account.Link{ID: "link_" + strconv.Itoa(w.n), Hash: "digest:" + secret, Purpose: purpose, UserID: a.ID, CreatedAt: epoch, ExpiresAt: expires}
+	w.links[l.ID] = l
+	return l
+}
+
 type (
+	linksPort     struct{ *world }
+	courierPort   struct{ *world }
 	accountsPort  struct{ *world }
 	sessionsPort  struct{ *world }
 	passwordsPort struct{ *world }
@@ -101,6 +113,58 @@ func (p sessionsPort) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (p sessionsPort) DeleteOf(_ context.Context, userID, keep string) error {
+	for id, s := range p.sessions {
+		if s.UserID == userID && id != keep {
+			delete(p.sessions, id)
+		}
+	}
+	return nil
+}
+
+func (p linksPort) NewID(context.Context) (string, error) {
+	p.n++
+	return "link_" + strconv.Itoa(p.n), nil
+}
+
+func (p linksPort) Save(_ context.Context, l account.Link) error {
+	p.links[l.ID] = l
+	return nil
+}
+
+func (p linksPort) ByHash(_ context.Context, hash string) (account.Link, bool, error) {
+	for _, l := range p.links {
+		if l.Hash == hash {
+			return l, true, nil
+		}
+	}
+	return account.Link{}, false, nil
+}
+
+func (p linksPort) DeleteOf(_ context.Context, userID, purpose string) error {
+	for id, l := range p.links {
+		if l.UserID == userID && l.Purpose == purpose {
+			delete(p.links, id)
+		}
+	}
+	return nil
+}
+
+func (p courierPort) Verification(_ context.Context, to account.Account, secret string) error {
+	p.mails = append(p.mails, "verify "+to.Email+" "+secret)
+	return nil
+}
+
+func (p courierPort) Reset(_ context.Context, to account.Account, secret string) error {
+	p.mails = append(p.mails, "reset "+to.Email+" "+secret)
+	return nil
+}
+
+func (p courierPort) AlreadyMember(_ context.Context, to account.Account) error {
+	p.mails = append(p.mails, "already "+to.Email)
+	return nil
+}
+
 func (passwordsPort) Hash(_ context.Context, password string) (string, error) {
 	return "hash:" + password, nil
 }
@@ -122,7 +186,7 @@ func (secretsPort) Digest(_ context.Context, secret string) (string, error) {
 func (p clockPort) Now(context.Context) (time.Time, error) { return p.now, nil }
 
 func (w *world) signUp() SignUp {
-	return NewSignUp(accountsPort{w}, passwordsPort{w}, clockPort{w})
+	return NewSignUp(accountsPort{w}, passwordsPort{w}, clockPort{w}, linksPort{w}, secretsPort{w}, courierPort{w})
 }
 
 func (w *world) signIn() SignIn {

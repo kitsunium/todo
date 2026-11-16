@@ -19,9 +19,9 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 |---|---|---|
 | `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
 | `identity/account` | account (domain) | `Account` and its lock, `Session`, `NormalizeEmail`, the errors |
-| `identity/access` | access (application) | the use cases `SignUp` `SignIn` `Authenticate` `SignOut`, the ports `Accounts` `Sessions` `Passwords` `Secrets` `Clock` |
-| `identity/vault` | vault (adapter) | the stores `accounts` and `sessions` with their indexes, the queries `member` and `member-by-email` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
-| `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session` |
+| `identity/access` | access (application) | the use cases `SignUp` `VerifyEmail` `ResendVerification` `SignIn` `Authenticate` `SignOut` `ForgotPassword` `ResetPassword` `ChangePassword`, the ports `Accounts` `Sessions` `Links` `Courier` `Passwords` `Secrets` `Clock`; `links.go` is what the one-time links share |
+| `identity/vault` | vault (adapter) | the stores `accounts`, `sessions` and `links` with their indexes, `Postman` (the mails of an account, sent through `post`), the setting `base-url`, the queries `member` and `member-by-email` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
+| `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session`, the setting `verify-addresses` |
 | `contacts/link` | link (domain) | `Link`, `PairOf`, the `Requests` workflow, the errors |
 | `contacts/circle` | circle (application) | the use cases `RequestContact` `AnswerRequest` `RemoveContact` `ListContacts` `AreContacts`, the ports `Links` `People` `Notices` `Clock` |
 | `contacts/linkstore` | linkstore (adapter) | the store `links`, the topic `events`, `Links`, `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
@@ -75,8 +75,9 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   an id alone: another member's task is `ErrNotFound`, never a 403.
 - **A secret is never kept, answered or logged**: a password is stretched
   by `Stretcher`, a session's secret kept as its SHA-256, and both fields
-  are tagged `app:"secret"`. An unknown address and a wrong password are
-  answered alike, and cost the same time (`Stretcher.verify` on an empty
+  are tagged `app:"secret"`. What a stranger may ask is answered the same whether an
+  address has an account or not (sign-up, a new link, a forgotten
+  password); an unknown address and a wrong password are answered alike, and cost the same time (`Stretcher.verify` on an empty
   hash).
 - **A component's data is its own**: another component reaches it through
   a query the owner declares (`vault.MemberQuery.Ask`,

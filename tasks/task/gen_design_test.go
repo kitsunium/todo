@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
 package task
 
@@ -13,7 +13,7 @@ import (
 
 // designDigest is the design the properties run under: with the property's
 // path, it seeds its values, so a pull request replays the same ones.
-const designDigest = "sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63"
+const designDigest = "sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af"
 
 // designSeed is the seed of a property: the design's digest and its path —
 // and DESIGN_SEED when it is set.

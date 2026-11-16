@@ -48,7 +48,7 @@ func (a *Accounts) newID(ctx context.Context) (r0 string, err error) {
 // save is Accounts.Save's body: the account replaces what its id held.
 func (a *Accounts) save(ctx context.Context, acc account.Account) (err error) {
 	return AccountsStore.Put(ctx, AccountRecord{
-		ID: acc.ID, Email: acc.Email, Name: acc.Name, PasswordHash: acc.PasswordHash,
+		ID: acc.ID, Email: acc.Email, Name: acc.Name, PasswordHash: acc.PasswordHash, Verified: acc.Verified,
 		FailedLogins: acc.FailedLogins, LockedUntil: acc.LockedUntil, CreatedAt: acc.CreatedAt, UpdatedAt: acc.UpdatedAt,
 	})
 }
@@ -56,7 +56,7 @@ func (a *Accounts) save(ctx context.Context, acc account.Account) (err error) {
 // accountOf is the account a record keeps.
 func accountOf(r AccountRecord) account.Account {
 	return account.Account{
-		ID: r.ID, Email: r.Email, Name: r.Name, PasswordHash: r.PasswordHash,
+		ID: r.ID, Email: r.Email, Name: r.Name, PasswordHash: r.PasswordHash, Verified: r.Verified,
 		FailedLogins: r.FailedLogins, LockedUntil: r.LockedUntil, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }

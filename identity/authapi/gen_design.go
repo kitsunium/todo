@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
 // Package authapi — The HTTP API of the accounts, and the handler that says
 // who calls a route.
@@ -25,11 +25,27 @@ const (
 	CookieName string = "todo_session"
 )
 
+// ChangeRequest — The current password and the new one.
+type ChangeRequest struct {
+	Current  string `json:"current" app:"secret"`
+	Password string `json:"password" app:"secret"`
+}
+
 // Credentials — What a request proves its member with, the session cookie of
 // a browser or the same secret as a bearer token.
 type Credentials struct {
 	Cookie        string `cookie:"todo_session"`
 	Authorization string `header:"Authorization"`
+}
+
+// EmailRequest — An address.
+type EmailRequest struct {
+	Email string `json:"email" app:"personal"`
+}
+
+// LinkRequest — The secret of a one-time link.
+type LinkRequest struct {
+	Token string `json:"token" app:"secret"`
 }
 
 // NoInput — A request, or an answer, that says nothing.
@@ -48,6 +64,12 @@ type Profile struct {
 	ID    string `json:"id" app:"public"`
 	Email string `json:"email" app:"personal"`
 	Name  string `json:"name" app:"personal"`
+}
+
+// ResetRequest — The secret of a reset link and the new password.
+type ResetRequest struct {
+	Token    string `json:"token" app:"secret"`
+	Password string `json:"password" app:"secret"`
 }
 
 // SignInRequest — An address and its password.
@@ -70,14 +92,62 @@ type SignedIn struct {
 	Token string  `json:"token" app:"secret"`
 }
 
+// SignedUp — What a sign-up answers, the same whether the address had an
+// account or not.
+type SignedUp struct {
+	Email string `json:"email" app:"personal"`
+	// Status is verification_sent, or verified where the deployment trusts
+	// addresses.
+	Status string `json:"status" app:"public"`
+}
+
 // Service is authapi's framework service: what it declares, drawn and run.
 var Service = app.NewService("authapi", "The HTTP API of the accounts, and the handler that says who calls a route.")
+
+// VerifyAddressesSetting — Whether a new account proves its address by a
+// mailed link before it signs in; off where the deployment has no mail relay.
+var VerifyAddressesSetting = Service.Setting[bool]("verify-addresses", true)
 
 var _ = Service.Endpoint("POST /api/auth/signup", SignUp, app.RateLimitPerClient(2, 5))
 
 // SignUp serves POST /api/auth/signup: its body is the hand-written signUp.
-func SignUp(ctx context.Context, in SignUpRequest) (Profile, error) {
+func SignUp(ctx context.Context, in SignUpRequest) (SignedUp, error) {
 	return signUp(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/auth/verify", Verify, app.RateLimitPerClient(2, 5))
+
+// Verify serves POST /api/auth/verify: its body is the hand-written verify.
+func Verify(ctx context.Context, in LinkRequest) (Profile, error) {
+	return verify(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/auth/verify/resend", Resend, app.RateLimitPerClient(2, 5))
+
+// Resend serves POST /api/auth/verify/resend: its body is the hand-written resend.
+func Resend(ctx context.Context, in EmailRequest) (NoInput, error) {
+	return resend(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/auth/password/forgot", Forgot, app.RateLimitPerClient(2, 5))
+
+// Forgot serves POST /api/auth/password/forgot: its body is the hand-written forgot.
+func Forgot(ctx context.Context, in EmailRequest) (NoInput, error) {
+	return forgot(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/auth/password/reset", Reset, app.RateLimitPerClient(2, 5))
+
+// Reset serves POST /api/auth/password/reset: its body is the hand-written reset.
+func Reset(ctx context.Context, in ResetRequest) (NoInput, error) {
+	return reset(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/auth/password", ChangePassword, app.Auth(), app.RateLimitPerClient(2, 5))
+
+// ChangePassword serves POST /api/auth/password: its body is the hand-written changePassword.
+func ChangePassword(ctx context.Context, in ChangeRequest) (NoInput, error) {
+	return changePassword(ctx, in)
 }
 
 var _ = Service.Endpoint("POST /api/auth/login", SignIn, app.RateLimitPerClient(2, 5))
@@ -113,16 +183,28 @@ func Authenticate(ctx context.Context, in Credentials) (app.UID, Principal, erro
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
-	signUp       access.SignUp
-	signIn       access.SignIn
-	signOut      access.SignOut
-	authenticate access.Authenticate
+	signUp                 access.SignUp
+	verifyAddressesSetting *app.Setting[bool]
+	verifyEmail            access.VerifyEmail
+	resendVerification     access.ResendVerification
+	forgotPassword         access.ForgotPassword
+	resetPassword          access.ResetPassword
+	changePassword         access.ChangePassword
+	signIn                 access.SignIn
+	signOut                access.SignOut
+	authenticate           access.Authenticate
 }
 
 // Wire gives the handlers what they use: the role that mounts authapi calls it
 // before its App runs.
-func Wire(signUp access.SignUp, signIn access.SignIn, signOut access.SignOut, authenticate access.Authenticate) {
+func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verifyEmail access.VerifyEmail, resendVerification access.ResendVerification, forgotPassword access.ForgotPassword, resetPassword access.ResetPassword, changePassword access.ChangePassword, signIn access.SignIn, signOut access.SignOut, authenticate access.Authenticate) {
 	wired.signUp = signUp
+	wired.verifyAddressesSetting = verifyAddressesSetting
+	wired.verifyEmail = verifyEmail
+	wired.resendVerification = resendVerification
+	wired.forgotPassword = forgotPassword
+	wired.resetPassword = resetPassword
+	wired.changePassword = changePassword
 	wired.signIn = signIn
 	wired.signOut = signOut
 	wired.authenticate = authenticate

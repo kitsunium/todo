@@ -7,6 +7,8 @@ h2 { margin: 1.5rem 0 .5rem; font-size: 1.1rem; }
 form { display: grid; gap: .5rem; }
 #door { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
 #door[hidden], #desk[hidden] { display: none; }
+#word { padding: .5rem .75rem; border: 1px solid var(--accent); border-radius: .4rem; color: var(--accent); }
+a { color: var(--accent); }
 label { display: grid; gap: .15rem; font-size: .9rem; color: var(--soft); }
 input, select, button { font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; color: var(--ink); }
 button { cursor: pointer; }

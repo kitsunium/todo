@@ -37,9 +37,16 @@ function notice(text) {
   $("notice").hidden = !text;
 }
 
+// word says something that went well.
+function word(text) {
+  $("word").textContent = text || "";
+  $("word").hidden = !text;
+}
+
 // attempt runs an action and says what went wrong, if anything did.
 async function attempt(action) {
   notice("");
+  word("");
   try {
     await action();
   } catch (err) {
@@ -48,8 +55,10 @@ async function attempt(action) {
   }
 }
 
-function show(me) {
-  $("door").hidden = Boolean(me);
+function show(me, page) {
+  $("door").hidden = Boolean(me) || Boolean(page);
+  $("lost").hidden = page !== "lost";
+  $("renew").hidden = page !== "renew";
   $("desk").hidden = !me;
   $("who").hidden = !me;
   $("who-name").textContent = me ? me.name : "";
@@ -119,8 +128,13 @@ $("signup").addEventListener("submit", (ev) => {
   ev.preventDefault();
   attempt(async () => {
     const f = fields(ev.target);
-    await call("POST", "/api/auth/signup", { email: f.email, name: f.name, password: f.password });
-    await enter(f);
+    const res = await call("POST", "/api/auth/signup", { email: f.email, name: f.name, password: f.password });
+    if (res.status === "verified") {
+      await enter(f);
+      return;
+    }
+    ev.target.reset();
+    word("Un lien de confirmation vient d’être envoyé à " + res.email + ". Ouvrez-le, puis connectez-vous.");
   });
 });
 
@@ -151,8 +165,42 @@ for (const b of document.querySelectorAll("#states button")) {
   }));
 }
 
-// At load: a session still open goes straight to the desk.
-call("GET", "/api/auth/me").then(async (me) => {
-  show(me);
-  await refresh();
-}, () => show(null));
+$("forgot").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  attempt(async () => {
+    await call("POST", "/api/auth/password/forgot", { email: fields(ev.target).email });
+    ev.target.reset();
+    word("Si cette adresse a un compte, un lien vient de lui être envoyé.");
+  });
+});
+
+$("reset").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  attempt(async () => {
+    await call("POST", "/api/auth/password/reset", { token: token, password: fields(ev.target).password });
+    history.replaceState(null, "", "/");
+    show(null);
+    word("Votre mot de passe est changé. Connectez-vous.");
+  });
+});
+
+// At load: the link of a mail does what it is for; else a session still
+// open goes straight to the desk.
+const token = new URLSearchParams(location.search).get("token") || "";
+if (location.pathname === "/verify" && token) {
+  show(null);
+  attempt(async () => {
+    await call("POST", "/api/auth/verify", { token: token });
+    history.replaceState(null, "", "/");
+    word("Votre adresse est confirmée. Connectez-vous.");
+  });
+} else if (location.pathname === "/reset" && token) {
+  show(null, "renew");
+} else if (location.pathname === "/forgot") {
+  show(null, "lost");
+} else {
+  call("GET", "/api/auth/me").then(async (me) => {
+    show(me);
+    await refresh();
+  }, () => show(null));
+}

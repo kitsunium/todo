@@ -17,14 +17,66 @@ import (
 	"github.com/kitsunium/todo/identity/account"
 )
 
-// signUp is POST /api/auth/signup's body; what it uses is in wired.
-func signUp(ctx context.Context, in SignUpRequest) (out Profile, err error) {
-	res, err := wired.signUp.Execute(ctx, access.SignUpInput{Email: in.Email, Name: in.Name, Password: in.Password})
+// signUp is POST /api/auth/signup's body; what it uses is in wired. Its
+// answer is the same whether the address had an account or not.
+func signUp(ctx context.Context, in SignUpRequest) (out SignedUp, err error) {
+	res, err := wired.signUp.Execute(ctx, access.SignUpInput{
+		Email: in.Email, Name: in.Name, Password: in.Password, Trusted: !wired.verifyAddressesSetting.Get(),
+	})
+	if err != nil {
+		return SignedUp{}, refusal(err)
+	}
+	out = SignedUp{Email: res.Email, Status: "verification_sent"}
+	if res.Verified {
+		out.Status = "verified"
+	}
+	return out, nil
+}
+
+// verify is POST /api/auth/verify's body; what it uses is in wired.
+func verify(ctx context.Context, in LinkRequest) (out Profile, err error) {
+	res, err := wired.verifyEmail.Execute(ctx, access.VerifyEmailInput{Secret: in.Token})
 	if err != nil {
 		return Profile{}, refusal(err)
 	}
-	logger.Info(ctx, app.Log(ctx), "account created", logger.String("user", res.Account.ID))
+	logger.Info(ctx, app.Log(ctx), "address verified", logger.String("user", res.Account.ID))
 	return profileOf(res.Account), nil
+}
+
+// resend is POST /api/auth/verify/resend's body; what it uses is in wired.
+func resend(ctx context.Context, in EmailRequest) (out NoInput, err error) {
+	_, err = wired.resendVerification.Execute(ctx, access.ResendVerificationInput{Email: in.Email})
+	return NoInput{}, err
+}
+
+// forgot is POST /api/auth/password/forgot's body; what it uses is in wired.
+func forgot(ctx context.Context, in EmailRequest) (out NoInput, err error) {
+	_, err = wired.forgotPassword.Execute(ctx, access.ForgotPasswordInput{Email: in.Email})
+	return NoInput{}, err
+}
+
+// reset is POST /api/auth/password/reset's body; what it uses is in wired.
+func reset(ctx context.Context, in ResetRequest) (out NoInput, err error) {
+	if _, err := wired.resetPassword.Execute(ctx, access.ResetPasswordInput{Secret: in.Token, Password: in.Password}); err != nil {
+		return NoInput{}, refusal(err)
+	}
+	return NoInput{}, nil
+}
+
+// changePassword is POST /api/auth/password's body; what it uses is in wired.
+func changePassword(ctx context.Context, in ChangeRequest) (out NoInput, err error) {
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return NoInput{}, app.Unauthenticated("sign in first")
+	}
+	p, _ := app.AuthData[Principal](ctx)
+	_, err = wired.changePassword.Execute(ctx, access.ChangePasswordInput{
+		UserID: string(uid), SessionID: p.SessionID, Current: in.Current, Password: in.Password,
+	})
+	if err != nil {
+		return NoInput{}, refusal(err)
+	}
+	return NoInput{}, nil
 }
 
 // signIn is POST /api/auth/login's body; what it uses is in wired. The
@@ -105,8 +157,8 @@ func profileOf(a account.Account) Profile {
 }
 
 // refusal is a use case's error as the API answers it, with the codes a
-// client branches on: 400 with the field at fault, 409 for an address
-// already taken, 401 invalid_credentials, 403 account_locked.
+// client branches on: 400 with the field at fault or invalid_token for a link,
+// 401 invalid_credentials, 403 account_locked or email_unverified.
 func refusal(err error) error {
 	invalid := func(path, rule string, cause error) error {
 		e := app.Invalid("the request is invalid")
@@ -120,8 +172,10 @@ func refusal(err error) error {
 		return invalid("name", "required", err)
 	case errors.Is(err, account.ErrWeakPassword):
 		return invalid("password", "length", err)
-	case errors.Is(err, account.ErrEmailTaken):
-		return app.Conflict("this address already has an account")
+	case errors.Is(err, account.ErrUnverified):
+		return &app.Error{Status: http.StatusForbidden, Code: "email_unverified", Message: "confirm your email address first: the link is in your inbox"}
+	case errors.Is(err, account.ErrBadLink):
+		return &app.Error{Status: http.StatusBadRequest, Code: "invalid_token", Message: "this link is invalid or has expired: ask for a new one"}
 	case errors.Is(err, account.ErrInvalidCredentials):
 		return &app.Error{Status: http.StatusUnauthorized, Code: "invalid_credentials", Message: "the email address or the password is not right"}
 	case errors.Is(err, account.ErrLocked):

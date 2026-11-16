@@ -77,3 +77,14 @@ func givenSignInRefusesALockedAccount(t *testing.T) (SignIn, SignInInput) {
 	})
 	return uc, SignInInput{Email: a.Email, Password: passphrase}
 }
+
+// givenSignInRefusesAnUnverifiedAccount builds SignIn for "refuses an unverified account": the use case and the input it
+// refuses with account.ErrUnverified.
+func givenSignInRefusesAnUnverifiedAccount(t *testing.T) (SignIn, SignInInput) {
+	t.Helper()
+	w := newWorld()
+	a := w.member("ada@example.com")
+	a.Verified = false
+	w.accounts[a.ID] = a
+	return w.signIn(), SignInInput{Email: a.Email, Password: passphrase}
+}

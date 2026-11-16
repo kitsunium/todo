@@ -15,7 +15,8 @@ import (
 // answered alike, and an unknown address still has a password checked, so
 // neither the answer nor its time says whether an address has an account.
 // The fifth wrong password in a row locks the account for LockFor; a right
-// one clears the count.
+// one clears the count. An account whose address is not proven signs
+// nobody in.
 func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOutput, error) {
 	email, err := account.NormalizeEmail(in.Email)
 	if err != nil {
@@ -55,6 +56,11 @@ func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOut
 		if err := h.accounts.Save(ctx, a); err != nil {
 			return SignInOutput{}, err
 		}
+	}
+	if !a.Verified {
+		// Said only once the password proved right: the answer never tells a
+		// stranger whether an address has an account.
+		return SignInOutput{}, account.ErrUnverified
 	}
 	secret, digest, err := h.secrets.New(ctx)
 	if err != nil {

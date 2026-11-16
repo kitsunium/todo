@@ -14,6 +14,7 @@
   </header>
 
   <p id="notice" role="alert" hidden></p>
+  <p id="word" role="status" hidden></p>
 
   <main id="door" hidden>
     <form id="login">
@@ -21,6 +22,7 @@
       <label>Adresse <input name="email" type="email" autocomplete="username" required></label>
       <label>Mot de passe <input name="password" type="password" autocomplete="current-password" required></label>
       <button>Se connecter</button>
+      <p><a href="/forgot">Mot de passe oublié ?</a></p>
     </form>
     <form id="signup">
       <h2>Créer un compte</h2>
@@ -28,6 +30,23 @@
       <label>Adresse <input name="email" type="email" autocomplete="username" required></label>
       <label>Mot de passe (10 caractères au moins) <input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
       <button>Créer le compte</button>
+    </form>
+  </main>
+
+  <main id="lost" hidden>
+    <form id="forgot">
+      <h2>Mot de passe oublié</h2>
+      <label>Adresse <input name="email" type="email" autocomplete="username" required></label>
+      <button>Recevoir le lien</button>
+      <p><a href="/">Retour</a></p>
+    </form>
+  </main>
+
+  <main id="renew" hidden>
+    <form id="reset">
+      <h2>Nouveau mot de passe</h2>
+      <label>Mot de passe (10 caractères au moins) <input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+      <button>Choisir ce mot de passe</button>
     </form>
   </main>
 

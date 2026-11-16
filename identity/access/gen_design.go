@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
 // Package access — Signing up, signing in and out, and naming the member a
 // session belongs to.
@@ -33,6 +33,22 @@ type ClockV1 interface {
 	Now(ctx context.Context) (time.Time, error)
 }
 
+// CourierV1 writes to a member the mails of their account, each with the
+// link's secret only the mail carries.
+type CourierV1 interface {
+	AlreadyMember(ctx context.Context, to account.Account) error
+	Reset(ctx context.Context, to account.Account, secret string) error
+	Verification(ctx context.Context, to account.Account, secret string) error
+}
+
+// LinksV1 keeps the one-time links.
+type LinksV1 interface {
+	ByHash(ctx context.Context, hash string) (account.Link, bool, error)
+	DeleteOf(ctx context.Context, userID string, purpose string) error
+	NewID(ctx context.Context) (string, error)
+	Save(ctx context.Context, l account.Link) error
+}
+
 // PasswordsV1 stretches a password and checks one against what was kept.
 type PasswordsV1 interface {
 	Hash(ctx context.Context, password string) (string, error)
@@ -49,6 +65,7 @@ type SecretsV1 interface {
 type SessionsV1 interface {
 	ByTokenHash(ctx context.Context, hash string) (account.Session, bool, error)
 	Delete(ctx context.Context, id string) error
+	DeleteOf(ctx context.Context, userID string, keep string) error
 	NewID(ctx context.Context) (string, error)
 	Save(ctx context.Context, s account.Session) error
 }
@@ -90,6 +107,154 @@ func (h *AuthenticateHandler) Execute(ctx context.Context, in AuthenticateInput)
 }
 
 var _ Authenticate = (*AuthenticateHandler)(nil)
+
+// ChangePassword replaces a member's password for one who knows the current
+// one, and ends their other sessions.
+type ChangePassword interface {
+	Execute(ctx context.Context, in ChangePasswordInput) (ChangePasswordOutput, error)
+}
+
+// ChangePasswordInput is ChangePassword's input: a field added breaks no caller.
+type ChangePasswordInput struct {
+	UserID    string
+	SessionID string
+	Current   string
+	Password  string
+}
+
+// ChangePasswordOutput is ChangePassword's output.
+type ChangePasswordOutput struct {
+}
+
+// ChangePasswordHandler runs ChangePassword: its body is the hand-written execute.
+type ChangePasswordHandler struct {
+	accounts  AccountsV1
+	passwords PasswordsV1
+	clock     ClockV1
+	sessions  SessionsV1
+}
+
+// NewChangePassword builds ChangePassword on what it calls.
+func NewChangePassword(accounts AccountsV1, passwords PasswordsV1, clock ClockV1, sessions SessionsV1) *ChangePasswordHandler {
+	return &ChangePasswordHandler{accounts: accounts, passwords: passwords, clock: clock, sessions: sessions}
+}
+
+// Execute runs ChangePassword.
+func (h *ChangePasswordHandler) Execute(ctx context.Context, in ChangePasswordInput) (ChangePasswordOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ChangePassword = (*ChangePasswordHandler)(nil)
+
+// ForgotPassword mails an address the link that chooses a new password, when
+// it has an account, and answers alike when it has none.
+type ForgotPassword interface {
+	Execute(ctx context.Context, in ForgotPasswordInput) (ForgotPasswordOutput, error)
+}
+
+// ForgotPasswordInput is ForgotPassword's input: a field added breaks no caller.
+type ForgotPasswordInput struct {
+	Email string
+}
+
+// ForgotPasswordOutput is ForgotPassword's output.
+type ForgotPasswordOutput struct {
+}
+
+// ForgotPasswordHandler runs ForgotPassword: its body is the hand-written execute.
+type ForgotPasswordHandler struct {
+	accounts AccountsV1
+	clock    ClockV1
+	links    LinksV1
+	secrets  SecretsV1
+	courier  CourierV1
+}
+
+// NewForgotPassword builds ForgotPassword on what it calls.
+func NewForgotPassword(accounts AccountsV1, clock ClockV1, links LinksV1, secrets SecretsV1, courier CourierV1) *ForgotPasswordHandler {
+	return &ForgotPasswordHandler{accounts: accounts, clock: clock, links: links, secrets: secrets, courier: courier}
+}
+
+// Execute runs ForgotPassword.
+func (h *ForgotPasswordHandler) Execute(ctx context.Context, in ForgotPasswordInput) (ForgotPasswordOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ForgotPassword = (*ForgotPasswordHandler)(nil)
+
+// ResendVerification mails a new link to an address whose account is not
+// verified yet, and says nothing of the others.
+type ResendVerification interface {
+	Execute(ctx context.Context, in ResendVerificationInput) (ResendVerificationOutput, error)
+}
+
+// ResendVerificationInput is ResendVerification's input: a field added breaks no caller.
+type ResendVerificationInput struct {
+	Email string
+}
+
+// ResendVerificationOutput is ResendVerification's output.
+type ResendVerificationOutput struct {
+}
+
+// ResendVerificationHandler runs ResendVerification: its body is the hand-written execute.
+type ResendVerificationHandler struct {
+	accounts AccountsV1
+	clock    ClockV1
+	links    LinksV1
+	secrets  SecretsV1
+	courier  CourierV1
+}
+
+// NewResendVerification builds ResendVerification on what it calls.
+func NewResendVerification(accounts AccountsV1, clock ClockV1, links LinksV1, secrets SecretsV1, courier CourierV1) *ResendVerificationHandler {
+	return &ResendVerificationHandler{accounts: accounts, clock: clock, links: links, secrets: secrets, courier: courier}
+}
+
+// Execute runs ResendVerification.
+func (h *ResendVerificationHandler) Execute(ctx context.Context, in ResendVerificationInput) (ResendVerificationOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ResendVerification = (*ResendVerificationHandler)(nil)
+
+// ResetPassword chooses a new password with the secret of a reset link, lifts
+// the lock, proves the address and ends every session.
+type ResetPassword interface {
+	Execute(ctx context.Context, in ResetPasswordInput) (ResetPasswordOutput, error)
+}
+
+// ResetPasswordInput is ResetPassword's input: a field added breaks no caller.
+type ResetPasswordInput struct {
+	Secret   string
+	Password string
+}
+
+// ResetPasswordOutput is ResetPassword's output.
+type ResetPasswordOutput struct {
+}
+
+// ResetPasswordHandler runs ResetPassword: its body is the hand-written execute.
+type ResetPasswordHandler struct {
+	secrets   SecretsV1
+	links     LinksV1
+	clock     ClockV1
+	accounts  AccountsV1
+	passwords PasswordsV1
+	sessions  SessionsV1
+}
+
+// NewResetPassword builds ResetPassword on what it calls.
+func NewResetPassword(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1, passwords PasswordsV1, sessions SessionsV1) *ResetPasswordHandler {
+	return &ResetPasswordHandler{secrets: secrets, links: links, clock: clock, accounts: accounts, passwords: passwords, sessions: sessions}
+}
+
+// Execute runs ResetPassword.
+func (h *ResetPasswordHandler) Execute(ctx context.Context, in ResetPasswordInput) (ResetPasswordOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ResetPassword = (*ResetPasswordHandler)(nil)
 
 // SignIn opens a session for an address and its password; five wrong passwords
 // in a row lock the account for fifteen minutes.
@@ -162,7 +327,8 @@ func (h *SignOutHandler) Execute(ctx context.Context, in SignOutInput) (SignOutO
 
 var _ SignOut = (*SignOutHandler)(nil)
 
-// SignUp creates an account.
+// SignUp creates an account and mails the link that proves its address; an
+// address that already has an account is answered alike, and its member told.
 type SignUp interface {
 	Execute(ctx context.Context, in SignUpInput) (SignUpOutput, error)
 }
@@ -172,11 +338,13 @@ type SignUpInput struct {
 	Email    string
 	Name     string
 	Password string
+	Trusted  bool
 }
 
 // SignUpOutput is SignUp's output.
 type SignUpOutput struct {
-	Account account.Account
+	Email    string
+	Verified bool
 }
 
 // SignUpHandler runs SignUp: its body is the hand-written execute.
@@ -184,11 +352,14 @@ type SignUpHandler struct {
 	accounts  AccountsV1
 	passwords PasswordsV1
 	clock     ClockV1
+	links     LinksV1
+	secrets   SecretsV1
+	courier   CourierV1
 }
 
 // NewSignUp builds SignUp on what it calls.
-func NewSignUp(accounts AccountsV1, passwords PasswordsV1, clock ClockV1) *SignUpHandler {
-	return &SignUpHandler{accounts: accounts, passwords: passwords, clock: clock}
+func NewSignUp(accounts AccountsV1, passwords PasswordsV1, clock ClockV1, links LinksV1, secrets SecretsV1, courier CourierV1) *SignUpHandler {
+	return &SignUpHandler{accounts: accounts, passwords: passwords, clock: clock, links: links, secrets: secrets, courier: courier}
 }
 
 // Execute runs SignUp.
@@ -197,3 +368,39 @@ func (h *SignUpHandler) Execute(ctx context.Context, in SignUpInput) (SignUpOutp
 }
 
 var _ SignUp = (*SignUpHandler)(nil)
+
+// VerifyEmail proves an account's address with the secret of the link it was
+// mailed.
+type VerifyEmail interface {
+	Execute(ctx context.Context, in VerifyEmailInput) (VerifyEmailOutput, error)
+}
+
+// VerifyEmailInput is VerifyEmail's input: a field added breaks no caller.
+type VerifyEmailInput struct {
+	Secret string
+}
+
+// VerifyEmailOutput is VerifyEmail's output.
+type VerifyEmailOutput struct {
+	Account account.Account
+}
+
+// VerifyEmailHandler runs VerifyEmail: its body is the hand-written execute.
+type VerifyEmailHandler struct {
+	secrets  SecretsV1
+	links    LinksV1
+	clock    ClockV1
+	accounts AccountsV1
+}
+
+// NewVerifyEmail builds VerifyEmail on what it calls.
+func NewVerifyEmail(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1) *VerifyEmailHandler {
+	return &VerifyEmailHandler{secrets: secrets, links: links, clock: clock, accounts: accounts}
+}
+
+// Execute runs VerifyEmail.
+func (h *VerifyEmailHandler) Execute(ctx context.Context, in VerifyEmailInput) (VerifyEmailOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ VerifyEmail = (*VerifyEmailHandler)(nil)

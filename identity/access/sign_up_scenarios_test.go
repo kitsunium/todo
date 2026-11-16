@@ -6,25 +6,77 @@ package access
 
 import (
 	"testing"
+
+	"github.com/kitsunium/todo/identity/account"
 )
 
-// givenSignUpCreatesAnAccount builds SignUp for "creates an account": the use case, its input, and
+// byEmail is the one account of an address in the world, for a test to read.
+func (w *world) byEmail(t *testing.T, email string) account.Account {
+	t.Helper()
+	a, ok, _ := accountsPort{w}.ByEmail(t.Context(), email)
+	if !ok {
+		t.Fatalf("no account of %s", email)
+	}
+	return a
+}
+
+// givenSignUpCreatesAnAccountToVerify builds SignUp for "creates an account to verify": the use case, its input, and
 // what its output must be.
-func givenSignUpCreatesAnAccount(t *testing.T) (SignUp, SignUpInput, func(*testing.T, SignUpOutput)) {
+func givenSignUpCreatesAnAccountToVerify(t *testing.T) (SignUp, SignUpInput, func(*testing.T, SignUpOutput)) {
 	t.Helper()
 	w := newWorld()
 	in := SignUpInput{Email: "  Ada@Example.com ", Name: " Ada   Lovelace ", Password: passphrase}
 	return w.signUp(), in, func(t *testing.T, out SignUpOutput) {
 		t.Helper()
-		a := out.Account
-		if a.ID == "" || a.Email != "ada@example.com" || a.Name != "Ada Lovelace" || !a.CreatedAt.Equal(epoch) {
+		if out.Email != "ada@example.com" || out.Verified {
+			t.Errorf("the answer: %+v", out)
+		}
+		a := w.byEmail(t, "ada@example.com")
+		if a.Name != "Ada Lovelace" || a.Verified || !a.CreatedAt.Equal(epoch) || a.PasswordHash == "" || a.PasswordHash == passphrase {
 			t.Errorf("the account created: %+v", a)
 		}
-		if a.PasswordHash == "" || a.PasswordHash == passphrase {
-			t.Errorf("the password is kept as %q: it must be stretched", a.PasswordHash)
+		if len(w.links) != 1 || len(w.mails) != 1 {
+			t.Fatalf("%d link(s) and %d mail(s), want one of each", len(w.links), len(w.mails))
 		}
-		if kept, ok := w.accounts[a.ID]; !ok || kept != a {
-			t.Errorf("the store keeps %+v, want %+v", kept, a)
+		for _, l := range w.links {
+			if l.UserID != a.ID || l.Purpose != account.PurposeVerify || !l.ExpiresAt.Equal(epoch.Add(account.VerifyFor)) {
+				t.Errorf("the link: %+v", l)
+			}
+		}
+	}
+}
+
+// givenSignUpCreatesAVerifiedAccountWhereAddressesAreTrusted builds SignUp for "creates a verified account where addresses are trusted": the use case, its input, and
+// what its output must be.
+func givenSignUpCreatesAVerifiedAccountWhereAddressesAreTrusted(t *testing.T) (SignUp, SignUpInput, func(*testing.T, SignUpOutput)) {
+	t.Helper()
+	w := newWorld()
+	in := SignUpInput{Email: "ada@example.com", Name: "Ada", Password: passphrase, Trusted: true}
+	return w.signUp(), in, func(t *testing.T, out SignUpOutput) {
+		t.Helper()
+		if !out.Verified || !w.byEmail(t, "ada@example.com").Verified || len(w.links) != 0 || len(w.mails) != 0 {
+			t.Errorf("answer %+v, %d link(s), %d mail(s): want a verified account and nothing mailed", out, len(w.links), len(w.mails))
+		}
+	}
+}
+
+// givenSignUpAnswersATakenAddressAlike builds SignUp for "answers a taken address alike": the use case, its input, and
+// what its output must be.
+func givenSignUpAnswersATakenAddressAlike(t *testing.T) (SignUp, SignUpInput, func(*testing.T, SignUpOutput)) {
+	t.Helper()
+	w := newWorld()
+	first := w.member("ada@example.com")
+	in := SignUpInput{Email: "ADA@example.com", Name: "Another Ada", Password: "another passphrase"}
+	return w.signUp(), in, func(t *testing.T, out SignUpOutput) {
+		t.Helper()
+		if out.Email != "ada@example.com" || out.Verified {
+			t.Errorf("the answer: %+v, want what a new address gets", out)
+		}
+		if len(w.accounts) != 1 || w.accounts[first.ID] != first {
+			t.Errorf("the accounts: %+v, want the first one untouched", w.accounts)
+		}
+		if len(w.mails) != 1 || w.mails[0] != "already ada@example.com" {
+			t.Errorf("the mails: %q, want its member told", w.mails)
 		}
 	}
 }
@@ -41,13 +93,4 @@ func givenSignUpRefusesAnInvalidAddress(t *testing.T) (SignUp, SignUpInput) {
 func givenSignUpRefusesAShortPassword(t *testing.T) (SignUp, SignUpInput) {
 	t.Helper()
 	return newWorld().signUp(), SignUpInput{Email: "ada@example.com", Name: "Ada", Password: "too short"}
-}
-
-// givenSignUpRefusesATakenAddress builds SignUp for "refuses a taken address": the use case and the input it
-// refuses with account.ErrEmailTaken.
-func givenSignUpRefusesATakenAddress(t *testing.T) (SignUp, SignUpInput) {
-	t.Helper()
-	w := newWorld()
-	w.member("ada@example.com")
-	return w.signUp(), SignUpInput{Email: "ADA@example.com", Name: "Another Ada", Password: passphrase}
 }

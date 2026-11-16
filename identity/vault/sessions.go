@@ -36,7 +36,26 @@ func (a *Sessions) byTokenHash(ctx context.Context, hash string) (r0 account.Ses
 
 // deleteBody is Sessions.Delete's body: a session already gone is deleted.
 func (a *Sessions) deleteBody(ctx context.Context, id string) (err error) {
-	err = SessionsStore.Delete(ctx, id)
+	return gone(SessionsStore.Delete(ctx, id))
+}
+
+// deleteOf is Sessions.DeleteOf's body: every session of a member but keep
+// ends ("" keeps none).
+func (a *Sessions) deleteOf(ctx context.Context, userID string, keep string) (err error) {
+	found, err := SessionsStore.Filter(ctx, func(r SessionRecord) bool { return r.UserID == userID && r.ID != keep })
+	if err != nil {
+		return err
+	}
+	for _, r := range found {
+		if err := gone(SessionsStore.Delete(ctx, r.ID)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// gone is the error of a delete, a record already gone being none.
+func gone(err error) error {
 	var refused *app.Error
 	if errors.As(err, &refused) && refused.Code == app.WireNotFound {
 		return nil

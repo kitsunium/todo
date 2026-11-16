@@ -1,9 +1,9 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
-// Package vault — The accounts and the sessions in the framework's stores,
-// the directory the rest of the product asks, the passwords stretched, the
-// secrets drawn.
+// Package vault — The accounts, the sessions and the one-time links in the
+// framework's stores, the mails of an account, the directory the rest of the
+// product asks, the passwords stretched, the secrets drawn.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -29,10 +29,21 @@ type AccountRecord struct {
 	Email        string    `json:"email" app:"personal,subject"`
 	Name         string    `json:"name" app:"personal"`
 	PasswordHash string    `json:"passwordHash" app:"secret"`
+	Verified     bool      `json:"verified" app:"public"`
 	FailedLogins int       `json:"failedLogins" app:"public"`
 	LockedUntil  time.Time `json:"lockedUntil" app:"public"`
 	CreatedAt    time.Time `json:"createdAt" app:"public"`
 	UpdatedAt    time.Time `json:"updatedAt" app:"public"`
+}
+
+// LinkRecord — A one-time link as the store keeps it, field for field.
+type LinkRecord struct {
+	ID        string    `json:"id" app:"public"`
+	Hash      string    `json:"hash" app:"secret"`
+	Purpose   string    `json:"purpose" app:"public"`
+	UserID    string    `json:"userId" app:"public"`
+	CreatedAt time.Time `json:"createdAt" app:"public"`
+	ExpiresAt time.Time `json:"expiresAt" app:"public"`
 }
 
 // SessionRecord — A session as the store keeps it, field for field.
@@ -118,6 +129,66 @@ func (a *Drawer) New(ctx context.Context) (string, string, error) {
 
 var _ access.SecretsV1 = (*Drawer)(nil)
 
+// OneTimeLinks is Links@v1 on the store "links".
+type OneTimeLinks struct {
+	oneTimeLinks // its own state, hand-written
+}
+
+// NewOneTimeLinks builds OneTimeLinks: its body is the hand-written newOneTimeLinks.
+func NewOneTimeLinks() *OneTimeLinks {
+	return newOneTimeLinks()
+}
+
+// ByHash is identity/port/Links@v1's.
+func (a *OneTimeLinks) ByHash(ctx context.Context, hash string) (account.Link, bool, error) {
+	return a.byHash(ctx, hash)
+}
+
+// DeleteOf is identity/port/Links@v1's.
+func (a *OneTimeLinks) DeleteOf(ctx context.Context, userID string, purpose string) error {
+	return a.deleteOf(ctx, userID, purpose)
+}
+
+// NewID is identity/port/Links@v1's.
+func (a *OneTimeLinks) NewID(ctx context.Context) (string, error) {
+	return a.newID(ctx)
+}
+
+// Save is identity/port/Links@v1's.
+func (a *OneTimeLinks) Save(ctx context.Context, l account.Link) error {
+	return a.save(ctx, l)
+}
+
+var _ access.LinksV1 = (*OneTimeLinks)(nil)
+
+// Postman is Courier@v1; it writes the mails of an account, in French, and
+// sends them through the product's mailer.
+type Postman struct {
+	postman // its own state, hand-written
+}
+
+// NewPostman builds Postman: its body is the hand-written newPostman.
+func NewPostman(baseUrlSetting *app.Setting[string]) *Postman {
+	return newPostman(baseUrlSetting)
+}
+
+// AlreadyMember is identity/port/Courier@v1's.
+func (a *Postman) AlreadyMember(ctx context.Context, to account.Account) error {
+	return a.alreadyMember(ctx, to)
+}
+
+// Reset is identity/port/Courier@v1's.
+func (a *Postman) Reset(ctx context.Context, to account.Account, secret string) error {
+	return a.reset(ctx, to, secret)
+}
+
+// Verification is identity/port/Courier@v1's.
+func (a *Postman) Verification(ctx context.Context, to account.Account, secret string) error {
+	return a.verification(ctx, to, secret)
+}
+
+var _ access.CourierV1 = (*Postman)(nil)
+
 // Sessions is Sessions@v1 on the store "sessions".
 type Sessions struct {
 	sessions // its own state, hand-written
@@ -136,6 +207,11 @@ func (self *Sessions) ByTokenHash(ctx context.Context, hash string) (account.Ses
 // Delete is identity/port/Sessions@v1's.
 func (self *Sessions) Delete(ctx context.Context, id string) error {
 	return self.deleteBody(ctx, id)
+}
+
+// DeleteOf is identity/port/Sessions@v1's.
+func (self *Sessions) DeleteOf(ctx context.Context, userID string, keep string) error {
+	return self.deleteOf(ctx, userID, keep)
 }
 
 // NewID is identity/port/Sessions@v1's.
@@ -190,7 +266,11 @@ func (a *WallClock) Now(ctx context.Context) (time.Time, error) {
 var _ access.ClockV1 = (*WallClock)(nil)
 
 // Service is vault's framework service: what it declares, drawn and run.
-var Service = app.NewService("vault", "The accounts and the sessions in the framework's stores, the directory the rest of the product asks, the passwords stretched, the secrets drawn.")
+var Service = app.NewService("vault", "The accounts, the sessions and the one-time links in the framework's stores, the mails of an account, the directory the rest of the product asks, the passwords stretched, the secrets drawn.")
+
+// BaseUrlSetting — Where members reach the product, for the links of its
+// mails.
+var BaseUrlSetting = Service.Setting[string]("base-url", "http://localhost:4000")
 
 // AccountsStore — Every account, keyed by its id; one untouched for three
 // years is erased.
@@ -204,6 +284,13 @@ var AccountsStore = Service.Store("accounts", func(e AccountRecord) string { ret
 var SessionsStore = Service.Store("sessions", func(e SessionRecord) string { return e.ID },
 	app.DeleteAfter[SessionRecord](time.Duration(86400000000000) /* 24h */, func(e SessionRecord) (time.Time, bool) { return e.ExpiresAt, !e.ExpiresAt.IsZero() }),
 	app.Unique[SessionRecord]("by-token", func(e SessionRecord) string { return e.TokenHash }),
+)
+
+// LinksStore — Every one-time link, keyed by its id; one is deleted a day
+// after it expired.
+var LinksStore = Service.Store("links", func(e LinkRecord) string { return e.ID },
+	app.DeleteAfter[LinkRecord](time.Duration(86400000000000) /* 24h */, func(e LinkRecord) (time.Time, bool) { return e.ExpiresAt, !e.ExpiresAt.IsZero() }),
+	app.Unique[LinkRecord]("by-hash", func(e LinkRecord) string { return e.Hash }),
 )
 
 // MemberQuery — The directory: a member's address and name by their id, for

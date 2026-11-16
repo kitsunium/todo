@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27181b66e729f1fb8db820d65217c17c9cc9e0bc6f9b395ba00ff28fca67de63
+// design:digest sha256:35933b95eb37968572e6d46dc1379b8281e3503fec0e8451a525bac3fb04f4af
 
 // Package account — The account, its lock after wrong passwords, and the
 // session.
@@ -19,8 +19,8 @@ import (
 var errNotImplemented = errs.New(errs.Pack(64, 6, 1, 255), "NOT_IMPLEMENTED", "not implemented yet", "account: a hand-written body is still a skeleton")
 
 var (
-	// ErrEmailTaken is "this address already has an account".
-	ErrEmailTaken = errs.New(errs.Pack(64, 6, 1, 4), "EMAIL_TAKEN", "this address already has an account", "identity/error/ErrEmailTaken")
+	// ErrBadLink is "this link is invalid or has expired: ask for a new one".
+	ErrBadLink = errs.New(errs.Pack(64, 6, 1, 9), "BAD_LINK", "this link is invalid or has expired: ask for a new one", "identity/error/ErrBadLink")
 	// ErrInvalidCredentials is "the email address or the password is not right".
 	ErrInvalidCredentials = errs.New(errs.Pack(64, 6, 1, 5), "INVALID_CREDENTIALS", "the email address or the password is not right", "identity/error/ErrInvalidCredentials")
 	// ErrInvalidEmail is "this is not an email address".
@@ -32,6 +32,9 @@ var (
 	ErrNameRequired = errs.New(errs.Pack(64, 6, 1, 3), "NAME_REQUIRED", "an account needs a name", "identity/error/ErrNameRequired")
 	// ErrNoSession is "the session has expired: sign in again".
 	ErrNoSession = errs.New(errs.Pack(64, 6, 1, 7), "NO_SESSION", "the session has expired: sign in again", "identity/error/ErrNoSession")
+	// ErrUnverified is "confirm your email address first: the link is in your
+	// inbox".
+	ErrUnverified = errs.New(errs.Pack(64, 6, 1, 8), "UNVERIFIED", "confirm your email address first: the link is in your inbox", "identity/error/ErrUnverified")
 	// ErrWeakPassword is "a password is 10 to 128 characters long".
 	ErrWeakPassword = errs.New(errs.Pack(64, 6, 1, 2), "WEAK_PASSWORD", "a password is 10 to 128 characters long", "identity/error/ErrWeakPassword")
 )
@@ -43,8 +46,16 @@ const (
 	MaxFailedLogins int = 5
 	// MinPassword is the shortest password an account takes.
 	MinPassword int = 10
+	// PurposeReset is the purpose of a link that chooses a new password.
+	PurposeReset string = "reset"
+	// PurposeVerify is the purpose of a link that proves an address.
+	PurposeVerify string = "verify"
+	// ResetFor is how long a link that chooses a new password is good for.
+	ResetFor time.Duration = time.Hour
 	// SessionFor is how long a session lives after it was last seen.
 	SessionFor time.Duration = 30 * 24 * time.Hour
+	// VerifyFor is how long a link that proves an address is good for.
+	VerifyFor time.Duration = 24 * time.Hour
 )
 
 // Account — A member of the team, who signs in with an address and a
@@ -55,6 +66,9 @@ type Account struct {
 	Name  string `json:"name" app:"personal"`
 	// PasswordHash is the password, stretched: never the password, never answered.
 	PasswordHash string `json:"-" app:"secret"`
+	// Verified says the member proved the address is theirs; an account that is
+	// not signs nobody in.
+	Verified bool `json:"verified" app:"public"`
 	// FailedLogins counts the wrong passwords in a row.
 	FailedLogins int `json:"-" app:"public"`
 	// LockedUntil is when the lock of too many wrong passwords ends; the zero time
@@ -67,6 +81,19 @@ type Account struct {
 // Locked reports whether the account refuses every password at now.
 func (a *Account) Locked(now time.Time) bool {
 	return a.locked(now)
+}
+
+// Link — A one-time link mailed to a member, to prove an address or to
+// choose a new password.
+type Link struct {
+	ID string `json:"id" app:"public"`
+	// Hash is the SHA-256 of the link's secret, which only the mail carries.
+	Hash string `json:"-" app:"secret"`
+	// Purpose is verify or reset: a link does one thing.
+	Purpose   string    `json:"purpose" app:"public"`
+	UserID    string    `json:"userId" app:"public"`
+	CreatedAt time.Time `json:"createdAt" app:"public"`
+	ExpiresAt time.Time `json:"expiresAt" app:"public"`
 }
 
 // Session — A member signed in, from one browser or one client.
