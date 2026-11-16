@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 package task
 
@@ -13,7 +13,7 @@ import (
 
 // designDigest is the design the properties run under: with the property's
 // path, it seeds its values, so a pull request replays the same ones.
-const designDigest = "sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0"
+const designDigest = "sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b"
 
 // designSeed is the seed of a property: the design's digest and its path —
 // and DESIGN_SEED when it is set.
@@ -41,11 +41,11 @@ func TestPropertyTaskOverdueNeverWhenDone(t *testing.T) {
 	propertyTaskOverdueNeverWhenDone(t, seed)
 }
 
-// TestPropertyTaskSeenByOwnerAndSharedOnly holds tasks/Task.SeenBy by property OwnerAndSharedOnly.
-func TestPropertyTaskSeenByOwnerAndSharedOnly(t *testing.T) {
-	seed := designSeed("tasks/Task.SeenBy#OwnerAndSharedOnly")
+// TestPropertyTaskSeenByOwnerSharedAssigneeOrMember holds tasks/Task.SeenBy by property OwnerSharedAssigneeOrMember.
+func TestPropertyTaskSeenByOwnerSharedAssigneeOrMember(t *testing.T) {
+	seed := designSeed("tasks/Task.SeenBy#OwnerSharedAssigneeOrMember")
 	useSeed(t, seed)
-	propertyTaskSeenByOwnerAndSharedOnly(t, seed)
+	propertyTaskSeenByOwnerSharedAssigneeOrMember(t, seed)
 }
 
 // TestPropertyParsePriorityKnownOrRefused holds tasks/function/ParsePriority by property KnownOrRefused.

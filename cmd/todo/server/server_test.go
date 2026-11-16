@@ -217,7 +217,7 @@ func TestATaskGoesThroughItsLifecycle(t *testing.T) {
 	p.stranger().call(http.StatusUnauthorized, "GET", "/api/tasks", nil, nil)
 	p.stranger().call(http.StatusUnauthorized, "POST", "/api/tasks", map[string]any{"title": "x"}, nil)
 	var added taskView
-	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": " Write the design ", "priority": "high", "assignee": "Ada"}, &added)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": " Write the design ", "priority": "high", "assigneeId": ada.id}, &added)
 	if added.ID == "" || added.Title != "Write the design" || added.Priority != "high" || added.State != "open" {
 		t.Fatalf("the task added: %+v", added)
 	}
@@ -293,7 +293,7 @@ func TestTheJobsRunOnTheClock(t *testing.T) {
 	p := start(t)
 	ada := p.signUp("Ada", "ada@example.com")
 	var soon, other taskView
-	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Ship the release", "assignee": "Grace", "due": epoch.Add(6 * time.Hour)}, &soon)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Ship the release", "due": epoch.Add(6 * time.Hour)}, &soon)
 	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Tidy the backlog"}, &other)
 	ada.call(http.StatusOK, "POST", "/api/tasks/"+other.ID+"/complete", nil, nil)
 
@@ -939,4 +939,216 @@ func TestMembersFormAGroup(t *testing.T) {
 	}
 	dee.call(http.StatusConflict, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
 	invite(bob, g.ID, dee, http.StatusOK)
+}
+
+// groupTask is a task as a group's members read it.
+type groupTask struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Priority   string `json:"priority"`
+	State      string `json:"state"`
+	OwnerID    string `json:"ownerId"`
+	GroupID    string `json:"groupId"`
+	AssigneeID string `json:"assigneeId"`
+}
+
+// viewCounts is what GET /api/tasks/counts answers.
+type viewCounts struct {
+	Inbox, Today, Upcoming, Shared, Assigned, Overdue, CompletedThisWeek int
+	Groups                                                               map[string]int
+}
+
+// A group shares a list: a task added to it is seen, edited and moved by
+// every member and by nobody else; its owner or an admin of the group deletes
+// it, its owner alone shares it; it is assigned to its owner, to a member of
+// the group, or, when it is personal, to a contact, who then sees it; the
+// views and the counts follow what each member sees; a member removed from
+// the group stops doing its tasks, and a group deleted gives its tasks back
+// to their owners.
+func TestAGroupSharesAList(t *testing.T) {
+	p := start(t)
+	ada, bob, cy, dee, eve := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com"), p.signUp("Dee", "dee@example.com"), p.signUp("Eve", "eve@example.com")
+	ada.befriend(bob, "bob@example.com")
+	ada.befriend(cy, "cy@example.com")
+	ada.befriend(eve, "eve@example.com")
+	var g groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Core"}, &g)
+	join := func(who *member, role string) {
+		t.Helper()
+		var inv struct{ ID string }
+		ada.call(http.StatusOK, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{"userId": who.id}, &inv)
+		who.call(http.StatusOK, "POST", "/api/invitations/"+inv.ID+"/accept", nil, nil)
+		if role != "member" {
+			ada.call(http.StatusOK, "PATCH", "/api/groups/"+g.ID+"/members/"+who.id, map[string]any{"role": role}, nil)
+		}
+	}
+	join(bob, "admin")
+	join(cy, "member")
+
+	// Only a member adds a task to the group's list, and assigns it to who is
+	// in the group; a personal task is assigned to a contact.
+	soon, later := epoch.Add(3*time.Hour), epoch.Add(72*time.Hour)
+	var first, second, mine groupTask
+	dee.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "groupId": g.ID}, nil)
+	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "groupId": g.ID, "assigneeId": eve.id}, nil) // a contact, not in the group
+	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "assigneeId": dee.id}, nil)                  // no contact of hers
+	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "assignee": "Grace"}, nil)                   // the free text is gone
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Plan the sprint", "groupId": g.ID, "assigneeId": bob.id, "due": soon}, &first)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Write the notes", "groupId": g.ID, "due": later}, &second)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Water the plants", "assigneeId": eve.id}, &mine)
+	if first.GroupID != g.ID || first.AssigneeID != bob.id || first.OwnerID != ada.id || mine.AssigneeID != eve.id || mine.GroupID != "" {
+		t.Fatalf("the tasks added: %+v %+v", first, mine)
+	}
+	eve.call(http.StatusOK, "GET", "/api/tasks/"+mine.ID, nil, nil) // her assignee sees it
+	dee.call(http.StatusNotFound, "GET", "/api/tasks/"+mine.ID, nil, nil)
+	cy.call(http.StatusNotFound, "GET", "/api/tasks/"+mine.ID, nil, nil)
+
+	// Every member sees the group's tasks, nobody else does.
+	var list struct{ Tasks []groupTask }
+	for _, m := range []*member{ada, bob, cy} {
+		m.call(http.StatusOK, "GET", "/api/tasks/"+first.ID, nil, nil)
+	}
+	dee.call(http.StatusNotFound, "GET", "/api/tasks/"+first.ID, nil, nil)
+	eve.call(http.StatusNotFound, "GET", "/api/tasks/"+first.ID, nil, nil)
+	cy.call(http.StatusOK, "GET", "/api/tasks", nil, &list)
+	if len(list.Tasks) != 2 {
+		t.Errorf("Cy's list: %+v, want the two tasks of the group", list.Tasks)
+	}
+	dee.call(http.StatusOK, "GET", "/api/tasks", nil, &list)
+	if len(list.Tasks) != 0 {
+		t.Errorf("Dee's list: %+v, want none", list.Tasks)
+	}
+
+	// The views and the counts are each member's.
+	bob.call(http.StatusBadRequest, "GET", "/api/tasks?view=someday", nil, nil)
+	bob.call(http.StatusBadRequest, "GET", "/api/tasks?view=group", nil, nil)
+	bob.call(http.StatusBadRequest, "GET", "/api/tasks?view=today&tz=Mars/Olympus", nil, nil)
+	bob.call(http.StatusBadRequest, "GET", "/api/tasks/counts?tz=Mars/Olympus", nil, nil)
+	dee.call(http.StatusNotFound, "GET", "/api/tasks?group="+g.ID, nil, nil)
+	titlesOf := func(m *member, query string) []string {
+		t.Helper()
+		var out struct{ Tasks []groupTask }
+		m.call(http.StatusOK, "GET", "/api/tasks?"+query, nil, &out)
+		var titles []string
+		for _, x := range out.Tasks {
+			titles = append(titles, x.Title)
+		}
+		return titles
+	}
+	for query, want := range map[string][]string{
+		"view=today&tz=Europe/Paris":  {"Plan the sprint"},
+		"view=upcoming":               {"Write the notes"},
+		"view=assigned":               {"Plan the sprint"},
+		"view=inbox":                  nil,
+		"view=shared":                 nil,
+		"view=completed":              nil,
+		"group=" + g.ID:               {"Plan the sprint", "Write the notes"},
+		"view=group&group=" + g.ID:    {"Plan the sprint", "Write the notes"},
+		"view=assigned&group=" + g.ID: {"Plan the sprint"},
+		"view=today&group=" + g.ID + "&tz=Europe/Paris": {"Plan the sprint"},
+	} {
+		if got := titlesOf(bob, query); !slices.Equal(got, want) {
+			t.Errorf("Bob's %s: %q, want %q", query, got, want)
+		}
+	}
+	countsOf := func(m *member, query string) (counts viewCounts) {
+		t.Helper()
+		m.call(http.StatusOK, "GET", "/api/tasks/counts"+query, nil, &counts)
+		return counts
+	}
+	counts := countsOf(bob, "?tz=Europe/Paris")
+	if counts.Today != 1 || counts.Upcoming != 1 || counts.Assigned != 1 || counts.Inbox != 0 || counts.Shared != 0 || counts.Overdue != 0 || counts.Groups[g.ID] != 2 {
+		t.Errorf("Bob's counts: %+v, want one today, one upcoming, one assigned and two on the group", counts)
+	}
+	counts = countsOf(ada, "")
+	if counts.Inbox != 1 || counts.Groups[g.ID] != 2 { // the personal task, and the two of the group
+		t.Errorf("Ada's counts: %+v, want one in the inbox and two on the group", counts)
+	}
+	counts = countsOf(dee, "")
+	if counts.Inbox != 0 || len(counts.Groups) != 0 {
+		t.Errorf("Dee's counts: %+v, want nothing", counts)
+	}
+
+	// Every member edits and moves, and may assign a task to one in the group;
+	// only the owner shares it; the owner or an admin deletes it.
+	var edited groupTask
+	cy.call(http.StatusOK, "PATCH", "/api/tasks/"+first.ID, map[string]any{"priority": "high"}, &edited)
+	if edited.Priority != "high" || edited.AssigneeID != bob.id || edited.GroupID != g.ID {
+		t.Errorf("the task Cy edited: %+v, want the priority alone changed", edited)
+	}
+	cy.call(http.StatusBadRequest, "PATCH", "/api/tasks/"+first.ID, map[string]any{"assigneeId": dee.id}, nil)
+	cy.call(http.StatusBadRequest, "PATCH", "/api/tasks/"+first.ID, map[string]any{"assigneeId": eve.id}, nil) // a contact of Ada's, and of nobody in the group
+	cy.call(http.StatusOK, "PATCH", "/api/tasks/"+first.ID, map[string]any{"assigneeId": cy.id}, &edited)
+	cy.call(http.StatusOK, "PATCH", "/api/tasks/"+first.ID, map[string]any{"assigneeId": bob.id}, &edited)
+	cy.call(http.StatusOK, "POST", "/api/tasks/"+second.ID+"/complete", nil, &edited)
+	cy.call(http.StatusForbidden, "POST", "/api/tasks/"+first.ID+"/share", map[string]any{"userId": dee.id}, nil)
+	bob.call(http.StatusForbidden, "POST", "/api/tasks/"+first.ID+"/share", map[string]any{"userId": dee.id}, nil)
+	cy.call(http.StatusForbidden, "DELETE", "/api/tasks/"+first.ID, nil, nil)
+	dee.call(http.StatusNotFound, "DELETE", "/api/tasks/"+first.ID, nil, nil)
+	if got := titlesOf(cy, "view=completed"); !slices.Equal(got, []string{"Write the notes"}) {
+		t.Errorf("Cy's completed tasks: %q", got)
+	}
+	counts = countsOf(cy, "")
+	if counts.CompletedThisWeek != 1 || counts.Groups[g.ID] != 1 {
+		t.Errorf("Cy's counts: %+v, want one finished this week and one open on the group", counts)
+	}
+	var gone groupTask
+	cy.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Tidy the board", "groupId": g.ID}, &gone)
+	bob.call(http.StatusOK, "DELETE", "/api/tasks/"+gone.ID, nil, nil) // an admin deletes a member's task
+	cy.call(http.StatusNotFound, "GET", "/api/tasks/"+gone.ID, nil, nil)
+
+	// Each member of the group is told of its tasks, and nobody else.
+	feedKinds := func(m *member, want int) []string {
+		t.Helper()
+		var kinds []string
+		p.settle("the group's tasks in a feed", 50*time.Millisecond, func() bool {
+			var feed struct {
+				Entries []struct{ Kind, TaskID string }
+			}
+			m.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+			kinds = kinds[:0]
+			for _, e := range feed.Entries {
+				if e.TaskID == first.ID {
+					kinds = append(kinds, e.Kind)
+				}
+			}
+			return len(kinds) >= want
+		})
+		return kinds
+	}
+	if got := feedKinds(cy, 2); got[len(got)-1] != "added" {
+		t.Errorf("what Cy's feed tells of the first task, newest first: %q, want it to end with added", got)
+	}
+	if got := feedKinds(dee, 0); len(got) != 0 {
+		t.Errorf("what Dee's feed tells of the first task: %q, want nothing", got)
+	}
+
+	// A member removed from the group stops doing its tasks and no more sees
+	// them; the tasks of a deleted group go back to their owners.
+	ada.call(http.StatusOK, "DELETE", "/api/groups/"+g.ID+"/members/"+bob.id, nil, nil)
+	bob.call(http.StatusNotFound, "GET", "/api/tasks/"+first.ID, nil, nil)
+	p.settle("the task unassigned from Bob", 50*time.Millisecond, func() bool {
+		ada.call(http.StatusOK, "GET", "/api/tasks/"+first.ID, nil, &edited)
+		return edited.AssigneeID == ""
+	})
+	if edited.GroupID != g.ID {
+		t.Errorf("the task Bob stopped doing: %+v, want it still on the group", edited)
+	}
+	cy.call(http.StatusOK, "PATCH", "/api/tasks/"+first.ID, map[string]any{"assigneeId": cy.id}, nil)
+	ada.call(http.StatusConflict, "DELETE", "/api/groups/"+g.ID+"/members/"+ada.id, nil, nil)
+	cy.call(http.StatusForbidden, "DELETE", "/api/groups/"+g.ID, nil, nil)
+	ada.call(http.StatusOK, "DELETE", "/api/groups/"+g.ID, nil, nil)
+	p.settle("the tasks back on their owner's list", 50*time.Millisecond, func() bool {
+		ada.call(http.StatusOK, "GET", "/api/tasks/"+first.ID, nil, &edited)
+		return edited.GroupID == ""
+	})
+	if edited.AssigneeID != "" || edited.OwnerID != ada.id {
+		t.Errorf("the task of the deleted group: %+v, want it Ada's alone, unassigned", edited)
+	}
+	cy.call(http.StatusNotFound, "GET", "/api/tasks/"+first.ID, nil, nil)
+	cy.call(http.StatusNotFound, "GET", "/api/tasks/"+second.ID, nil, nil)
+	if got := titlesOf(ada, "view=inbox"); !slices.Equal(got, []string{"Plan the sprint", "Water the plants"}) { // the one Cy made high first
+		t.Errorf("Ada's inbox: %q, want the two open tasks back", got)
+	}
+	ada.call(http.StatusNotFound, "GET", "/api/tasks?group="+g.ID, nil, nil)
 }

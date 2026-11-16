@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package task — The task, its priority and its lifecycle.
 //
@@ -19,20 +19,34 @@ import (
 var errNotImplemented = errs.New(errs.Pack(64, 1, 1, 255), "NOT_IMPLEMENTED", "not implemented yet", "task: a hand-written body is still a skeleton")
 
 var (
+	// ErrBadZone is "a time zone is an IANA name, like Europe/Paris".
+	ErrBadZone = errs.New(errs.Pack(64, 1, 1, 10), "BAD_ZONE", "a time zone is an IANA name, like Europe/Paris", "tasks/error/ErrBadZone")
 	// ErrEmptyTitle is "a task needs a title".
 	ErrEmptyTitle = errs.New(errs.Pack(64, 1, 1, 1), "EMPTY_TITLE", "a task needs a title", "tasks/error/ErrEmptyTitle")
+	// ErrGroupNeeded is "the group view needs a group".
+	ErrGroupNeeded = errs.New(errs.Pack(64, 1, 1, 9), "GROUP_NEEDED", "the group view needs a group", "tasks/error/ErrGroupNeeded")
+	// ErrNoGroup is "no such group".
+	ErrNoGroup = errs.New(errs.Pack(64, 1, 1, 11), "NO_GROUP", "no such group", "tasks/error/ErrNoGroup")
 	// ErrNotAllowed is "the task cannot make this move from the state it is in".
 	ErrNotAllowed = errs.New(errs.Pack(64, 1, 1, 5), "NOT_ALLOWED", "the task cannot make this move from the state it is in", "tasks/error/ErrNotAllowed")
+	// ErrNotAssignable is "a task is assigned to its owner, to a contact of its
+	// owner, or to a member of its group".
+	ErrNotAssignable = errs.New(errs.Pack(64, 1, 1, 13), "NOT_ASSIGNABLE", "a task is assigned to its owner, to a contact of its owner, or to a member of its group", "tasks/error/ErrNotAssignable")
 	// ErrNotContact is "a task is shared with a contact of its owner".
 	ErrNotContact = errs.New(errs.Pack(64, 1, 1, 6), "NOT_CONTACT", "a task is shared with a contact of its owner", "tasks/error/ErrNotContact")
 	// ErrNotFound is "no such task".
 	ErrNotFound = errs.New(errs.Pack(64, 1, 1, 3), "NOT_FOUND", "no such task", "tasks/error/ErrNotFound")
+	// ErrNotMember is "a task goes on the list of a group its member belongs to".
+	ErrNotMember = errs.New(errs.Pack(64, 1, 1, 12), "NOT_MEMBER", "a task goes on the list of a group its member belongs to", "tasks/error/ErrNotMember")
 	// ErrNotOwner is "only its owner does this to a task".
 	ErrNotOwner = errs.New(errs.Pack(64, 1, 1, 7), "NOT_OWNER", "only its owner does this to a task", "tasks/error/ErrNotOwner")
 	// ErrTitleTooLong is "a title is 120 characters at most".
 	ErrTitleTooLong = errs.New(errs.Pack(64, 1, 1, 2), "TITLE_TOO_LONG", "a title is 120 characters at most", "tasks/error/ErrTitleTooLong")
 	// ErrUnknownPriority is "a priority is low, normal or high".
 	ErrUnknownPriority = errs.New(errs.Pack(64, 1, 1, 4), "UNKNOWN_PRIORITY", "a priority is low, normal or high", "tasks/error/ErrUnknownPriority")
+	// ErrUnknownView is "a view is inbox, today, upcoming, shared, assigned,
+	// completed or group".
+	ErrUnknownView = errs.New(errs.Pack(64, 1, 1, 8), "UNKNOWN_VIEW", "a view is inbox, today, upcoming, shared, assigned, completed or group", "tasks/error/ErrUnknownView")
 )
 
 const (
@@ -58,9 +72,12 @@ type Task struct {
 	Title      string   `json:"title" app:"public"`
 	Notes      string   `json:"notes" app:"public"`
 	Priority   Priority `json:"priority" app:"public"`
-	// Assignee is who does the task, as the team names them; an address gets the
-	// reminders.
-	Assignee string `json:"assignee" app:"personal"`
+	// GroupID is the group whose list the task is on, empty for a personal task:
+	// every member of the group sees it, edits it and moves it.
+	GroupID string `json:"groupId" app:"public"`
+	// AssigneeID is the member who does the task, empty for none: they see it,
+	// edit it and move it.
+	AssigneeID string `json:"assigneeId" app:"personal"`
 	// Due is when the task is due; the zero time when it has no date.
 	Due       time.Time      `json:"due" app:"public"`
 	State     LifecycleState `json:"state" app:"public"`
@@ -75,10 +92,10 @@ func (tx *Task) Overdue(now time.Time) bool {
 	return tx.overdue(now)
 }
 
-// SeenBy reports whether a member sees the task, its owner or one it is shared
-// with.
-func (tx *Task) SeenBy(user string) bool {
-	return tx.seenBy(user)
+// SeenBy reports whether a member sees the task: its owner, one it is shared
+// with, its assignee, or a member of its group, which the caller says.
+func (tx *Task) SeenBy(user string, inGroup bool) bool {
+	return tx.seenBy(user, inGroup)
 }
 
 // Priority — How urgent a task is.

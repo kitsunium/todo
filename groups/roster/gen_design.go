@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package roster — Creating and running a group, inviting a contact into it,
 // answering an invitation, and what the other components ask of one's groups.
@@ -401,6 +401,39 @@ func (h *ListInvitationsHandler) Execute(ctx context.Context, in ListInvitations
 }
 
 var _ ListInvitations = (*ListInvitationsHandler)(nil)
+
+// MembersOf lists the members of a group, whoever they are, empty for a group
+// that does not exist; the components that tell a group's members ask it.
+type MembersOf interface {
+	Execute(ctx context.Context, in MembersOfInput) (MembersOfOutput, error)
+}
+
+// MembersOfInput is MembersOf's input: a field added breaks no caller.
+type MembersOfInput struct {
+	Group string
+}
+
+// MembersOfOutput is MembersOf's output.
+type MembersOfOutput struct {
+	Users []string
+}
+
+// MembersOfHandler runs MembersOf: its body is the hand-written execute.
+type MembersOfHandler struct {
+	groups GroupsV1
+}
+
+// NewMembersOf builds MembersOf on what it calls.
+func NewMembersOf(groups GroupsV1) *MembersOfHandler {
+	return &MembersOfHandler{groups: groups}
+}
+
+// Execute runs MembersOf.
+func (h *MembersOfHandler) Execute(ctx context.Context, in MembersOfInput) (MembersOfOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ MembersOf = (*MembersOfHandler)(nil)
 
 // Memberships lists the groups a member belongs to, with their role in each;
 // the other components ask it.

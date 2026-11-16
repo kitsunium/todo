@@ -12,8 +12,10 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
-// execute is AddTask's body: the title and the priority are checked, then
-// the task is kept open on its owner's list and the journal told.
+// execute is AddTask's body: the title and the priority are checked, then the
+// group, which the owner must be in, and the assignee, who must be someone the
+// task may be assigned to; the task is kept open on its owner's list, or the
+// group's, and the journal told.
 func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTaskOutput, error) {
 	title := strings.TrimSpace(in.Title)
 	switch {
@@ -30,15 +32,31 @@ func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTask
 	if err != nil {
 		return AddTaskOutput{}, err
 	}
+	t := task.Task{
+		OwnerID: in.Owner, GroupID: strings.TrimSpace(in.GroupID), AssigneeID: strings.TrimSpace(in.AssigneeID),
+	}
+	role, err := roleIn(ctx, h.groups, t, in.Owner)
+	if err != nil {
+		return AddTaskOutput{}, err
+	}
+	if t.GroupID != "" && role == "" {
+		return AddTaskOutput{}, task.ErrNotMember
+	}
+	if t.AssigneeID != "" {
+		ok, err := assignable(ctx, h.groups, h.circle, t, in.Owner, t.AssigneeID)
+		if err != nil {
+			return AddTaskOutput{}, err
+		}
+		if !ok {
+			return AddTaskOutput{}, task.ErrNotAssignable
+		}
+	}
 	id, err := h.taskStore.NewID(ctx)
 	if err != nil {
 		return AddTaskOutput{}, err
 	}
-	t := task.Task{
-		ID: id, OwnerID: in.Owner, Title: title, Notes: strings.TrimSpace(in.Notes), Priority: priority,
-		Assignee: strings.TrimSpace(in.Assignee), Due: in.Due, State: task.LifecycleInitial,
-		CreatedAt: now, UpdatedAt: now,
-	}
+	t.ID, t.Title, t.Notes, t.Priority, t.Due = id, title, strings.TrimSpace(in.Notes), priority, in.Due
+	t.State, t.CreatedAt, t.UpdatedAt = task.LifecycleInitial, now, now
 	if err := h.taskStore.Save(ctx, t); err != nil {
 		return AddTaskOutput{}, err
 	}

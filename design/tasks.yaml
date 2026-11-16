@@ -20,7 +20,8 @@ domains:
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: Priority, tag: 'json:"priority" app:"public"'}
-              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"', description: "Assignee is who does the task, as the team names them; an address gets the reminders."}
+              - {name: GroupID, type: string, tag: 'json:"groupId" app:"public"', description: "GroupID is the group whose list the task is on, empty for a personal task: every member of the group sees it, edits it and moves it."}
+              - {name: AssigneeID, type: string, tag: 'json:"assigneeId" app:"personal"', description: "AssigneeID is the member who does the task, empty for none: they see it, edit it and move it."}
               - {name: Due, type: time.Time, tag: 'json:"due" app:"public"', description: "Due is when the task is due; the zero time when it has no date."}
               - {name: State, type: LifecycleState, tag: 'json:"state" app:"public"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
@@ -28,10 +29,10 @@ domains:
               - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"', description: "DoneAt is when the task was last completed; the zero time while it is open."}
             methods:
               - name: SeenBy
-                description: SeenBy reports whether a member sees the task, its owner or one it is shared with.
-                params: [{name: user, type: string}]
+                description: "SeenBy reports whether a member sees the task: its owner, one it is shared with, its assignee, or a member of its group, which the caller says."
+                params: [{name: user, type: string}, {name: inGroup, type: bool}]
                 results: [{type: bool}]
-                properties: [OwnerAndSharedOnly]
+                properties: [OwnerSharedAssigneeOrMember]
               - name: Overdue
                 description: Overdue reports whether the task is still open after its due date.
                 params: [{name: now, type: time.Time}]
@@ -60,6 +61,12 @@ domains:
           - {name: ErrNotAllowed, serial: 5, message: the task cannot make this move from the state it is in}
           - {name: ErrNotContact, serial: 6, message: a task is shared with a contact of its owner}
           - {name: ErrNotOwner, serial: 7, message: only its owner does this to a task}
+          - {name: ErrUnknownView, serial: 8, message: "a view is inbox, today, upcoming, shared, assigned, completed or group"}
+          - {name: ErrGroupNeeded, serial: 9, message: the group view needs a group}
+          - {name: ErrBadZone, serial: 10, message: "a time zone is an IANA name, like Europe/Paris"}
+          - {name: ErrNoGroup, serial: 11, message: no such group}
+          - {name: ErrNotMember, serial: 12, message: a task goes on the list of a group its member belongs to}
+          - {name: ErrNotAssignable, serial: 13, message: "a task is assigned to its owner, to a contact of its owner, or to a member of its group"}
         workflows:
           - name: Lifecycle
             entity: Task
@@ -93,6 +100,13 @@ domains:
             description: CircleV1 says who is a contact of whom.
             methods:
               - {name: AreContacts, params: [{name: one, type: string}, {name: other, type: string}], results: [{type: bool}]}
+          - name: Groups
+            direction: out
+            version: 1
+            description: GroupsV1 says who belongs to which group, and what they are in it.
+            methods:
+              - {name: RoleOf, params: [{name: group, type: string}, {name: user, type: string}], results: [{type: string}]}
+              - {name: Memberships, params: [{name: user, type: string}], results: [{type: "map[string]string"}]}
           - name: Clock
             direction: out
             version: 1
@@ -107,23 +121,29 @@ domains:
               - {name: Record, params: [{name: kind, type: string}, {name: t, type: task.Task}]}
         usecases:
           - name: AddTask
-            description: AddTask adds an open task to its owner's list.
+            description: AddTask adds an open task to its owner's list, or to the list of a group the owner belongs to, assigned or not.
             input:
               - {name: Owner, type: string}
               - {name: Title, type: string}
               - {name: Notes, type: string}
               - {name: Priority, type: string}
-              - {name: Assignee, type: string}
+              - {name: GroupID, type: string}
+              - {name: AssigneeID, type: string}
               - {name: Due, type: time.Time}
             output:
               - {name: Task, type: task.Task}
-            errors: [task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority]
-            calls: [tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            errors: [task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotMember, task.ErrNotAssignable]
+            calls: [tasks/port/Clock@v1.Now, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: adds an open task, kind: success}
+              - {name: adds a task to a group list, kind: success}
+              - {name: assigns a task to a contact, kind: success}
               - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
               - {name: refuses a long title, kind: refusal, error: task.ErrTitleTooLong}
               - {name: refuses an unknown priority, kind: refusal, error: task.ErrUnknownPriority}
+              - {name: refuses a group the member is not in, kind: refusal, error: task.ErrNotMember}
+              - {name: refuses an assignee who is no contact, kind: refusal, error: task.ErrNotAssignable}
+              - {name: refuses an assignee outside the group, kind: refusal, error: task.ErrNotAssignable}
           - name: MoveTask
             description: MoveTask moves a task through its lifecycle by one event (complete, reopen, archive, restore), for a member who sees it; a task they do not see is not found.
             input:
@@ -133,23 +153,54 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotAllowed]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: completes an open task, kind: success}
               - {name: refuses an unknown task, kind: refusal, error: task.ErrNotFound}
               - {name: refuses the task of another member, kind: refusal, error: task.ErrNotFound}
               - {name: moves a task shared with the member, kind: success}
+              - {name: moves a task of a group of the member, kind: success}
+              - {name: moves a task assigned to the member, kind: success}
               - {name: refuses to archive an open task, kind: refusal, error: task.ErrNotAllowed}
           - name: ListTasks
-            description: ListTasks lists the tasks a member sees, theirs and those shared with them, of a state, or every one not archived, the most urgent first.
+            description: "ListTasks lists the tasks a member sees, theirs, those shared with them, assigned to them and on their groups' lists, of a view (inbox, today, upcoming, shared, assigned, completed or group), of a state, or every one not archived, the most urgent first; a group narrows the list, and a time zone says when the day ends."
             input:
               - {name: Owner, type: string}
               - {name: State, type: string}
+              - {name: View, type: string}
+              - {name: Group, type: string}
+              - {name: TZ, type: string}
             output:
               - {name: Tasks, type: "[]task.Task"}
-            calls: [tasks/port/TaskStore@v1.List]
+            errors: [task.ErrUnknownView, task.ErrGroupNeeded, task.ErrBadZone, task.ErrNoGroup]
+            calls: [tasks/port/Groups@v1.Memberships, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List]
             scenarios:
               - {name: lists the most urgent first, kind: success}
+              - {name: lists the tasks of a group, kind: success}
+              - {name: lists a view, kind: success}
+              - {name: refuses an unknown view, kind: refusal, error: task.ErrUnknownView}
+              - {name: refuses the group view without a group, kind: refusal, error: task.ErrGroupNeeded}
+              - {name: refuses an unknown time zone, kind: refusal, error: task.ErrBadZone}
+              - {name: refuses a group the member is not in, kind: refusal, error: task.ErrNoGroup}
+          - name: CountViews
+            description: CountViews counts what a member's sidebar shows, the tasks left to do in each view, the overdue ones, those finished this week, and the open ones of each of their groups.
+            input:
+              - {name: User, type: string}
+              - {name: TZ, type: string}
+            output:
+              - {name: Inbox, type: int}
+              - {name: Today, type: int}
+              - {name: Upcoming, type: int}
+              - {name: Shared, type: int}
+              - {name: Assigned, type: int}
+              - {name: Overdue, type: int}
+              - {name: CompletedThisWeek, type: int}
+              - {name: Groups, type: "map[string]int"}
+            errors: [task.ErrBadZone]
+            calls: [tasks/port/Groups@v1.Memberships, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.List]
+            scenarios:
+              - {name: counts every view, kind: success}
+              - {name: refuses an unknown time zone, kind: refusal, error: task.ErrBadZone}
           - name: GetTask
             description: GetTask reads one task, for a member who sees it.
             input:
@@ -158,37 +209,45 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound]
-            calls: [tasks/port/TaskStore@v1.Get]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf]
             scenarios:
               - {name: reads a task shared with the member, kind: success}
+              - {name: reads a task of a group of the member, kind: success}
+              - {name: reads a task assigned to the member, kind: success}
               - {name: refuses a task the member does not see, kind: refusal, error: task.ErrNotFound}
+              - {name: refuses a group task to who left the group, kind: refusal, error: task.ErrNotFound}
           - name: EditTask
-            description: EditTask changes what a task says, its title, notes, priority, assignee or due date, each only when given, for a member who sees it.
+            description: EditTask changes what a task says, its title, notes, priority, assignee or due date, each only when given, for a member who sees it; an empty assignee clears it.
             input:
               - {name: User, type: string}
               - {name: ID, type: string}
               - {name: Title, type: "*string"}
               - {name: Notes, type: "*string"}
               - {name: Priority, type: "*string"}
-              - {name: Assignee, type: "*string"}
+              - {name: AssigneeID, type: "*string"}
               - {name: Due, type: "*time.Time"}
             output:
               - {name: Task, type: task.Task}
-            errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotAssignable]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: changes only what is given, kind: success}
+              - {name: assigns a member of the group, kind: success}
+              - {name: clears the assignee, kind: success}
               - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
+              - {name: refuses an assignee outside the group, kind: refusal, error: task.ErrNotAssignable}
           - name: DeleteTask
-            description: DeleteTask deletes a task, for its owner alone.
+            description: DeleteTask deletes a task, for its owner, or for an owner or an admin of its group.
             input:
               - {name: User, type: string}
               - {name: ID, type: string}
             errors: [task.ErrNotFound, task.ErrNotOwner]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/TaskStore@v1.Delete, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/TaskStore@v1.Delete, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: deletes a task of the owner, kind: success}
+              - {name: deletes a task of the group as its admin, kind: success}
               - {name: refuses a member it is shared with, kind: refusal, error: task.ErrNotOwner}
+              - {name: refuses a plain member of the group, kind: refusal, error: task.ErrNotOwner}
           - name: ShareTask
             description: ShareTask shares a task with a contact of its owner, who then sees it.
             input:
@@ -198,11 +257,12 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotOwner, task.ErrNotContact]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: shares with a contact, kind: success}
               - {name: refuses who is no contact, kind: refusal, error: task.ErrNotContact}
               - {name: refuses who is not the owner, kind: refusal, error: task.ErrNotOwner}
+              - {name: refuses a member of the group who is not the owner, kind: refusal, error: task.ErrNotOwner}
           - name: UnshareTask
             description: UnshareTask ends the sharing of a task with a member, for its owner, or for that member who leaves it.
             input:
@@ -212,10 +272,19 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotOwner]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save]
             scenarios:
               - {name: lets a member leave a task, kind: success}
               - {name: refuses a member who removes another, kind: refusal, error: task.ErrNotOwner}
+          - name: FollowGroup
+            description: "FollowGroup keeps the tasks consistent with a group that changed: the tasks of a deleted group go back to their owners' lists, and a task assigned to a member who is no longer in its group, and no more its owner's or shared, loses its assignee. Doing it twice changes nothing."
+            input:
+              - {name: Group, type: string}
+              - {name: Deleted, type: bool}
+            calls: [tasks/port/TaskStore@v1.List, tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save]
+            scenarios:
+              - {name: sends the tasks of a deleted group back to their owners, kind: success}
+              - {name: unassigns who left the group, kind: success}
           - name: CountTasks
             description: CountTasks counts the tasks per state, and the open ones past their due date.
             output:
@@ -252,10 +321,38 @@ domains:
               description: "byDue orders two tasks by due date, one with none last."
               params: [{name: a, type: "task.Task"}, {name: b, type: "task.Task"}]
               results: [{type: "int"}]
+            - name: roleIn
+              description: "roleIn is the role a member has in the group a task is on: empty for a task on no group, and for a member who is in none."
+              params: [{name: ctx, type: "context.Context"}, {name: groups, type: "GroupsV1"}, {name: t, type: "task.Task"}, {name: user, type: "string"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: load
+              description: "load reads a task for a member who sees it, with the role they have in its group; a task they do not see is not found, as if there were none."
+              params: [{name: ctx, type: "context.Context"}, {name: store, type: "TaskStoreV1"}, {name: groups, type: "GroupsV1"}, {name: id, type: "string"}, {name: user, type: "string"}]
+              results: [{type: "task.Task"}, {type: "string"}, {type: "error"}]
+            - name: manages
+              description: "manages reports whether a member deletes a task: its owner, or an owner or an admin of its group, whose role is given."
+              params: [{name: t, type: "task.Task"}, {name: user, type: "string"}, {name: role, type: "string"}]
+              results: [{type: "bool"}]
+            - name: assignable
+              description: "assignable reports whether a task is assigned to a member by the caller: to the caller, to its owner, to a member it is shared with, to a member of its group when it is on a group's list, to a contact of the caller when it is a personal task."
+              params: [{name: ctx, type: "context.Context"}, {name: groups, type: "GroupsV1"}, {name: circle, type: "CircleV1"}, {name: t, type: "task.Task"}, {name: caller, type: "string"}, {name: candidate, type: "string"}]
+              results: [{type: "bool"}, {type: "error"}]
+            - name: dayAndWeek
+              description: "dayAndWeek places now in the member's time zone, an IANA name, UTC when none is given, and returns the end of their day and the start of their week, a Monday at midnight."
+              params: [{name: now, type: "time.Time"}, {name: tz, type: "string"}]
+              results: [{type: "time.Time"}, {type: "time.Time"}, {type: "error"}]
+            - name: inView
+              description: "inView reports whether a task belongs to a view for a member, the end of whose day is tomorrow, and who is or is not in the task's group."
+              params: [{name: view, type: "string"}, {name: t, type: "task.Task"}, {name: user, type: "string"}, {name: inGroup, type: "bool"}, {name: tomorrow, type: "time.Time"}]
+              results: [{type: "bool"}]
+            - name: byCompletion
+              description: "byCompletion orders the completed view: the most recently finished first."
+              params: [{name: a, type: "task.Task"}, {name: b, type: "task.Task"}]
+              results: [{type: "int"}]
       - name: taskstore
         role: adapter
         code: 64.1.3
-        uses: [planner, task, contactsapi]
+        uses: [planner, task, contactsapi, groupsapi, groupstore]
         description: The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, and the framework's clock.
         entities:
           - name: Record
@@ -267,7 +364,8 @@ domains:
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
-              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal,subject"'}
+              - {name: GroupID, type: string, tag: 'json:"groupId" app:"public"'}
+              - {name: AssigneeID, type: string, tag: 'json:"assigneeId" app:"personal,subject"'}
               - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
               - {name: State, type: ShelfState, tag: 'json:"state" app:"public"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
@@ -294,9 +392,8 @@ domains:
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: OwnerID, type: string, tag: 'json:"ownerId" app:"public"'}
-              - {name: Audience, type: "[]string", tag: 'json:"audience" app:"public"', description: "Audience are the members the event is told to: the task's owner and those it is shared with."}
+              - {name: Audience, type: "[]string", tag: 'json:"audience" app:"public"', description: "Audience are the members the event is told to: the task's owner, those it is shared with, its assignee and the members of its group."}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
-              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
         topics:
           - {name: events, message: Event, description: "What happened to the tasks: one message a task added or moved, delivered at least once."}
@@ -313,12 +410,17 @@ domains:
           - name: Friends
             description: Friends is Circle@v1 on the contacts' query "are-contacts".
             implements: [tasks/port/Circle@v1]
+          - name: Groups
+            description: Groups is Groups@v1 on the groups' queries "role" and "memberships".
+            implements: [tasks/port/Groups@v1]
           - name: Announcer
             description: Announcer is Journal@v1 on the topic "events".
             implements: [tasks/port/Journal@v1]
           - name: AppClock
             description: AppClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
             implements: [tasks/port/Clock@v1]
+        subscriptions:
+          - {name: groups, topic: groups/topic/events, handler: FollowGroups, description: "A group deleted, or a member who left it or was removed from it: the tasks follow.", uses: [tasks/usecase/FollowGroup], calls: [tasks/usecase/FollowGroup]}
         internals:
           functions:
             - name: toRecord
@@ -329,6 +431,10 @@ domains:
               description: "fromRecord is the task a record keeps."
               params: [{name: r, type: "Record"}]
               results: [{type: "task.Task"}]
+            - name: audienceOf
+              description: "audienceOf is everyone who sees a task: its owner, the members it is shared with, its assignee, and the members of its group, the groups' query \"members\" naming them; each once, the owner first."
+              params: [{name: ctx, type: "context.Context"}, {name: t, type: "task.Task"}]
+              results: [{type: "[]string"}, {type: "error"}]
       - name: api
         role: presentation
         code: 64.1.4
@@ -341,7 +447,8 @@ domains:
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
-              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: GroupID, type: string, tag: 'json:"groupId" app:"public"'}
+              - {name: AssigneeID, type: string, tag: 'json:"assigneeId" app:"personal"'}
               - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
           - name: ByID
             description: The task a route names.
@@ -354,7 +461,7 @@ domains:
               - {name: Title, type: "*string", tag: 'json:"title" app:"public"'}
               - {name: Notes, type: "*string", tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: "*string", tag: 'json:"priority" app:"public"'}
-              - {name: Assignee, type: "*string", tag: 'json:"assignee" app:"personal"'}
+              - {name: AssigneeID, type: "*string", tag: 'json:"assigneeId" app:"personal"'}
               - {name: Due, type: "*time.Time", tag: 'json:"due" app:"public"'}
           - name: ShareRequest
             description: The member a task is shared with.
@@ -370,6 +477,24 @@ domains:
             description: Which tasks to list.
             fields:
               - {name: State, type: string, tag: 'query:"state"'}
+              - {name: View, type: string, tag: 'query:"view"'}
+              - {name: Group, type: string, tag: 'query:"group"'}
+              - {name: TZ, type: string, tag: 'query:"tz"'}
+          - name: CountsRequest
+            description: Whose views to count, in which time zone.
+            fields:
+              - {name: TZ, type: string, tag: 'query:"tz"'}
+          - name: ViewCounts
+            description: What a member's sidebar counts.
+            fields:
+              - {name: Inbox, type: int, tag: 'json:"inbox" app:"public"'}
+              - {name: Today, type: int, tag: 'json:"today" app:"public"'}
+              - {name: Upcoming, type: int, tag: 'json:"upcoming" app:"public"'}
+              - {name: Shared, type: int, tag: 'json:"shared" app:"public"'}
+              - {name: Assigned, type: int, tag: 'json:"assigned" app:"public"'}
+              - {name: Overdue, type: int, tag: 'json:"overdue" app:"public"'}
+              - {name: CompletedThisWeek, type: int, tag: 'json:"completedThisWeek" app:"public"'}
+              - {name: Groups, type: "map[string]int", tag: 'json:"groups" app:"public"'}
           - name: Census
             description: The tasks counted, every member's together.
             fields:
@@ -387,6 +512,7 @@ domains:
         endpoints:
           - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
           - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
+          - {route: "GET /api/tasks/counts", request: CountsRequest, response: ViewCounts, handler: Counts, auth: required, uses: [tasks/usecase/CountViews], calls: [tasks/usecase/CountViews]}
           - {route: "GET /api/tasks/{id}", request: ByID, response: task.Task, handler: Get, auth: required, uses: [tasks/usecase/GetTask], calls: [tasks/usecase/GetTask]}
           - {route: "PATCH /api/tasks/{id}", request: EditRequest, response: task.Task, handler: Edit, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/EditTask], calls: [tasks/usecase/EditTask]}
           - {route: "DELETE /api/tasks/{id}", request: ByID, response: NoInput, handler: Delete, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/DeleteTask], calls: [tasks/usecase/DeleteTask]}
@@ -416,6 +542,7 @@ domains:
         start: tasks/usecase/MoveTask
         steps:
           - call: tasks/port/TaskStore@v1.Get
+          - call: tasks/port/Groups@v1.RoleOf
           - call: tasks/port/Clock@v1.Now
           - call: tasks/port/TaskStore@v1.Save
           - call: tasks/port/Journal@v1.Record

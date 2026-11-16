@@ -6,8 +6,10 @@ package taskstore
 
 import (
 	"context"
+	"slices"
 
 	"github.com/kitsunium/sdk/framework/app"
+	"github.com/kitsunium/todo/groups/groupsapi"
 	"github.com/kitsunium/todo/tasks/task"
 )
 
@@ -22,9 +24,37 @@ func newAnnouncer() *Announcer {
 
 // record is Announcer.Record's body: what happened to the task is published
 // on the topic "events", with an id of its own, the date the task was last
-// written and the members to tell: its owner and those it is shared with. Whoever listens hears of it later, at least once.
+// written and the members to tell: everyone who sees the task. Whoever listens hears of it later, at least once.
 func (a *Announcer) record(ctx context.Context, kind string, t task.Task) (err error) {
+	audience, err := audienceOf(ctx, t)
+	if err != nil {
+		return err
+	}
 	return EventsTopic.Publish(ctx, Event{
-		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Audience: append([]string{t.OwnerID}, t.SharedWith...), Title: t.Title, Assignee: t.Assignee, At: t.UpdatedAt,
+		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Audience: audience, Title: t.Title, At: t.UpdatedAt,
 	})
+}
+
+// audienceOf is everyone who sees a task: its owner, the members it is shared
+// with, its assignee, and the members of its group, the groups' query "members"
+// naming them; each once, the owner first.
+func audienceOf(ctx context.Context, t task.Task) ([]string, error) {
+	out := []string{t.OwnerID}
+	add := func(ids ...string) {
+		for _, id := range ids {
+			if id != "" && !slices.Contains(out, id) {
+				out = append(out, id)
+			}
+		}
+	}
+	add(t.SharedWith...)
+	add(t.AssigneeID)
+	if t.GroupID != "" {
+		members, err := groupsapi.MembersQuery.Ask(ctx, groupsapi.WhichGroup{Group: t.GroupID})
+		if err != nil {
+			return nil, err
+		}
+		add(members.Users...)
+	}
+	return out, nil
 }

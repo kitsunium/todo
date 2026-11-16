@@ -13,18 +13,15 @@ import (
 // kindDeleted is what the journal is told of a task its owner deleted.
 const kindDeleted = "deleted"
 
-// execute is DeleteTask's body: its owner deletes a task, and those it was
-// shared with are told. A member it is shared with may not; anyone else
-// finds none.
+// execute is DeleteTask's body: its owner deletes a task, and so does an
+// owner or an admin of its group; everyone who saw it is told. A member who
+// sees it and is none of them may not; anyone else finds none.
 func (h *DeleteTaskHandler) execute(ctx context.Context, in *DeleteTaskInput) (DeleteTaskOutput, error) {
-	t, err := h.taskStore.Get(ctx, in.ID)
+	t, role, err := load(ctx, h.taskStore, h.groups, in.ID, in.User)
 	if err != nil {
 		return DeleteTaskOutput{}, err
 	}
-	switch {
-	case !t.SeenBy(in.User):
-		return DeleteTaskOutput{}, task.ErrNotFound
-	case t.OwnerID != in.User:
+	if !manages(t, in.User, role) {
 		return DeleteTaskOutput{}, task.ErrNotOwner
 	}
 	if err := h.taskStore.Delete(ctx, t.ID); err != nil {

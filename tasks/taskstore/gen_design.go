@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package taskstore — The tasks in the framework's store, the archiving of
 // what was done long ago, their events on a topic, and the framework's clock.
@@ -14,6 +14,7 @@ import (
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/errs"
+	"github.com/kitsunium/todo/groups/groupstore"
 	"github.com/kitsunium/todo/tasks/planner"
 	"github.com/kitsunium/todo/tasks/task"
 )
@@ -30,7 +31,8 @@ type Record struct {
 	Title      string     `json:"title" app:"public"`
 	Notes      string     `json:"notes" app:"public"`
 	Priority   string     `json:"priority" app:"public"`
-	Assignee   string     `json:"assignee" app:"personal,subject"`
+	GroupID    string     `json:"groupId" app:"public"`
+	AssigneeID string     `json:"assigneeId" app:"personal,subject"`
 	Due        time.Time  `json:"due" app:"public"`
 	State      ShelfState `json:"state" app:"public"`
 	CreatedAt  time.Time  `json:"createdAt" app:"public"`
@@ -48,11 +50,10 @@ type Event struct {
 	Kind    string `json:"kind" app:"public"`
 	TaskID  string `json:"taskId" app:"public"`
 	OwnerID string `json:"ownerId" app:"public"`
-	// Audience are the members the event is told to: the task's owner and those it
-	// is shared with.
+	// Audience are the members the event is told to: the task's owner, those it is
+	// shared with, its assignee and the members of its group.
 	Audience []string  `json:"audience" app:"public"`
 	Title    string    `json:"title" app:"public"`
-	Assignee string    `json:"assignee" app:"personal"`
 	At       time.Time `json:"at" app:"public"`
 }
 
@@ -106,6 +107,28 @@ func (a *Friends) AreContacts(ctx context.Context, one string, other string) (bo
 }
 
 var _ planner.CircleV1 = (*Friends)(nil)
+
+// Groups is Groups@v1 on the groups' queries "role" and "memberships".
+type Groups struct {
+	groups // its own state, hand-written
+}
+
+// NewGroups builds Groups: its body is the hand-written newGroups.
+func NewGroups() *Groups {
+	return newGroups()
+}
+
+// Memberships is tasks/port/Groups@v1's.
+func (a *Groups) Memberships(ctx context.Context, user string) (map[string]string, error) {
+	return a.memberships(ctx, user)
+}
+
+// RoleOf is tasks/port/Groups@v1's.
+func (a *Groups) RoleOf(ctx context.Context, group string, user string) (string, error) {
+	return a.roleOf(ctx, group, user)
+}
+
+var _ planner.GroupsV1 = (*Groups)(nil)
 
 // Tasks is TaskStore@v1 on the store "tasks".
 type Tasks struct {
@@ -187,13 +210,22 @@ var TasksStore = Service.Store("tasks", func(e Record) string { return e.ID },
 // moved, delivered at least once.
 var EventsTopic = Service.Topic[Event]("events")
 
+var _ = Service.Subscribe("groups", groupstore.EventsTopic, FollowGroups)
+
+// FollowGroups — A group deleted, or a member who left it or was removed
+// from it: the tasks follow.
+func FollowGroups(ctx context.Context, msg groupstore.Event) error {
+	return followGroups(ctx, msg)
+}
+
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
+	followGroup planner.FollowGroup
 }
 
 // Wire gives the handlers what they use: the role that mounts taskstore calls it
 // before its App runs.
-func Wire() {
-
+func Wire(followGroup planner.FollowGroup) {
+	wired.followGroup = followGroup
 }

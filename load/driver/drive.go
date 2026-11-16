@@ -10,12 +10,10 @@ import (
 	"time"
 )
 
-// What a load adds: a few titles, the three priorities, and assignees of
-// whom one has an address, so that the reminders have something to send.
+// What a load adds: a few titles and the three priorities.
 var (
 	titles     = []string{"Write the release notes", "Review the pull request", "Call the supplier", "Plan the sprint", "Fix the flaky test", "Update the runbook"}
 	priorities = []string{"normal", "high", "low"}
-	assignees  = []string{"Ada", "ada@example.com", "Grace", ""}
 )
 
 // The load's own member: it signs up the first time, and signs in.
@@ -55,7 +53,7 @@ func (h *DriveHandler) execute(ctx context.Context, in *DriveInput) (DriveOutput
 			if round%2 == 0 {
 				due = time.Now().Add(12 * time.Hour)
 			}
-			id, err := h.api.Add(ctx, titles[round%len(titles)]+" #"+strconv.Itoa(round+1), priorities[round%len(priorities)], assignees[round%len(assignees)], due)
+			id, err := h.api.Add(ctx, titles[round%len(titles)]+" #"+strconv.Itoa(round+1), priorities[round%len(priorities)], due)
 			count(err)
 			if err == nil {
 				added = append(added, id)

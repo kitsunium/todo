@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package driver — What a load does, and the API it needs.
 //
@@ -26,7 +26,7 @@ var (
 // APIV1 is the server's HTTP API, as the load calls it.
 type APIV1 interface {
 	Activity(ctx context.Context) (int, error)
-	Add(ctx context.Context, title string, priority string, assignee string, due time.Time) (string, error)
+	Add(ctx context.Context, title string, priority string, due time.Time) (string, error)
 	Enter(ctx context.Context, email string, name string, passphrase string) error
 	List(ctx context.Context) (int, error)
 	Move(ctx context.Context, id string, event string) error

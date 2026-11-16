@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package groupsapi — The HTTP API of a member's groups and invitations, and
 // the questions the rest of the product asks of them.
@@ -72,6 +72,11 @@ type InviteRequest struct {
 	UserID string `json:"userId" app:"public"`
 }
 
+// Members — The members of a group.
+type Members struct {
+	Users []string `json:"users" app:"public"`
+}
+
 // NoInput — A request, or an answer, that says nothing.
 type NoInput struct {
 }
@@ -93,6 +98,11 @@ type RoleRequest struct {
 	ID     string `path:"id"`
 	UserID string `path:"userId"`
 	Role   string `json:"role" app:"public"`
+}
+
+// WhichGroup — A group whose members are asked.
+type WhichGroup struct {
+	Group string `json:"group" app:"public"`
 }
 
 // WhoseGroups — A member whose groups are asked.
@@ -198,6 +208,15 @@ func AskMemberships(ctx context.Context, in WhoseGroups) (Belongings, error) {
 	return askMemberships(ctx, in)
 }
 
+// MembersQuery — The members of a group, for the components that tell them
+// what happens to the group's tasks.
+var MembersQuery = Service.Query("members", AskMembers)
+
+// AskMembers handles the query "members": its body is the hand-written askMembers.
+func AskMembers(ctx context.Context, in WhichGroup) (Members, error) {
+	return askMembers(ctx, in)
+}
+
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
@@ -213,11 +232,12 @@ var wired struct {
 	setRole          roster.SetRole
 	roleOf           roster.RoleOf
 	memberships      roster.Memberships
+	membersOf        roster.MembersOf
 }
 
 // Wire gives the handlers what they use: the role that mounts groupsapi calls it
 // before its App runs.
-func Wire(listGroups roster.ListGroups, createGroup roster.CreateGroup, getGroup roster.GetGroup, editGroup roster.EditGroup, deleteGroup roster.DeleteGroup, invite roster.Invite, listInvitations roster.ListInvitations, answerInvitation roster.AnswerInvitation, removeMember roster.RemoveMember, setRole roster.SetRole, roleOf roster.RoleOf, memberships roster.Memberships) {
+func Wire(listGroups roster.ListGroups, createGroup roster.CreateGroup, getGroup roster.GetGroup, editGroup roster.EditGroup, deleteGroup roster.DeleteGroup, invite roster.Invite, listInvitations roster.ListInvitations, answerInvitation roster.AnswerInvitation, removeMember roster.RemoveMember, setRole roster.SetRole, roleOf roster.RoleOf, memberships roster.Memberships, membersOf roster.MembersOf) {
 	wired.listGroups = listGroups
 	wired.createGroup = createGroup
 	wired.getGroup = getGroup
@@ -230,4 +250,5 @@ func Wire(listGroups roster.ListGroups, createGroup roster.CreateGroup, getGroup
 	wired.setRole = setRole
 	wired.roleOf = roleOf
 	wired.memberships = memberships
+	wired.membersOf = membersOf
 }

@@ -14,11 +14,11 @@ import (
 func givenShareTaskSharesWithAContact(t *testing.T) (ShareTask, ShareTaskInput, func(*testing.T, ShareTaskOutput)) {
 	t.Helper()
 	store, journal := newMemTasks(open("task_a")), &memJournal{}
-	uc := NewShareTask(store, contacts{ada + "|" + bob: true}, fixedClock(epoch), journal)
+	uc := NewShareTask(store, crew(), contacts{ada + "|" + bob: true}, fixedClock(epoch), journal)
 	in := ShareTaskInput{User: ada, ID: "task_a", With: bob}
 	return uc, in, func(t *testing.T, out ShareTaskOutput) {
 		t.Helper()
-		if !slices.Equal(out.Task.SharedWith, []string{bob}) || !out.Task.SeenBy(bob) {
+		if !slices.Equal(out.Task.SharedWith, []string{bob}) || !out.Task.SeenBy(bob, false) {
 			t.Errorf("the task shared: %+v", out.Task)
 		}
 		again, err := uc.Execute(t.Context(), in)
@@ -32,7 +32,7 @@ func givenShareTaskSharesWithAContact(t *testing.T) (ShareTask, ShareTaskInput, 
 // refuses with task.ErrNotContact.
 func givenShareTaskRefusesWhoIsNoContact(t *testing.T) (ShareTask, ShareTaskInput) {
 	t.Helper()
-	uc := NewShareTask(newMemTasks(open("task_a")), contacts{ada + "|" + bob: true}, fixedClock(epoch), &memJournal{})
+	uc := NewShareTask(newMemTasks(open("task_a")), crew(), contacts{ada + "|" + bob: true}, fixedClock(epoch), &memJournal{})
 	return uc, ShareTaskInput{User: ada, ID: "task_a", With: cy}
 }
 
@@ -40,6 +40,14 @@ func givenShareTaskRefusesWhoIsNoContact(t *testing.T) (ShareTask, ShareTaskInpu
 // refuses with task.ErrNotOwner.
 func givenShareTaskRefusesWhoIsNotTheOwner(t *testing.T) (ShareTask, ShareTaskInput) {
 	t.Helper()
-	uc := NewShareTask(newMemTasks(shared("task_a")), contacts{bob + "|" + cy: true}, fixedClock(epoch), &memJournal{})
+	uc := NewShareTask(newMemTasks(shared("task_a")), crew(), contacts{bob + "|" + cy: true}, fixedClock(epoch), &memJournal{})
 	return uc, ShareTaskInput{User: bob, ID: "task_a", With: cy}
+}
+
+// givenShareTaskRefusesAMemberOfTheGroupWhoIsNotTheOwner builds ShareTask for "refuses a member of the group who is not the owner": the use case and the input it
+// refuses with task.ErrNotOwner.
+func givenShareTaskRefusesAMemberOfTheGroupWhoIsNotTheOwner(t *testing.T) (ShareTask, ShareTaskInput) {
+	t.Helper()
+	uc := NewShareTask(newMemTasks(grouped("task_a")), crew(), contacts{bob + "|" + dee: true}, fixedClock(epoch), &memJournal{})
+	return uc, ShareTaskInput{User: bob, ID: "task_a", With: dee} // an admin of the group runs its list, and shares none of its tasks
 }

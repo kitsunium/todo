@@ -40,8 +40,8 @@ func (a *Client) activity(ctx context.Context) (r0 int, err error) {
 }
 
 // add is Client.Add's body: the id of the task added.
-func (a *Client) add(ctx context.Context, title string, priority string, assignee string, due time.Time) (r0 string, err error) {
-	body := map[string]any{"title": title, "priority": priority, "assignee": assignee}
+func (a *Client) add(ctx context.Context, title string, priority string, due time.Time) (r0 string, err error) {
+	body := map[string]any{"title": title, "priority": priority}
 	if !due.IsZero() {
 		body["due"] = due.UTC().Format(time.RFC3339)
 	}

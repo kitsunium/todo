@@ -18,17 +18,14 @@ const kindShared = "shared"
 // execute is ShareTask's body: the owner shares a task with one of their
 // contacts. Sharing it again with the same member changes nothing.
 func (h *ShareTaskHandler) execute(ctx context.Context, in *ShareTaskInput) (ShareTaskOutput, error) {
-	t, err := h.taskStore.Get(ctx, in.ID)
+	t, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.User)
 	if err != nil {
 		return ShareTaskOutput{}, err
 	}
-	switch {
-	case !t.SeenBy(in.User):
-		return ShareTaskOutput{}, task.ErrNotFound
-	case t.OwnerID != in.User:
+	if t.OwnerID != in.User {
 		return ShareTaskOutput{}, task.ErrNotOwner
 	}
-	if t.SeenBy(in.With) {
+	if in.With == t.OwnerID || slices.Contains(t.SharedWith, in.With) {
 		return ShareTaskOutput{Task: t}, nil
 	}
 	friends, err := h.circle.AreContacts(ctx, in.User, in.With)

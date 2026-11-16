@@ -48,14 +48,14 @@ func recent(ctx context.Context, in PageRequest) (out Page, err error) {
 var writing sync.Mutex
 
 // record is the subscription "tasks"'s body: one entry a message and a
-// member it is told to, the task's owner and those it is shared with.
+// member it is told to: everyone who sees the task.
 func record(ctx context.Context, msg taskstore.Event) error {
 	audience := msg.Audience
 	if len(audience) == 0 {
 		audience = []string{msg.OwnerID}
 	}
 	for _, user := range audience {
-		e := Entry{ID: msg.ID + "." + user, UserID: user, Kind: msg.Kind, TaskID: msg.TaskID, Title: msg.Title, Assignee: msg.Assignee, At: msg.At}
+		e := Entry{ID: msg.ID + "." + user, UserID: user, Kind: msg.Kind, TaskID: msg.TaskID, Title: msg.Title, At: msg.At}
 		if err := write(ctx, e); err != nil {
 			return err
 		}

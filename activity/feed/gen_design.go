@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package feed — The feed, written from the events of the tasks, of the
 // contacts and of the groups, and its HTTP read.
@@ -33,8 +33,9 @@ type Entry struct {
 	ID string `json:"id" app:"public"`
 	// Seq orders the entries: each is one above the entry written before it.
 	Seq int64 `json:"seq" app:"public"`
-	// UserID is the member whose feed the entry is in: the task's owner.
-	UserID string `json:"userId" app:"public"`
+	// UserID is the member whose feed the entry is in: whoever the event is told
+	// to, and the subject of the entry.
+	UserID string `json:"userId" app:"personal,subject"`
 	// Kind is added or the lifecycle event that moved a task, contact-requested or
 	// contact-accepted for a contact, group-invited, group-joined, group-left,
 	// group-removed, group-role or group-deleted for a group.
@@ -42,9 +43,8 @@ type Entry struct {
 	TaskID string `json:"taskId" app:"public"`
 	// Title is the task's title, the name of the member a contact entry is about,
 	// or the name of the group a group entry is about.
-	Title    string    `json:"title" app:"personal"`
-	Assignee string    `json:"assignee" app:"personal,subject"`
-	At       time.Time `json:"at" app:"public"`
+	Title string    `json:"title" app:"personal"`
+	At    time.Time `json:"at" app:"public"`
 }
 
 // Page — The latest entries, newest first.

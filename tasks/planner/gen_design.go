@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -29,6 +29,12 @@ type ClockV1 interface {
 	Now(ctx context.Context) (time.Time, error)
 }
 
+// GroupsV1 says who belongs to which group, and what they are in it.
+type GroupsV1 interface {
+	Memberships(ctx context.Context, user string) (map[string]string, error)
+	RoleOf(ctx context.Context, group string, user string) (string, error)
+}
+
 // JournalV1 is told what happened to a task, for whoever keeps a feed of it.
 type JournalV1 interface {
 	Record(ctx context.Context, kind string, t task.Task) error
@@ -43,19 +49,21 @@ type TaskStoreV1 interface {
 	Save(ctx context.Context, t task.Task) error
 }
 
-// AddTask adds an open task to its owner's list.
+// AddTask adds an open task to its owner's list, or to the list of a group the
+// owner belongs to, assigned or not.
 type AddTask interface {
 	Execute(ctx context.Context, in AddTaskInput) (AddTaskOutput, error)
 }
 
 // AddTaskInput is AddTask's input: a field added breaks no caller.
 type AddTaskInput struct {
-	Owner    string
-	Title    string
-	Notes    string
-	Priority string
-	Assignee string
-	Due      time.Time
+	Owner      string
+	Title      string
+	Notes      string
+	Priority   string
+	GroupID    string
+	AssigneeID string
+	Due        time.Time
 }
 
 // AddTaskOutput is AddTask's output.
@@ -66,13 +74,15 @@ type AddTaskOutput struct {
 // AddTaskHandler runs AddTask: its body is the hand-written execute.
 type AddTaskHandler struct {
 	clock     ClockV1
+	groups    GroupsV1
+	circle    CircleV1
 	taskStore TaskStoreV1
 	journal   JournalV1
 }
 
 // NewAddTask builds AddTask on what it calls.
-func NewAddTask(clock ClockV1, taskStore TaskStoreV1, journal JournalV1) *AddTaskHandler {
-	return &AddTaskHandler{clock: clock, taskStore: taskStore, journal: journal}
+func NewAddTask(clock ClockV1, groups GroupsV1, circle CircleV1, taskStore TaskStoreV1, journal JournalV1) *AddTaskHandler {
+	return &AddTaskHandler{clock: clock, groups: groups, circle: circle, taskStore: taskStore, journal: journal}
 }
 
 // Execute runs AddTask.
@@ -117,7 +127,52 @@ func (h *CountTasksHandler) Execute(ctx context.Context, in CountTasksInput) (Co
 
 var _ CountTasks = (*CountTasksHandler)(nil)
 
-// DeleteTask deletes a task, for its owner alone.
+// CountViews counts what a member's sidebar shows, the tasks left to do in
+// each view, the overdue ones, those finished this week, and the open ones of
+// each of their groups.
+type CountViews interface {
+	Execute(ctx context.Context, in CountViewsInput) (CountViewsOutput, error)
+}
+
+// CountViewsInput is CountViews's input: a field added breaks no caller.
+type CountViewsInput struct {
+	User string
+	TZ   string
+}
+
+// CountViewsOutput is CountViews's output.
+type CountViewsOutput struct {
+	Inbox             int
+	Today             int
+	Upcoming          int
+	Shared            int
+	Assigned          int
+	Overdue           int
+	CompletedThisWeek int
+	Groups            map[string]int
+}
+
+// CountViewsHandler runs CountViews: its body is the hand-written execute.
+type CountViewsHandler struct {
+	groups    GroupsV1
+	clock     ClockV1
+	taskStore TaskStoreV1
+}
+
+// NewCountViews builds CountViews on what it calls.
+func NewCountViews(groups GroupsV1, clock ClockV1, taskStore TaskStoreV1) *CountViewsHandler {
+	return &CountViewsHandler{groups: groups, clock: clock, taskStore: taskStore}
+}
+
+// Execute runs CountViews.
+func (h *CountViewsHandler) Execute(ctx context.Context, in CountViewsInput) (CountViewsOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ CountViews = (*CountViewsHandler)(nil)
+
+// DeleteTask deletes a task, for its owner, or for an owner or an admin of its
+// group.
 type DeleteTask interface {
 	Execute(ctx context.Context, in DeleteTaskInput) (DeleteTaskOutput, error)
 }
@@ -135,12 +190,13 @@ type DeleteTaskOutput struct {
 // DeleteTaskHandler runs DeleteTask: its body is the hand-written execute.
 type DeleteTaskHandler struct {
 	taskStore TaskStoreV1
+	groups    GroupsV1
 	journal   JournalV1
 }
 
 // NewDeleteTask builds DeleteTask on what it calls.
-func NewDeleteTask(taskStore TaskStoreV1, journal JournalV1) *DeleteTaskHandler {
-	return &DeleteTaskHandler{taskStore: taskStore, journal: journal}
+func NewDeleteTask(taskStore TaskStoreV1, groups GroupsV1, journal JournalV1) *DeleteTaskHandler {
+	return &DeleteTaskHandler{taskStore: taskStore, groups: groups, journal: journal}
 }
 
 // Execute runs DeleteTask.
@@ -184,20 +240,21 @@ func (h *DueSoonHandler) Execute(ctx context.Context, in DueSoonInput) (DueSoonO
 var _ DueSoon = (*DueSoonHandler)(nil)
 
 // EditTask changes what a task says, its title, notes, priority, assignee or
-// due date, each only when given, for a member who sees it.
+// due date, each only when given, for a member who sees it; an empty assignee
+// clears it.
 type EditTask interface {
 	Execute(ctx context.Context, in EditTaskInput) (EditTaskOutput, error)
 }
 
 // EditTaskInput is EditTask's input: a field added breaks no caller.
 type EditTaskInput struct {
-	User     string
-	ID       string
-	Title    *string
-	Notes    *string
-	Priority *string
-	Assignee *string
-	Due      *time.Time
+	User       string
+	ID         string
+	Title      *string
+	Notes      *string
+	Priority   *string
+	AssigneeID *string
+	Due        *time.Time
 }
 
 // EditTaskOutput is EditTask's output.
@@ -208,13 +265,15 @@ type EditTaskOutput struct {
 // EditTaskHandler runs EditTask: its body is the hand-written execute.
 type EditTaskHandler struct {
 	taskStore TaskStoreV1
+	groups    GroupsV1
+	circle    CircleV1
 	clock     ClockV1
 	journal   JournalV1
 }
 
 // NewEditTask builds EditTask on what it calls.
-func NewEditTask(taskStore TaskStoreV1, clock ClockV1, journal JournalV1) *EditTaskHandler {
-	return &EditTaskHandler{taskStore: taskStore, clock: clock, journal: journal}
+func NewEditTask(taskStore TaskStoreV1, groups GroupsV1, circle CircleV1, clock ClockV1, journal JournalV1) *EditTaskHandler {
+	return &EditTaskHandler{taskStore: taskStore, groups: groups, circle: circle, clock: clock, journal: journal}
 }
 
 // Execute runs EditTask.
@@ -223,6 +282,43 @@ func (h *EditTaskHandler) Execute(ctx context.Context, in EditTaskInput) (EditTa
 }
 
 var _ EditTask = (*EditTaskHandler)(nil)
+
+// FollowGroup keeps the tasks consistent with a group that changed: the tasks
+// of a deleted group go back to their owners' lists, and a task assigned to a
+// member who is no longer in its group, and no more its owner's or shared,
+// loses its assignee. Doing it twice changes nothing.
+type FollowGroup interface {
+	Execute(ctx context.Context, in FollowGroupInput) (FollowGroupOutput, error)
+}
+
+// FollowGroupInput is FollowGroup's input: a field added breaks no caller.
+type FollowGroupInput struct {
+	Group   string
+	Deleted bool
+}
+
+// FollowGroupOutput is FollowGroup's output.
+type FollowGroupOutput struct {
+}
+
+// FollowGroupHandler runs FollowGroup: its body is the hand-written execute.
+type FollowGroupHandler struct {
+	taskStore TaskStoreV1
+	groups    GroupsV1
+	clock     ClockV1
+}
+
+// NewFollowGroup builds FollowGroup on what it calls.
+func NewFollowGroup(taskStore TaskStoreV1, groups GroupsV1, clock ClockV1) *FollowGroupHandler {
+	return &FollowGroupHandler{taskStore: taskStore, groups: groups, clock: clock}
+}
+
+// Execute runs FollowGroup.
+func (h *FollowGroupHandler) Execute(ctx context.Context, in FollowGroupInput) (FollowGroupOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ FollowGroup = (*FollowGroupHandler)(nil)
 
 // GetTask reads one task, for a member who sees it.
 type GetTask interface {
@@ -243,11 +339,12 @@ type GetTaskOutput struct {
 // GetTaskHandler runs GetTask: its body is the hand-written execute.
 type GetTaskHandler struct {
 	taskStore TaskStoreV1
+	groups    GroupsV1
 }
 
 // NewGetTask builds GetTask on what it calls.
-func NewGetTask(taskStore TaskStoreV1) *GetTaskHandler {
-	return &GetTaskHandler{taskStore: taskStore}
+func NewGetTask(taskStore TaskStoreV1, groups GroupsV1) *GetTaskHandler {
+	return &GetTaskHandler{taskStore: taskStore, groups: groups}
 }
 
 // Execute runs GetTask.
@@ -257,8 +354,11 @@ func (h *GetTaskHandler) Execute(ctx context.Context, in GetTaskInput) (GetTaskO
 
 var _ GetTask = (*GetTaskHandler)(nil)
 
-// ListTasks lists the tasks a member sees, theirs and those shared with them,
-// of a state, or every one not archived, the most urgent first.
+// ListTasks lists the tasks a member sees, theirs, those shared with them,
+// assigned to them and on their groups' lists, of a view (inbox, today,
+// upcoming, shared, assigned, completed or group), of a state, or every one
+// not archived, the most urgent first; a group narrows the list, and a time
+// zone says when the day ends.
 type ListTasks interface {
 	Execute(ctx context.Context, in ListTasksInput) (ListTasksOutput, error)
 }
@@ -267,6 +367,9 @@ type ListTasks interface {
 type ListTasksInput struct {
 	Owner string
 	State string
+	View  string
+	Group string
+	TZ    string
 }
 
 // ListTasksOutput is ListTasks's output.
@@ -276,12 +379,14 @@ type ListTasksOutput struct {
 
 // ListTasksHandler runs ListTasks: its body is the hand-written execute.
 type ListTasksHandler struct {
+	groups    GroupsV1
+	clock     ClockV1
 	taskStore TaskStoreV1
 }
 
 // NewListTasks builds ListTasks on what it calls.
-func NewListTasks(taskStore TaskStoreV1) *ListTasksHandler {
-	return &ListTasksHandler{taskStore: taskStore}
+func NewListTasks(groups GroupsV1, clock ClockV1, taskStore TaskStoreV1) *ListTasksHandler {
+	return &ListTasksHandler{groups: groups, clock: clock, taskStore: taskStore}
 }
 
 // Execute runs ListTasks.
@@ -313,13 +418,14 @@ type MoveTaskOutput struct {
 // MoveTaskHandler runs MoveTask: its body is the hand-written execute.
 type MoveTaskHandler struct {
 	taskStore TaskStoreV1
+	groups    GroupsV1
 	clock     ClockV1
 	journal   JournalV1
 }
 
 // NewMoveTask builds MoveTask on what it calls.
-func NewMoveTask(taskStore TaskStoreV1, clock ClockV1, journal JournalV1) *MoveTaskHandler {
-	return &MoveTaskHandler{taskStore: taskStore, clock: clock, journal: journal}
+func NewMoveTask(taskStore TaskStoreV1, groups GroupsV1, clock ClockV1, journal JournalV1) *MoveTaskHandler {
+	return &MoveTaskHandler{taskStore: taskStore, groups: groups, clock: clock, journal: journal}
 }
 
 // Execute runs MoveTask.
@@ -349,14 +455,15 @@ type ShareTaskOutput struct {
 // ShareTaskHandler runs ShareTask: its body is the hand-written execute.
 type ShareTaskHandler struct {
 	taskStore TaskStoreV1
+	groups    GroupsV1
 	circle    CircleV1
 	clock     ClockV1
 	journal   JournalV1
 }
 
 // NewShareTask builds ShareTask on what it calls.
-func NewShareTask(taskStore TaskStoreV1, circle CircleV1, clock ClockV1, journal JournalV1) *ShareTaskHandler {
-	return &ShareTaskHandler{taskStore: taskStore, circle: circle, clock: clock, journal: journal}
+func NewShareTask(taskStore TaskStoreV1, groups GroupsV1, circle CircleV1, clock ClockV1, journal JournalV1) *ShareTaskHandler {
+	return &ShareTaskHandler{taskStore: taskStore, groups: groups, circle: circle, clock: clock, journal: journal}
 }
 
 // Execute runs ShareTask.
@@ -387,12 +494,13 @@ type UnshareTaskOutput struct {
 // UnshareTaskHandler runs UnshareTask: its body is the hand-written execute.
 type UnshareTaskHandler struct {
 	taskStore TaskStoreV1
+	groups    GroupsV1
 	clock     ClockV1
 }
 
 // NewUnshareTask builds UnshareTask on what it calls.
-func NewUnshareTask(taskStore TaskStoreV1, clock ClockV1) *UnshareTaskHandler {
-	return &UnshareTaskHandler{taskStore: taskStore, clock: clock}
+func NewUnshareTask(taskStore TaskStoreV1, groups GroupsV1, clock ClockV1) *UnshareTaskHandler {
+	return &UnshareTaskHandler{taskStore: taskStore, groups: groups, clock: clock}
 }
 
 // Execute runs UnshareTask.

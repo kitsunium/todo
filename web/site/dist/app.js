@@ -99,7 +99,6 @@ async function refresh() {
     const due = when(t.due);
     const late = due && t.state === "open" && new Date(t.due).getTime() < now;
     const meta = ["priorité " + (priorities[t.priority] || t.priority)];
-    if (t.assignee) meta.push("pour " + t.assignee);
     if (due) meta.push((late ? "en retard depuis le " : "pour le ") + due);
     li.append(el("span", "meta" + (late ? " late" : ""), meta.join(" · ")));
     return li;
@@ -147,7 +146,7 @@ $("add").addEventListener("submit", (ev) => {
   ev.preventDefault();
   attempt(async () => {
     const f = fields(ev.target);
-    const task = { title: f.title, priority: f.priority, assignee: f.assignee };
+    const task = { title: f.title, priority: f.priority };
     if (f.due) task.due = new Date(f.due).toISOString();
     await call("POST", "/api/tasks", task);
     ev.target.reset();

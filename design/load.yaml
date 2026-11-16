@@ -18,7 +18,7 @@ domains:
             description: APIV1 is the server's HTTP API, as the load calls it.
             methods:
               - {name: Enter, params: [{name: email, type: string}, {name: name, type: string}, {name: passphrase, type: string}]}
-              - {name: Add, params: [{name: title, type: string}, {name: priority, type: string}, {name: assignee, type: string}, {name: due, type: time.Time}], results: [{type: string}]}
+              - {name: Add, params: [{name: title, type: string}, {name: priority, type: string}, {name: due, type: time.Time}], results: [{type: string}]}
               - {name: Move, params: [{name: id, type: string}, {name: event, type: string}]}
               - {name: List, results: [{type: int}]}
               - {name: Activity, results: [{type: int}]}

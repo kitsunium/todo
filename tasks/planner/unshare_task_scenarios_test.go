@@ -13,10 +13,10 @@ import (
 func givenUnshareTaskLetsAMemberLeaveATask(t *testing.T) (UnshareTask, UnshareTaskInput, func(*testing.T, UnshareTaskOutput)) {
 	t.Helper()
 	store := newMemTasks(shared("task_a"))
-	return NewUnshareTask(store, fixedClock(epoch)), UnshareTaskInput{User: bob, ID: "task_a", With: bob}, func(t *testing.T, out UnshareTaskOutput) {
+	return NewUnshareTask(store, crew(), fixedClock(epoch)), UnshareTaskInput{User: bob, ID: "task_a", With: bob}, func(t *testing.T, out UnshareTaskOutput) {
 		t.Helper()
 		kept := store.byID["task_a"]
-		if len(out.Task.SharedWith) != 0 || out.Task.SeenBy(bob) || kept.SeenBy(bob) {
+		if len(out.Task.SharedWith) != 0 || out.Task.SeenBy(bob, false) || kept.SeenBy(bob, false) {
 			t.Errorf("the task Bob left: %+v", out.Task)
 		}
 	}
@@ -28,5 +28,5 @@ func givenUnshareTaskRefusesAMemberWhoRemovesAnother(t *testing.T) (UnshareTask,
 	t.Helper()
 	both := shared("task_a")
 	both.SharedWith = append(both.SharedWith, cy)
-	return NewUnshareTask(newMemTasks(both), fixedClock(epoch)), UnshareTaskInput{User: bob, ID: "task_a", With: cy}
+	return NewUnshareTask(newMemTasks(both), crew(), fixedClock(epoch)), UnshareTaskInput{User: bob, ID: "task_a", With: cy}
 }

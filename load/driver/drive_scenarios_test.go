@@ -22,7 +22,7 @@ func (a *countingAPI) Enter(context.Context, string, string, string) error {
 	return nil
 }
 
-func (a *countingAPI) Add(context.Context, string, string, string, time.Time) (string, error) {
+func (a *countingAPI) Add(context.Context, string, string, time.Time) (string, error) {
 	a.calls["Add"]++
 	a.next++
 	return "task_" + string(rune('a'+a.next)), nil

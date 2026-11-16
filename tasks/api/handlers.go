@@ -21,7 +21,7 @@ func add(ctx context.Context, in AddRequest) (out task.Task, err error) {
 		return task.Task{}, err
 	}
 	res, err := wired.addTask.Execute(ctx, planner.AddTaskInput{
-		Owner: owner, Title: in.Title, Notes: in.Notes, Priority: in.Priority, Assignee: in.Assignee, Due: in.Due,
+		Owner: owner, Title: in.Title, Notes: in.Notes, Priority: in.Priority, GroupID: in.GroupID, AssigneeID: in.AssigneeID, Due: in.Due,
 	})
 	if err != nil {
 		return task.Task{}, refusal(err)
@@ -36,11 +36,27 @@ func list(ctx context.Context, in ListRequest) (out TaskList, err error) {
 	if err != nil {
 		return TaskList{}, err
 	}
-	res, err := wired.listTasks.Execute(ctx, planner.ListTasksInput{Owner: owner, State: in.State})
+	res, err := wired.listTasks.Execute(ctx, planner.ListTasksInput{Owner: owner, State: in.State, View: in.View, Group: in.Group, TZ: in.TZ})
 	if err != nil {
 		return TaskList{}, refusal(err)
 	}
 	return TaskList{Tasks: res.Tasks}, nil
+}
+
+// counts is GET /api/tasks/counts's body; what it uses is in wired.
+func counts(ctx context.Context, in CountsRequest) (out ViewCounts, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return ViewCounts{}, err
+	}
+	res, err := wired.countViews.Execute(ctx, planner.CountViewsInput{User: me, TZ: in.TZ})
+	if err != nil {
+		return ViewCounts{}, refusal(err)
+	}
+	return ViewCounts{
+		Inbox: res.Inbox, Today: res.Today, Upcoming: res.Upcoming, Shared: res.Shared, Assigned: res.Assigned,
+		Overdue: res.Overdue, CompletedThisWeek: res.CompletedThisWeek, Groups: res.Groups,
+	}, nil
 }
 
 // complete is POST /api/tasks/{id}/complete's body; what it uses is in wired.
@@ -83,7 +99,7 @@ func edit(ctx context.Context, in EditRequest) (out task.Task, err error) {
 		return task.Task{}, err
 	}
 	res, err := wired.editTask.Execute(ctx, planner.EditTaskInput{
-		User: me, ID: in.ID, Title: in.Title, Notes: in.Notes, Priority: in.Priority, Assignee: in.Assignee, Due: in.Due,
+		User: me, ID: in.ID, Title: in.Title, Notes: in.Notes, Priority: in.Priority, AssigneeID: in.AssigneeID, Due: in.Due,
 	})
 	if err != nil {
 		return task.Task{}, refusal(err)
@@ -163,11 +179,12 @@ func caller(ctx context.Context) (string, error) {
 	return string(uid), nil
 }
 
-// refusal is a use case's error as the API answers it: 404 for a task that
-// does not exist or that the caller does not see, 403 for what only its
-// owner does, 409 for sharing with who is no contact, 409 for a move its state does not allow, 400 with the
-// field at fault for a task that cannot be added; anything else is the
-// framework's to answer.
+// refusal is a use case's error as the API answers it: 404 for a task or a
+// group that does not exist or that the caller does not see, 403 for what only
+// its owner does (or an owner or an admin of its group), 409 for sharing with
+// who is no contact, 409 for a move its state does not allow, 400 with the
+// field at fault for a task that cannot be added or a view that cannot be
+// listed; anything else is the framework's to answer.
 func refusal(err error) error {
 	invalid := func(path, rule string, cause error) error {
 		e := app.Invalid("the request is invalid")
@@ -177,8 +194,10 @@ func refusal(err error) error {
 	switch {
 	case errors.Is(err, task.ErrNotFound):
 		return app.NotFound("no such task")
+	case errors.Is(err, task.ErrNoGroup):
+		return app.NotFound("no such group")
 	case errors.Is(err, task.ErrNotOwner):
-		return app.Forbidden("only its owner does this to a task")
+		return app.Forbidden("only its owner, or an owner or an admin of its group, does this to a task")
 	case errors.Is(err, task.ErrNotContact):
 		return app.Conflict("a task is shared with a contact of its owner")
 	case errors.Is(err, task.ErrNotAllowed):
@@ -189,6 +208,16 @@ func refusal(err error) error {
 		return invalid("title", "maxlen", err)
 	case errors.Is(err, task.ErrUnknownPriority):
 		return invalid("priority", "oneof", err)
+	case errors.Is(err, task.ErrNotMember):
+		return invalid("groupId", "member", err)
+	case errors.Is(err, task.ErrNotAssignable):
+		return invalid("assigneeId", "audience", err)
+	case errors.Is(err, task.ErrUnknownView):
+		return invalid("view", "oneof", err)
+	case errors.Is(err, task.ErrGroupNeeded):
+		return invalid("group", "required", err)
+	case errors.Is(err, task.ErrBadZone):
+		return invalid("tz", "timezone", err)
 	}
 	return err
 }

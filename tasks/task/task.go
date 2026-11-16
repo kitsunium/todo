@@ -14,7 +14,8 @@ func (tx *Task) overdue(now time.Time) (r0 bool) {
 	return tx.State == LifecycleOpen && !tx.Due.IsZero() && tx.Due.Before(now)
 }
 
-// seenBy is Task.SeenBy's body: the owner, and the members it is shared with.
-func (tx *Task) seenBy(user string) (r0 bool) {
-	return user != "" && (user == tx.OwnerID || slices.Contains(tx.SharedWith, user))
+// seenBy is Task.SeenBy's body: the owner, the members it is shared with, its
+// assignee, and a member of its group. The one rule of who sees a task.
+func (tx *Task) seenBy(user string, inGroup bool) (r0 bool) {
+	return user != "" && (user == tx.OwnerID || user == tx.AssigneeID || slices.Contains(tx.SharedWith, user) || inGroup && tx.GroupID != "")
 }

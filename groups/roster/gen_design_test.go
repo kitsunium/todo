@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 package roster
 
@@ -253,6 +253,16 @@ func TestListInvitationsListsThePendingInvitationsNewestFirst(t *testing.T) {
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("ListInvitations: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestMembersOfListsTheMembersOfAGroup is MembersOf's scenario "lists the members of a group" (success).
+func TestMembersOfListsTheMembersOfAGroup(t *testing.T) {
+	uc, in, then := givenMembersOfListsTheMembersOfAGroup(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("MembersOf: %v, want a success", err)
 	}
 	then(t, out)
 }

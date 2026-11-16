@@ -66,10 +66,11 @@ func propertyParsePriorityKnownOrRefused(t *testing.T, seed uint64) {
 	}
 }
 
-// propertyTaskSeenByOwnerAndSharedOnly holds tasks/Task.SeenBy: a member
-// sees a task exactly when they own it or it is shared with them, and
+// propertyTaskSeenByOwnerSharedAssigneeOrMember holds tasks/Task.SeenBy: a
+// member sees a task exactly when they own it, it is shared with them, it is
+// assigned to them, or it is on a group's list and they are in that group;
 // nobody is never one of them.
-func propertyTaskSeenByOwnerAndSharedOnly(t *testing.T, seed uint64) {
+func propertyTaskSeenByOwnerSharedAssigneeOrMember(t *testing.T, seed uint64) {
 	t.Helper()
 	r := rand.New(rand.NewPCG(seed, seed))
 	who := func() string { return "user_" + string(rune('a'+r.IntN(6))) }
@@ -78,15 +79,21 @@ func propertyTaskSeenByOwnerAndSharedOnly(t *testing.T, seed uint64) {
 		for range r.IntN(4) {
 			tk.SharedWith = append(tk.SharedWith, who())
 		}
-		u := who()
-		want := u == tk.OwnerID
+		if r.IntN(2) == 0 {
+			tk.AssigneeID = who()
+		}
+		if r.IntN(2) == 0 {
+			tk.GroupID = "group_core"
+		}
+		u, inGroup := who(), r.IntN(2) == 0
+		want := u == tk.OwnerID || u == tk.AssigneeID || inGroup && tk.GroupID != ""
 		for _, s := range tk.SharedWith {
 			want = want || s == u
 		}
-		if got := tk.SeenBy(u); got != want {
-			t.Fatalf("%s sees the task of %s shared with %q: %v, want %v", u, tk.OwnerID, tk.SharedWith, got, want)
+		if got := tk.SeenBy(u, inGroup); got != want {
+			t.Fatalf("%s (in the group %v) sees the task of %s shared with %q, assigned to %q, on %q: %v, want %v", u, inGroup, tk.OwnerID, tk.SharedWith, tk.AssigneeID, tk.GroupID, got, want)
 		}
-		if tk.SeenBy("") {
+		if tk.SeenBy("", true) {
 			t.Fatalf("nobody sees the task of %s", tk.OwnerID)
 		}
 	}

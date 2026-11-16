@@ -17,9 +17,12 @@ func onShelfTransition(ctx context.Context, c app.Change[Record, ShelfState]) er
 	if c.Event != ShelfOnAutoArchive {
 		return nil
 	}
+	audience, err := audienceOf(ctx, fromRecord(c.Entity))
+	if err != nil {
+		return err
+	}
 	return EventsTopic.Publish(ctx, Event{
 		ID: app.NewID("event"), Kind: "archive", TaskID: c.Entity.ID, OwnerID: c.Entity.OwnerID,
-		Audience: append([]string{c.Entity.OwnerID}, c.Entity.SharedWith...),
-		Title:    c.Entity.Title, Assignee: c.Entity.Assignee, At: app.Now(ctx).UTC(),
+		Audience: audience, Title: c.Entity.Title, At: app.Now(ctx).UTC(),
 	})
 }

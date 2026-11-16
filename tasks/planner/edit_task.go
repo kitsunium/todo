@@ -16,15 +16,12 @@ import (
 const kindEdited = "edited"
 
 // execute is EditTask's body: each field given replaces the task's, checked
-// as when a task is added; a field left out stays. A task the member does
-// not see is not found.
+// as when a task is added; a field left out stays, an empty assignee clears
+// it. A task the member does not see is not found.
 func (h *EditTaskHandler) execute(ctx context.Context, in *EditTaskInput) (EditTaskOutput, error) {
-	t, err := h.taskStore.Get(ctx, in.ID)
+	t, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.User)
 	if err != nil {
 		return EditTaskOutput{}, err
-	}
-	if !t.SeenBy(in.User) {
-		return EditTaskOutput{}, task.ErrNotFound
 	}
 	if in.Title != nil {
 		title := strings.TrimSpace(*in.Title)
@@ -44,8 +41,19 @@ func (h *EditTaskHandler) execute(ctx context.Context, in *EditTaskInput) (EditT
 	if in.Notes != nil {
 		t.Notes = strings.TrimSpace(*in.Notes)
 	}
-	if in.Assignee != nil {
-		t.Assignee = strings.TrimSpace(*in.Assignee)
+	if in.AssigneeID != nil {
+		if next := strings.TrimSpace(*in.AssigneeID); next != t.AssigneeID {
+			if next != "" {
+				ok, err := assignable(ctx, h.groups, h.circle, t, in.User, next)
+				if err != nil {
+					return EditTaskOutput{}, err
+				}
+				if !ok {
+					return EditTaskOutput{}, task.ErrNotAssignable
+				}
+			}
+			t.AssigneeID = next
+		}
 	}
 	if in.Due != nil {
 		t.Due = *in.Due

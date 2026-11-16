@@ -11,12 +11,17 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
-// ada owns every task a test makes; bob and cy own none.
+// ada owns every task a test makes; bob and cy own none; dee is in no group.
 const (
 	ada = "user_ada"
 	bob = "user_bob"
 	cy  = "user_cy"
+	dee = "user_dee"
 )
+
+// core is the one group of the tests: Ada owns it, Bob is its admin, Cy a
+// member.
+const core = "group_core"
 
 // epoch is the instant every test starts at.
 var epoch = time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
@@ -63,6 +68,35 @@ type contacts map[string]bool
 
 func (c contacts) AreContacts(_ context.Context, one, other string) (bool, error) {
 	return c[one+"|"+other] || c[other+"|"+one], nil
+}
+
+// memGroups is GroupsV1 over the roles it holds, group then member.
+type memGroups map[string]map[string]string
+
+// crew is the group "core": Ada its owner, Bob an admin, Cy a member.
+func crew() memGroups {
+	return memGroups{core: {ada: roleOwner, bob: roleAdmin, cy: "member"}}
+}
+
+func (g memGroups) RoleOf(_ context.Context, group, user string) (string, error) {
+	return g[group][user], nil
+}
+
+func (g memGroups) Memberships(_ context.Context, user string) (map[string]string, error) {
+	out := map[string]string{}
+	for id, roles := range g {
+		if role := roles[user]; role != "" {
+			out[id] = role
+		}
+	}
+	return out, nil
+}
+
+// grouped is an open task of Ada's on the list of the group "core".
+func grouped(id string) task.Task {
+	t := open(id)
+	t.GroupID = core
+	return t
 }
 
 // shared is an open task of Ada's shared with Bob.

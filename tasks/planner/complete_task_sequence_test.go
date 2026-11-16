@@ -10,11 +10,13 @@ import (
 )
 
 // givenSequenceCompleteTask builds tasks/usecase/MoveTask with the ports it goes through wrapped by rec
-// (rec.Record…), and returns what starts it.
+// (rec.Record…), and returns what starts it. The task is on a group's list:
+// only such a task asks the groups for a role.
 func givenSequenceCompleteTask(t *testing.T, rec sequenceRecorder) func(context.Context) error {
 	t.Helper()
 	uc := NewMoveTask(
-		rec.RecordPlannerTaskStoreV1(newMemTasks(open("task_a"))),
+		rec.RecordPlannerTaskStoreV1(newMemTasks(grouped("task_a"))),
+		rec.RecordPlannerGroupsV1(crew()),
 		rec.RecordPlannerClockV1(fixedClock(epoch)),
 		rec.RecordPlannerJournalV1(&memJournal{}),
 	)

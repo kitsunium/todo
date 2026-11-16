@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 package planner
 
@@ -16,6 +16,26 @@ import (
 // TestAddTaskAddsAnOpenTask is AddTask's scenario "adds an open task" (success).
 func TestAddTaskAddsAnOpenTask(t *testing.T) {
 	uc, in, then := givenAddTaskAddsAnOpenTask(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("AddTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestAddTaskAddsATaskToAGroupList is AddTask's scenario "adds a task to a group list" (success).
+func TestAddTaskAddsATaskToAGroupList(t *testing.T) {
+	uc, in, then := givenAddTaskAddsATaskToAGroupList(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("AddTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestAddTaskAssignsATaskToAContact is AddTask's scenario "assigns a task to a contact" (success).
+func TestAddTaskAssignsATaskToAContact(t *testing.T) {
+	uc, in, then := givenAddTaskAssignsATaskToAContact(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("AddTask: %v, want a success", err)
@@ -50,6 +70,33 @@ func TestAddTaskRefusesAnUnknownPriority(t *testing.T) {
 	}
 }
 
+// TestAddTaskRefusesAGroupTheMemberIsNotIn is AddTask's scenario "refuses a group the member is not in" (refusal).
+func TestAddTaskRefusesAGroupTheMemberIsNotIn(t *testing.T) {
+	uc, in := givenAddTaskRefusesAGroupTheMemberIsNotIn(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotMember) {
+		t.Fatalf("AddTask: %v, want task.ErrNotMember", err)
+	}
+}
+
+// TestAddTaskRefusesAnAssigneeWhoIsNoContact is AddTask's scenario "refuses an assignee who is no contact" (refusal).
+func TestAddTaskRefusesAnAssigneeWhoIsNoContact(t *testing.T) {
+	uc, in := givenAddTaskRefusesAnAssigneeWhoIsNoContact(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotAssignable) {
+		t.Fatalf("AddTask: %v, want task.ErrNotAssignable", err)
+	}
+}
+
+// TestAddTaskRefusesAnAssigneeOutsideTheGroup is AddTask's scenario "refuses an assignee outside the group" (refusal).
+func TestAddTaskRefusesAnAssigneeOutsideTheGroup(t *testing.T) {
+	uc, in := givenAddTaskRefusesAnAssigneeOutsideTheGroup(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotAssignable) {
+		t.Fatalf("AddTask: %v, want task.ErrNotAssignable", err)
+	}
+}
+
 // TestCountTasksCountsEveryState is CountTasks's scenario "counts every state" (success).
 func TestCountTasksCountsEveryState(t *testing.T) {
 	uc, in, then := givenCountTasksCountsEveryState(t)
@@ -58,6 +105,25 @@ func TestCountTasksCountsEveryState(t *testing.T) {
 		t.Fatalf("CountTasks: %v, want a success", err)
 	}
 	then(t, out)
+}
+
+// TestCountViewsCountsEveryView is CountViews's scenario "counts every view" (success).
+func TestCountViewsCountsEveryView(t *testing.T) {
+	uc, in, then := givenCountViewsCountsEveryView(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("CountViews: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestCountViewsRefusesAnUnknownTimeZone is CountViews's scenario "refuses an unknown time zone" (refusal).
+func TestCountViewsRefusesAnUnknownTimeZone(t *testing.T) {
+	uc, in := givenCountViewsRefusesAnUnknownTimeZone(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrBadZone) {
+		t.Fatalf("CountViews: %v, want task.ErrBadZone", err)
+	}
 }
 
 // TestDeleteTaskDeletesATaskOfTheOwner is DeleteTask's scenario "deletes a task of the owner" (success).
@@ -70,9 +136,28 @@ func TestDeleteTaskDeletesATaskOfTheOwner(t *testing.T) {
 	then(t, out)
 }
 
+// TestDeleteTaskDeletesATaskOfTheGroupAsItsAdmin is DeleteTask's scenario "deletes a task of the group as its admin" (success).
+func TestDeleteTaskDeletesATaskOfTheGroupAsItsAdmin(t *testing.T) {
+	uc, in, then := givenDeleteTaskDeletesATaskOfTheGroupAsItsAdmin(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("DeleteTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
 // TestDeleteTaskRefusesAMemberItIsSharedWith is DeleteTask's scenario "refuses a member it is shared with" (refusal).
 func TestDeleteTaskRefusesAMemberItIsSharedWith(t *testing.T) {
 	uc, in := givenDeleteTaskRefusesAMemberItIsSharedWith(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotOwner) {
+		t.Fatalf("DeleteTask: %v, want task.ErrNotOwner", err)
+	}
+}
+
+// TestDeleteTaskRefusesAPlainMemberOfTheGroup is DeleteTask's scenario "refuses a plain member of the group" (refusal).
+func TestDeleteTaskRefusesAPlainMemberOfTheGroup(t *testing.T) {
+	uc, in := givenDeleteTaskRefusesAPlainMemberOfTheGroup(t)
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, task.ErrNotOwner) {
 		t.Fatalf("DeleteTask: %v, want task.ErrNotOwner", err)
@@ -99,6 +184,26 @@ func TestEditTaskChangesOnlyWhatIsGiven(t *testing.T) {
 	then(t, out)
 }
 
+// TestEditTaskAssignsAMemberOfTheGroup is EditTask's scenario "assigns a member of the group" (success).
+func TestEditTaskAssignsAMemberOfTheGroup(t *testing.T) {
+	uc, in, then := givenEditTaskAssignsAMemberOfTheGroup(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("EditTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestEditTaskClearsTheAssignee is EditTask's scenario "clears the assignee" (success).
+func TestEditTaskClearsTheAssignee(t *testing.T) {
+	uc, in, then := givenEditTaskClearsTheAssignee(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("EditTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
 // TestEditTaskRefusesAnEmptyTitle is EditTask's scenario "refuses an empty title" (refusal).
 func TestEditTaskRefusesAnEmptyTitle(t *testing.T) {
 	uc, in := givenEditTaskRefusesAnEmptyTitle(t)
@@ -108,9 +213,58 @@ func TestEditTaskRefusesAnEmptyTitle(t *testing.T) {
 	}
 }
 
+// TestEditTaskRefusesAnAssigneeOutsideTheGroup is EditTask's scenario "refuses an assignee outside the group" (refusal).
+func TestEditTaskRefusesAnAssigneeOutsideTheGroup(t *testing.T) {
+	uc, in := givenEditTaskRefusesAnAssigneeOutsideTheGroup(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotAssignable) {
+		t.Fatalf("EditTask: %v, want task.ErrNotAssignable", err)
+	}
+}
+
+// TestFollowGroupSendsTheTasksOfADeletedGroupBackToTheirOwners is FollowGroup's scenario "sends the tasks of a deleted group back to their owners" (success).
+func TestFollowGroupSendsTheTasksOfADeletedGroupBackToTheirOwners(t *testing.T) {
+	uc, in, then := givenFollowGroupSendsTheTasksOfADeletedGroupBackToTheirOwners(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("FollowGroup: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestFollowGroupUnassignsWhoLeftTheGroup is FollowGroup's scenario "unassigns who left the group" (success).
+func TestFollowGroupUnassignsWhoLeftTheGroup(t *testing.T) {
+	uc, in, then := givenFollowGroupUnassignsWhoLeftTheGroup(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("FollowGroup: %v, want a success", err)
+	}
+	then(t, out)
+}
+
 // TestGetTaskReadsATaskSharedWithTheMember is GetTask's scenario "reads a task shared with the member" (success).
 func TestGetTaskReadsATaskSharedWithTheMember(t *testing.T) {
 	uc, in, then := givenGetTaskReadsATaskSharedWithTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("GetTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestGetTaskReadsATaskOfAGroupOfTheMember is GetTask's scenario "reads a task of a group of the member" (success).
+func TestGetTaskReadsATaskOfAGroupOfTheMember(t *testing.T) {
+	uc, in, then := givenGetTaskReadsATaskOfAGroupOfTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("GetTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestGetTaskReadsATaskAssignedToTheMember is GetTask's scenario "reads a task assigned to the member" (success).
+func TestGetTaskReadsATaskAssignedToTheMember(t *testing.T) {
+	uc, in, then := givenGetTaskReadsATaskAssignedToTheMember(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("GetTask: %v, want a success", err)
@@ -127,6 +281,15 @@ func TestGetTaskRefusesATaskTheMemberDoesNotSee(t *testing.T) {
 	}
 }
 
+// TestGetTaskRefusesAGroupTaskToWhoLeftTheGroup is GetTask's scenario "refuses a group task to who left the group" (refusal).
+func TestGetTaskRefusesAGroupTaskToWhoLeftTheGroup(t *testing.T) {
+	uc, in := givenGetTaskRefusesAGroupTaskToWhoLeftTheGroup(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotFound) {
+		t.Fatalf("GetTask: %v, want task.ErrNotFound", err)
+	}
+}
+
 // TestListTasksListsTheMostUrgentFirst is ListTasks's scenario "lists the most urgent first" (success).
 func TestListTasksListsTheMostUrgentFirst(t *testing.T) {
 	uc, in, then := givenListTasksListsTheMostUrgentFirst(t)
@@ -135,6 +298,62 @@ func TestListTasksListsTheMostUrgentFirst(t *testing.T) {
 		t.Fatalf("ListTasks: %v, want a success", err)
 	}
 	then(t, out)
+}
+
+// TestListTasksListsTheTasksOfAGroup is ListTasks's scenario "lists the tasks of a group" (success).
+func TestListTasksListsTheTasksOfAGroup(t *testing.T) {
+	uc, in, then := givenListTasksListsTheTasksOfAGroup(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ListTasks: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestListTasksListsAView is ListTasks's scenario "lists a view" (success).
+func TestListTasksListsAView(t *testing.T) {
+	uc, in, then := givenListTasksListsAView(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ListTasks: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestListTasksRefusesAnUnknownView is ListTasks's scenario "refuses an unknown view" (refusal).
+func TestListTasksRefusesAnUnknownView(t *testing.T) {
+	uc, in := givenListTasksRefusesAnUnknownView(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrUnknownView) {
+		t.Fatalf("ListTasks: %v, want task.ErrUnknownView", err)
+	}
+}
+
+// TestListTasksRefusesTheGroupViewWithoutAGroup is ListTasks's scenario "refuses the group view without a group" (refusal).
+func TestListTasksRefusesTheGroupViewWithoutAGroup(t *testing.T) {
+	uc, in := givenListTasksRefusesTheGroupViewWithoutAGroup(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrGroupNeeded) {
+		t.Fatalf("ListTasks: %v, want task.ErrGroupNeeded", err)
+	}
+}
+
+// TestListTasksRefusesAnUnknownTimeZone is ListTasks's scenario "refuses an unknown time zone" (refusal).
+func TestListTasksRefusesAnUnknownTimeZone(t *testing.T) {
+	uc, in := givenListTasksRefusesAnUnknownTimeZone(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrBadZone) {
+		t.Fatalf("ListTasks: %v, want task.ErrBadZone", err)
+	}
+}
+
+// TestListTasksRefusesAGroupTheMemberIsNotIn is ListTasks's scenario "refuses a group the member is not in" (refusal).
+func TestListTasksRefusesAGroupTheMemberIsNotIn(t *testing.T) {
+	uc, in := givenListTasksRefusesAGroupTheMemberIsNotIn(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNoGroup) {
+		t.Fatalf("ListTasks: %v, want task.ErrNoGroup", err)
+	}
 }
 
 // TestMoveTaskCompletesAnOpenTask is MoveTask's scenario "completes an open task" (success).
@@ -168,6 +387,26 @@ func TestMoveTaskRefusesTheTaskOfAnotherMember(t *testing.T) {
 // TestMoveTaskMovesATaskSharedWithTheMember is MoveTask's scenario "moves a task shared with the member" (success).
 func TestMoveTaskMovesATaskSharedWithTheMember(t *testing.T) {
 	uc, in, then := givenMoveTaskMovesATaskSharedWithTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("MoveTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestMoveTaskMovesATaskOfAGroupOfTheMember is MoveTask's scenario "moves a task of a group of the member" (success).
+func TestMoveTaskMovesATaskOfAGroupOfTheMember(t *testing.T) {
+	uc, in, then := givenMoveTaskMovesATaskOfAGroupOfTheMember(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("MoveTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestMoveTaskMovesATaskAssignedToTheMember is MoveTask's scenario "moves a task assigned to the member" (success).
+func TestMoveTaskMovesATaskAssignedToTheMember(t *testing.T) {
+	uc, in, then := givenMoveTaskMovesATaskAssignedToTheMember(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("MoveTask: %v, want a success", err)
@@ -212,6 +451,15 @@ func TestShareTaskRefusesWhoIsNotTheOwner(t *testing.T) {
 	}
 }
 
+// TestShareTaskRefusesAMemberOfTheGroupWhoIsNotTheOwner is ShareTask's scenario "refuses a member of the group who is not the owner" (refusal).
+func TestShareTaskRefusesAMemberOfTheGroupWhoIsNotTheOwner(t *testing.T) {
+	uc, in := givenShareTaskRefusesAMemberOfTheGroupWhoIsNotTheOwner(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotOwner) {
+		t.Fatalf("ShareTask: %v, want task.ErrNotOwner", err)
+	}
+}
+
 // TestUnshareTaskLetsAMemberLeaveATask is UnshareTask's scenario "lets a member leave a task" (success).
 func TestUnshareTaskLetsAMemberLeaveATask(t *testing.T) {
 	uc, in, then := givenUnshareTaskLetsAMemberLeaveATask(t)
@@ -250,6 +498,26 @@ type recordedplannerClockV1 struct {
 func (x recordedplannerClockV1) Now(ctx context.Context) (time.Time, error) {
 	*x.calls = append(*x.calls, "tasks/port/Clock@v1.Now")
 	return x.next.Now(ctx)
+}
+
+// RecordPlannerGroupsV1 records the calls to next, then makes them.
+func (r sequenceRecorder) RecordPlannerGroupsV1(next GroupsV1) GroupsV1 {
+	return recordedplannerGroupsV1{next: next, calls: r.calls}
+}
+
+type recordedplannerGroupsV1 struct {
+	next  GroupsV1
+	calls *[]string
+}
+
+func (x recordedplannerGroupsV1) Memberships(ctx context.Context, user string) (map[string]string, error) {
+	*x.calls = append(*x.calls, "tasks/port/Groups@v1.Memberships")
+	return x.next.Memberships(ctx, user)
+}
+
+func (x recordedplannerGroupsV1) RoleOf(ctx context.Context, group string, user string) (string, error) {
+	*x.calls = append(*x.calls, "tasks/port/Groups@v1.RoleOf")
+	return x.next.RoleOf(ctx, group, user)
 }
 
 // RecordPlannerJournalV1 records the calls to next, then makes them.
@@ -310,7 +578,7 @@ func TestSequenceCompleteTask(t *testing.T) {
 	if err := run(t.Context()); err != nil {
 		t.Fatalf("the sequence failed: %v", err)
 	}
-	want := []string{"tasks/port/TaskStore@v1.Get", "tasks/port/Clock@v1.Now", "tasks/port/TaskStore@v1.Save", "tasks/port/Journal@v1.Record"}
+	want := []string{"tasks/port/TaskStore@v1.Get", "tasks/port/Groups@v1.RoleOf", "tasks/port/Clock@v1.Now", "tasks/port/TaskStore@v1.Save", "tasks/port/Journal@v1.Record"}
 	if !slices.Equal(got, want) {
 		t.Errorf("the calls: %q, want %q", got, want)
 	}

@@ -27,13 +27,13 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `contacts/linkstore` | linkstore (adapter) | the store `links`, its workflow `Waiting` (a request expires after fourteen days), the topic `events`, `Links`, `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
 | `contacts/contactsapi` | contactsapi (presentation) | the routes of `/api/contacts`, the query `are-contacts` |
 | `groups/team` | team (domain) | `Group` (with its `Membership`s and `Role`), `Invitation`, the `Inviting` workflow, `Manages` `CleanName` `ColorFor` `ParseRole` `Ranked`, the errors |
-| `groups/roster` | roster (application) | the use cases `CreateGroup` `EditGroup` `DeleteGroup` `ListGroups` `GetGroup` `Invite` `AnswerInvitation` `ListInvitations` `RemoveMember` `SetRole` `RoleOf` `Memberships`, the ports `Groups` `Invitations` `People` `Circle` `Notices` `Clock`; `present.go` is what the views share |
+| `groups/roster` | roster (application) | the use cases `CreateGroup` `EditGroup` `DeleteGroup` `ListGroups` `GetGroup` `Invite` `AnswerInvitation` `ListInvitations` `RemoveMember` `SetRole` `RoleOf` `Memberships` `MembersOf`, the ports `Groups` `Invitations` `People` `Circle` `Notices` `Clock`; `present.go` is what the views share |
 | `groups/groupstore` | groupstore (adapter) | the stores `groups` and `invitations`, the workflow `Lapsing` (an invitation expires after a week), the topic `events`, `Groups`, `Invitations`, `Directory` (asks the identity's query), `Friends` (asks the contacts' query), `Announcer` (one event for each member told), `WallClock` |
-| `groups/groupsapi` | groupsapi (presentation) | the routes of `/api/groups` and `/api/invitations`, the queries `role` and `memberships` |
-| `tasks/task` | task (domain) | `Task`, `Priority`, the `Lifecycle` workflow, the errors |
-| `tasks/planner` | planner (application) | the use cases `AddTask` `GetTask` `EditTask` `DeleteTask` `MoveTask` `ShareTask` `UnshareTask` `ListTasks` `CountTasks` `DueSoon`, the ports `TaskStore` `Circle` `Clock` `Journal`; `lifecycle.go` is what they share |
-| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, its workflow `Shelf` (a done task is archived after `archive-after`), the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes), `Friends` (their `Circle`, which asks the contacts' query) and `AppClock` |
-| `tasks/api` | api (presentation) | the routes of `/api/tasks`, the query `census` |
+| `groups/groupsapi` | groupsapi (presentation) | the routes of `/api/groups` and `/api/invitations`, the queries `role`, `memberships` and `members` |
+| `tasks/task` | task (domain) | `Task` (with its `GroupID` and `AssigneeID`) and `Task.SeenBy`, the one rule of who sees it, `Priority`, the `Lifecycle` workflow, the errors |
+| `tasks/planner` | planner (application) | the use cases `AddTask` `GetTask` `EditTask` `DeleteTask` `MoveTask` `ShareTask` `UnshareTask` `ListTasks` `CountViews` `FollowGroup` `CountTasks` `DueSoon`, the ports `TaskStore` `Circle` `Groups` `Clock` `Journal`; `lifecycle.go` is what they share, `access.go` is the role a member has in a task's group and who may be assigned, `views.go` the member's day and week and the views of the list |
+| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, its workflow `Shelf` (a done task is archived after `archive-after`), the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes, to everyone who sees the task), `Friends` (their `Circle`, which asks the contacts' query), `Groups` (their `Groups`, which asks the groups' queries `role` and `memberships`), `AppClock`, and the subscription `groups`, by which the tasks follow a group deleted or a member who left it |
+| `tasks/api` | api (presentation) | the routes of `/api/tasks` (views and `counts` included), the query `census` |
 | `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks`, `contacts` and `groups` to their events, `GET /api/activity` |
 | `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
 | `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through, `Carrier` (the reminders' `Mailer`, its SMTP connection declared in the design) |
@@ -73,6 +73,12 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 - **A store holds an entity of its own component**: `taskstore.Record`
   is `task.Task` as the store keeps it, field for field. Add a field to
   both, and to `toRecord` and `fromRecord`.
+- **Who sees a task is decided in one place**: `Task.SeenBy(user, inGroup)`
+  (owner, shared with, assignee, or member of its group). A use case never
+  tests ownership or sharing by hand: it reads the task and the caller's role
+  in its group through `load` (`planner/access.go`), a list through the
+  caller's `Groups.Memberships`. A task a member does not see is
+  `ErrNotFound`. The groups are asked through their queries, never read.
 - **Who calls is the framework's to say**: a route that needs a member
   says `auth: required` in the design, and its handler reads
   `app.UserID(ctx)`. A use case takes the owner as an input and never trusts
@@ -103,7 +109,7 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   subject one line: a component that writes to a member dispatches
   `post.SendCommand` or goes through `Carrier`, never a transport of its
   own. A test reads what was sent with `post.MailMailer.Captured()`.
-- **Logs name a task by its id**, never an assignee: `Assignee`, a mail's
+- **Logs name a task by its id**, never an assignee: `AssigneeID`, a mail's
   `To` are tagged `app:"personal"`, and `app:"personal,subject"` in the
   entity a store keeps. A store that keeps personal data says for how long
   in the design (`eraseAfter`, `deleteAfter`).

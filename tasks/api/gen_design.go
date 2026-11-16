@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c3740c1e3a00dc7bcadcdf53e2371b9d07033aa35ece87c63468defd794732a0
+// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
 
 // Package api — The HTTP API of a member's tasks, and the census the rest of
 // the product asks.
@@ -24,11 +24,12 @@ var errNotImplemented = errs.New(errs.Pack(64, 1, 4, 255), "NOT_IMPLEMENTED", "n
 
 // AddRequest — What a member sends to add a task.
 type AddRequest struct {
-	Title    string    `json:"title" app:"public"`
-	Notes    string    `json:"notes" app:"public"`
-	Priority string    `json:"priority" app:"public"`
-	Assignee string    `json:"assignee" app:"personal"`
-	Due      time.Time `json:"due" app:"public"`
+	Title      string    `json:"title" app:"public"`
+	Notes      string    `json:"notes" app:"public"`
+	Priority   string    `json:"priority" app:"public"`
+	GroupID    string    `json:"groupId" app:"public"`
+	AssigneeID string    `json:"assigneeId" app:"personal"`
+	Due        time.Time `json:"due" app:"public"`
 }
 
 // ByID — The task a route names.
@@ -43,20 +44,28 @@ type Census struct {
 	Overdue int            `json:"overdue" app:"public"`
 }
 
+// CountsRequest — Whose views to count, in which time zone.
+type CountsRequest struct {
+	TZ string `query:"tz"`
+}
+
 // EditRequest — What a member changes of a task, each field only when it is
 // sent.
 type EditRequest struct {
-	ID       string     `path:"id"`
-	Title    *string    `json:"title" app:"public"`
-	Notes    *string    `json:"notes" app:"public"`
-	Priority *string    `json:"priority" app:"public"`
-	Assignee *string    `json:"assignee" app:"personal"`
-	Due      *time.Time `json:"due" app:"public"`
+	ID         string     `path:"id"`
+	Title      *string    `json:"title" app:"public"`
+	Notes      *string    `json:"notes" app:"public"`
+	Priority   *string    `json:"priority" app:"public"`
+	AssigneeID *string    `json:"assigneeId" app:"personal"`
+	Due        *time.Time `json:"due" app:"public"`
 }
 
 // ListRequest — Which tasks to list.
 type ListRequest struct {
 	State string `query:"state"`
+	View  string `query:"view"`
+	Group string `query:"group"`
+	TZ    string `query:"tz"`
 }
 
 // NoInput — A question that needs no word.
@@ -80,6 +89,18 @@ type UnshareRequest struct {
 	UserID string `path:"userId"`
 }
 
+// ViewCounts — What a member's sidebar counts.
+type ViewCounts struct {
+	Inbox             int            `json:"inbox" app:"public"`
+	Today             int            `json:"today" app:"public"`
+	Upcoming          int            `json:"upcoming" app:"public"`
+	Shared            int            `json:"shared" app:"public"`
+	Assigned          int            `json:"assigned" app:"public"`
+	Overdue           int            `json:"overdue" app:"public"`
+	CompletedThisWeek int            `json:"completedThisWeek" app:"public"`
+	Groups            map[string]int `json:"groups" app:"public"`
+}
+
 // Service is api's framework service: what it declares, drawn and run.
 var Service = app.NewService("api", "The HTTP API of a member's tasks, and the census the rest of the product asks.")
 
@@ -95,6 +116,13 @@ var _ = Service.Endpoint("GET /api/tasks", List, app.Auth())
 // List serves GET /api/tasks: its body is the hand-written list.
 func List(ctx context.Context, in ListRequest) (TaskList, error) {
 	return list(ctx, in)
+}
+
+var _ = Service.Endpoint("GET /api/tasks/counts", Counts, app.Auth())
+
+// Counts serves GET /api/tasks/counts: its body is the hand-written counts.
+func Counts(ctx context.Context, in CountsRequest) (ViewCounts, error) {
+	return counts(ctx, in)
 }
 
 var _ = Service.Endpoint("GET /api/tasks/{id}", Get, app.Auth())
@@ -174,6 +202,7 @@ func Count(ctx context.Context, in NoInput) (Census, error) {
 var wired struct {
 	addTask     planner.AddTask
 	listTasks   planner.ListTasks
+	countViews  planner.CountViews
 	getTask     planner.GetTask
 	editTask    planner.EditTask
 	deleteTask  planner.DeleteTask
@@ -185,9 +214,10 @@ var wired struct {
 
 // Wire gives the handlers what they use: the role that mounts api calls it
 // before its App runs.
-func Wire(addTask planner.AddTask, listTasks planner.ListTasks, getTask planner.GetTask, editTask planner.EditTask, deleteTask planner.DeleteTask, shareTask planner.ShareTask, unshareTask planner.UnshareTask, moveTask planner.MoveTask, countTasks planner.CountTasks) {
+func Wire(addTask planner.AddTask, listTasks planner.ListTasks, countViews planner.CountViews, getTask planner.GetTask, editTask planner.EditTask, deleteTask planner.DeleteTask, shareTask planner.ShareTask, unshareTask planner.UnshareTask, moveTask planner.MoveTask, countTasks planner.CountTasks) {
 	wired.addTask = addTask
 	wired.listTasks = listTasks
+	wired.countViews = countViews
 	wired.getTask = getTask
 	wired.editTask = editTask
 	wired.deleteTask = deleteTask

@@ -15,14 +15,11 @@ import (
 // or that member leaves the task; a member it is shared with removes
 // nobody else.
 func (h *UnshareTaskHandler) execute(ctx context.Context, in *UnshareTaskInput) (UnshareTaskOutput, error) {
-	t, err := h.taskStore.Get(ctx, in.ID)
+	t, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.User)
 	if err != nil {
 		return UnshareTaskOutput{}, err
 	}
-	switch {
-	case !t.SeenBy(in.User):
-		return UnshareTaskOutput{}, task.ErrNotFound
-	case t.OwnerID != in.User && in.With != in.User:
+	if t.OwnerID != in.User && in.With != in.User {
 		return UnshareTaskOutput{}, task.ErrNotOwner
 	}
 	t.SharedWith = slices.DeleteFunc(slices.Clone(t.SharedWith), func(u string) bool { return u == in.With })

@@ -363,6 +363,15 @@ domains:
             calls: [groups/port/Groups@v1.Of]
             scenarios:
               - {name: lists the groups a member belongs to, kind: success}
+          - name: MembersOf
+            description: "MembersOf lists the members of a group, whoever they are, empty for a group that does not exist; the components that tell a group's members ask it."
+            input:
+              - {name: Group, type: string}
+            output:
+              - {name: Users, type: "[]string"}
+            calls: [groups/port/Groups@v1.Get]
+            scenarios:
+              - {name: lists the members of a group, kind: success}
         internals:
           functions:
             - name: present
@@ -545,6 +554,14 @@ domains:
             description: A member whose groups are asked.
             fields:
               - {name: User, type: string, tag: 'json:"user" app:"public"'}
+          - name: WhichGroup
+            description: A group whose members are asked.
+            fields:
+              - {name: Group, type: string, tag: 'json:"group" app:"public"'}
+          - name: Members
+            description: The members of a group.
+            fields:
+              - {name: Users, type: "[]string", tag: 'json:"users" app:"public"'}
           - name: Belongings
             description: The groups a member belongs to.
             fields:
@@ -552,6 +569,7 @@ domains:
         queries:
           - {name: role, input: RoleAsked, output: RoleAnswer, handler: AskRole, description: "The role of a member in a group, empty when they are not in it, for the components that decide who sees what.", uses: [groups/usecase/RoleOf], calls: [groups/usecase/RoleOf]}
           - {name: memberships, input: WhoseGroups, output: Belongings, handler: AskMemberships, description: "The groups a member belongs to and their role in each, for the components that follow them.", uses: [groups/usecase/Memberships], calls: [groups/usecase/Memberships]}
+          - {name: members, input: WhichGroup, output: Members, handler: AskMembers, description: "The members of a group, for the components that tell them what happens to the group's tasks.", uses: [groups/usecase/MembersOf], calls: [groups/usecase/MembersOf]}
         endpoints:
           - {route: "GET /api/groups", request: NoInput, response: GroupList, handler: List, auth: required, uses: [groups/usecase/ListGroups], calls: [groups/usecase/ListGroups]}
           - {route: "POST /api/groups", request: CreateRequest, response: roster.GroupView, handler: Create, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/CreateGroup], calls: [groups/usecase/CreateGroup]}

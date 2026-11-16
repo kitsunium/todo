@@ -154,6 +154,12 @@ func askMemberships(ctx context.Context, in WhoseGroups) (out Belongings, err er
 	return Belongings{Memberships: res.Memberships}, err
 }
 
+// askMembers is the query "members"'s body.
+func askMembers(ctx context.Context, in WhichGroup) (out Members, err error) {
+	res, err := wired.membersOf.Execute(ctx, roster.MembersOfInput{Group: in.Group})
+	return Members{Users: res.Users}, err
+}
+
 // answer runs AnswerInvitation for one of the two routes that answer an invitation.
 func answer(ctx context.Context, id string, event team.InvitingEvent) (roster.GroupView, error) {
 	me, err := caller(ctx)

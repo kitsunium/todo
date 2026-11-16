@@ -14,12 +14,9 @@ import (
 // kept, and the journal told of the event. An event the task's state does
 // not answer, or one the lifecycle does not know, is ErrNotAllowed.
 func (h *MoveTaskHandler) execute(ctx context.Context, in *MoveTaskInput) (MoveTaskOutput, error) {
-	t, err := h.taskStore.Get(ctx, in.ID)
+	t, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.Owner) // a task they do not see: as if there were none
 	if err != nil {
 		return MoveTaskOutput{}, err
-	}
-	if !t.SeenBy(in.Owner) {
-		return MoveTaskOutput{}, task.ErrNotFound // a task they do not see: as if there were none
 	}
 	now, err := h.clock.Now(ctx)
 	if err != nil {
