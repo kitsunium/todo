@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f78b90bd39d042efd423450d5f8ea59f0f6ddf7d6ea3d6874b6a7bc17cd1eabd
+// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -75,14 +75,13 @@ type AddTaskOutput struct {
 type AddTaskHandler struct {
 	clock     ClockV1
 	groups    GroupsV1
-	circle    CircleV1
 	taskStore TaskStoreV1
 	journal   JournalV1
 }
 
 // NewAddTask builds AddTask on what it calls.
-func NewAddTask(clock ClockV1, groups GroupsV1, circle CircleV1, taskStore TaskStoreV1, journal JournalV1) *AddTaskHandler {
-	return &AddTaskHandler{clock: clock, groups: groups, circle: circle, taskStore: taskStore, journal: journal}
+func NewAddTask(clock ClockV1, groups GroupsV1, taskStore TaskStoreV1, journal JournalV1) *AddTaskHandler {
+	return &AddTaskHandler{clock: clock, groups: groups, taskStore: taskStore, journal: journal}
 }
 
 // Execute runs AddTask.
@@ -266,14 +265,13 @@ type EditTaskOutput struct {
 type EditTaskHandler struct {
 	taskStore TaskStoreV1
 	groups    GroupsV1
-	circle    CircleV1
 	clock     ClockV1
 	journal   JournalV1
 }
 
 // NewEditTask builds EditTask on what it calls.
-func NewEditTask(taskStore TaskStoreV1, groups GroupsV1, circle CircleV1, clock ClockV1, journal JournalV1) *EditTaskHandler {
-	return &EditTaskHandler{taskStore: taskStore, groups: groups, circle: circle, clock: clock, journal: journal}
+func NewEditTask(taskStore TaskStoreV1, groups GroupsV1, clock ClockV1, journal JournalV1) *EditTaskHandler {
+	return &EditTaskHandler{taskStore: taskStore, groups: groups, clock: clock, journal: journal}
 }
 
 // Execute runs EditTask.

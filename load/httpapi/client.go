@@ -27,7 +27,7 @@ type client struct {
 
 // newClient is NewClient's body.
 func newClient(targetSetting *app.Setting[string]) *Client {
-	return &Client{client{targetSetting: targetSetting, http: &http.Client{Timeout: 5 * time.Second}}}
+	return &Client{client{targetSetting: targetSetting, http: &http.Client{Timeout: 20 * time.Second}}}
 }
 
 // activity is Client.Activity's body: how many entries the feed answers.

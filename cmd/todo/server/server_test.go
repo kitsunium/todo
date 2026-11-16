@@ -985,16 +985,19 @@ func TestAGroupSharesAList(t *testing.T) {
 	join(cy, "member")
 
 	// Only a member adds a task to the group's list, and assigns it to who is
-	// in the group; a personal task is assigned to a contact.
+	// in the group; a personal task is assigned to a member it is shared with.
 	soon, later := epoch.Add(3*time.Hour), epoch.Add(72*time.Hour)
 	var first, second, mine groupTask
 	dee.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "groupId": g.ID}, nil)
 	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "groupId": g.ID, "assigneeId": eve.id}, nil) // a contact, not in the group
-	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "assigneeId": dee.id}, nil)                  // no contact of hers
+	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "assigneeId": dee.id}, nil)                  // sees nothing of it
+	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "assigneeId": eve.id}, nil)                  // a contact, with whom it is not shared
 	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "assignee": "Grace"}, nil)                   // the free text is gone
 	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Plan the sprint", "groupId": g.ID, "assigneeId": bob.id, "due": soon}, &first)
 	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Write the notes", "groupId": g.ID, "due": later}, &second)
-	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Water the plants", "assigneeId": eve.id}, &mine)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Water the plants"}, &mine)
+	ada.call(http.StatusOK, "POST", "/api/tasks/"+mine.ID+"/share", map[string]any{"userId": eve.id}, nil)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+mine.ID, map[string]any{"assigneeId": eve.id}, &mine) // shared with her first, then assigned
 	if first.GroupID != g.ID || first.AssigneeID != bob.id || first.OwnerID != ada.id || mine.AssigneeID != eve.id || mine.GroupID != "" {
 		t.Fatalf("the tasks added: %+v %+v", first, mine)
 	}

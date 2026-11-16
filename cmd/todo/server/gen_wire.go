@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f78b90bd39d042efd423450d5f8ea59f0f6ddf7d6ea3d6874b6a7bc17cd1eabd
+// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -97,14 +97,14 @@ func Wire(ctx context.Context, build Build) {
 	taskstoreGroups := taskstore.NewGroups()
 	appClock := taskstore.NewAppClock()
 	followGroup := planner.NewFollowGroup(tasks, taskstoreGroups, appClock)
-	taskstoreFriends := taskstore.NewFriends()
 	taskstoreAnnouncer := taskstore.NewAnnouncer()
-	addTask := planner.NewAddTask(appClock, taskstoreGroups, taskstoreFriends, tasks, taskstoreAnnouncer)
+	addTask := planner.NewAddTask(appClock, taskstoreGroups, tasks, taskstoreAnnouncer)
 	listTasks := planner.NewListTasks(taskstoreGroups, appClock, tasks)
 	countViews := planner.NewCountViews(taskstoreGroups, appClock, tasks)
 	getTask := planner.NewGetTask(tasks, taskstoreGroups)
-	editTask := planner.NewEditTask(tasks, taskstoreGroups, taskstoreFriends, appClock, taskstoreAnnouncer)
+	editTask := planner.NewEditTask(tasks, taskstoreGroups, appClock, taskstoreAnnouncer)
 	deleteTask := planner.NewDeleteTask(tasks, taskstoreGroups, taskstoreAnnouncer)
+	taskstoreFriends := taskstore.NewFriends()
 	shareTask := planner.NewShareTask(tasks, taskstoreGroups, taskstoreFriends, appClock, taskstoreAnnouncer)
 	unshareTask := planner.NewUnshareTask(tasks, taskstoreGroups, appClock)
 	moveTask := planner.NewMoveTask(tasks, taskstoreGroups, appClock, taskstoreAnnouncer)

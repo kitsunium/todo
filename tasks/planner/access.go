@@ -50,17 +50,17 @@ func manages(t task.Task, user string, role string) bool {
 	return user == t.OwnerID || role == roleOwner || role == roleAdmin
 }
 
-// assignable reports whether a task is assigned to a member by the caller:
-// to the caller, to its owner, to a member it is shared with, to a member of
-// its group when it is on a group's list, to a contact of the caller when it
-// is a personal task.
-func assignable(ctx context.Context, groups GroupsV1, circle CircleV1, t task.Task, caller string, candidate string) (bool, error) {
-	if candidate == caller || candidate == t.OwnerID || slices.Contains(t.SharedWith, candidate) {
+// assignable reports whether a task may be assigned to a member: its owner,
+// a member it is shared with, or a member of its group. Being a contact of
+// whoever asks is not enough: assigning a task lets its assignee see it, and
+// only its owner decides who else does, by sharing it.
+func assignable(ctx context.Context, groups GroupsV1, t task.Task, candidate string) (bool, error) {
+	if candidate == t.OwnerID || slices.Contains(t.SharedWith, candidate) {
 		return true, nil
 	}
-	if t.GroupID != "" {
-		role, err := groups.RoleOf(ctx, t.GroupID, candidate)
-		return role != "", err
+	if t.GroupID == "" {
+		return false, nil
 	}
-	return circle.AreContacts(ctx, caller, candidate)
+	role, err := groups.RoleOf(ctx, t.GroupID, candidate)
+	return role != "", err
 }

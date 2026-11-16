@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f78b90bd39d042efd423450d5f8ea59f0f6ddf7d6ea3d6874b6a7bc17cd1eabd
+// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
 
 // Package task — The task, its priority and its lifecycle.
 //
@@ -29,9 +29,9 @@ var (
 	ErrNoGroup = errs.New(errs.Pack(64, 1, 1, 11), "NO_GROUP", "no such group", "tasks/error/ErrNoGroup")
 	// ErrNotAllowed is "the task cannot make this move from the state it is in".
 	ErrNotAllowed = errs.New(errs.Pack(64, 1, 1, 5), "NOT_ALLOWED", "the task cannot make this move from the state it is in", "tasks/error/ErrNotAllowed")
-	// ErrNotAssignable is "a task is assigned to its owner, to a contact of its
-	// owner, or to a member of its group".
-	ErrNotAssignable = errs.New(errs.Pack(64, 1, 1, 13), "NOT_ASSIGNABLE", "a task is assigned to its owner, to a contact of its owner, or to a member of its group", "tasks/error/ErrNotAssignable")
+	// ErrNotAssignable is "a task is assigned to its owner, to a member it is
+	// shared with, or to a member of its group".
+	ErrNotAssignable = errs.New(errs.Pack(64, 1, 1, 13), "NOT_ASSIGNABLE", "a task is assigned to its owner, to a member it is shared with, or to a member of its group", "tasks/error/ErrNotAssignable")
 	// ErrNotContact is "a task is shared with a contact of its owner".
 	ErrNotContact = errs.New(errs.Pack(64, 1, 1, 6), "NOT_CONTACT", "a task is shared with a contact of its owner", "tasks/error/ErrNotContact")
 	// ErrNotFound is "no such task".

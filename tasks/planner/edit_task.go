@@ -44,7 +44,7 @@ func (h *EditTaskHandler) execute(ctx context.Context, in *EditTaskInput) (EditT
 	if in.AssigneeID != nil {
 		if next := strings.TrimSpace(*in.AssigneeID); next != t.AssigneeID {
 			if next != "" {
-				ok, err := assignable(ctx, h.groups, h.circle, t, in.User, next)
+				ok, err := assignable(ctx, h.groups, t, next)
 				if err != nil {
 					return EditTaskOutput{}, err
 				}

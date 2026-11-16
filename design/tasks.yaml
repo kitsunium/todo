@@ -66,7 +66,7 @@ domains:
           - {name: ErrBadZone, serial: 10, message: "a time zone is an IANA name, like Europe/Paris"}
           - {name: ErrNoGroup, serial: 11, message: no such group}
           - {name: ErrNotMember, serial: 12, message: a task goes on the list of a group its member belongs to}
-          - {name: ErrNotAssignable, serial: 13, message: "a task is assigned to its owner, to a contact of its owner, or to a member of its group"}
+          - {name: ErrNotAssignable, serial: 13, message: "a task is assigned to its owner, to a member it is shared with, or to a member of its group"}
         workflows:
           - name: Lifecycle
             entity: Task
@@ -133,16 +133,15 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotMember, task.ErrNotAssignable]
-            calls: [tasks/port/Clock@v1.Now, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/Clock@v1.Now, tasks/port/Groups@v1.RoleOf, tasks/port/TaskStore@v1.NewID, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: adds an open task, kind: success}
               - {name: adds a task to a group list, kind: success}
-              - {name: assigns a task to a contact, kind: success}
               - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
               - {name: refuses a long title, kind: refusal, error: task.ErrTitleTooLong}
               - {name: refuses an unknown priority, kind: refusal, error: task.ErrUnknownPriority}
               - {name: refuses a group the member is not in, kind: refusal, error: task.ErrNotMember}
-              - {name: refuses an assignee who is no contact, kind: refusal, error: task.ErrNotAssignable}
+              - {name: refuses an assignee who does not see the task, kind: refusal, error: task.ErrNotAssignable}
               - {name: refuses an assignee outside the group, kind: refusal, error: task.ErrNotAssignable}
           - name: MoveTask
             description: MoveTask moves a task through its lifecycle by one event (complete, reopen, archive, restore), for a member who sees it; a task they do not see is not found.
@@ -229,10 +228,12 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotAssignable]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: changes only what is given, kind: success}
               - {name: assigns a member of the group, kind: success}
+              - {name: assigns a member the task is shared with, kind: success}
+              - {name: refuses a contact the task is not shared with, kind: refusal, error: task.ErrNotAssignable}
               - {name: clears the assignee, kind: success}
               - {name: refuses an empty title, kind: refusal, error: task.ErrEmptyTitle}
               - {name: refuses an assignee outside the group, kind: refusal, error: task.ErrNotAssignable}
@@ -334,8 +335,8 @@ domains:
               params: [{name: t, type: "task.Task"}, {name: user, type: "string"}, {name: role, type: "string"}]
               results: [{type: "bool"}]
             - name: assignable
-              description: "assignable reports whether a task is assigned to a member by the caller: to the caller, to its owner, to a member it is shared with, to a member of its group when it is on a group's list, to a contact of the caller when it is a personal task."
-              params: [{name: ctx, type: "context.Context"}, {name: groups, type: "GroupsV1"}, {name: circle, type: "CircleV1"}, {name: t, type: "task.Task"}, {name: caller, type: "string"}, {name: candidate, type: "string"}]
+              description: "assignable reports whether a task may be assigned to a member: its owner, a member it is shared with, or a member of its group."
+              params: [{name: ctx, type: "context.Context"}, {name: groups, type: "GroupsV1"}, {name: t, type: "task.Task"}, {name: candidate, type: "string"}]
               results: [{type: "bool"}, {type: "error"}]
             - name: dayAndWeek
               description: "dayAndWeek places now in the member's time zone, an IANA name, UTC when none is given, and returns the end of their day and the start of their week, a Monday at midnight."

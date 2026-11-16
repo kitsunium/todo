@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:f78b90bd39d042efd423450d5f8ea59f0f6ddf7d6ea3d6874b6a7bc17cd1eabd
+// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
 
 package planner
 
@@ -26,16 +26,6 @@ func TestAddTaskAddsAnOpenTask(t *testing.T) {
 // TestAddTaskAddsATaskToAGroupList is AddTask's scenario "adds a task to a group list" (success).
 func TestAddTaskAddsATaskToAGroupList(t *testing.T) {
 	uc, in, then := givenAddTaskAddsATaskToAGroupList(t)
-	out, err := uc.Execute(t.Context(), in)
-	if err != nil {
-		t.Fatalf("AddTask: %v, want a success", err)
-	}
-	then(t, out)
-}
-
-// TestAddTaskAssignsATaskToAContact is AddTask's scenario "assigns a task to a contact" (success).
-func TestAddTaskAssignsATaskToAContact(t *testing.T) {
-	uc, in, then := givenAddTaskAssignsATaskToAContact(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("AddTask: %v, want a success", err)
@@ -79,9 +69,9 @@ func TestAddTaskRefusesAGroupTheMemberIsNotIn(t *testing.T) {
 	}
 }
 
-// TestAddTaskRefusesAnAssigneeWhoIsNoContact is AddTask's scenario "refuses an assignee who is no contact" (refusal).
-func TestAddTaskRefusesAnAssigneeWhoIsNoContact(t *testing.T) {
-	uc, in := givenAddTaskRefusesAnAssigneeWhoIsNoContact(t)
+// TestAddTaskRefusesAnAssigneeWhoDoesNotSeeTheTask is AddTask's scenario "refuses an assignee who does not see the task" (refusal).
+func TestAddTaskRefusesAnAssigneeWhoDoesNotSeeTheTask(t *testing.T) {
+	uc, in := givenAddTaskRefusesAnAssigneeWhoDoesNotSeeTheTask(t)
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, task.ErrNotAssignable) {
 		t.Fatalf("AddTask: %v, want task.ErrNotAssignable", err)
@@ -192,6 +182,25 @@ func TestEditTaskAssignsAMemberOfTheGroup(t *testing.T) {
 		t.Fatalf("EditTask: %v, want a success", err)
 	}
 	then(t, out)
+}
+
+// TestEditTaskAssignsAMemberTheTaskIsSharedWith is EditTask's scenario "assigns a member the task is shared with" (success).
+func TestEditTaskAssignsAMemberTheTaskIsSharedWith(t *testing.T) {
+	uc, in, then := givenEditTaskAssignsAMemberTheTaskIsSharedWith(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("EditTask: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestEditTaskRefusesAContactTheTaskIsNotSharedWith is EditTask's scenario "refuses a contact the task is not shared with" (refusal).
+func TestEditTaskRefusesAContactTheTaskIsNotSharedWith(t *testing.T) {
+	uc, in := givenEditTaskRefusesAContactTheTaskIsNotSharedWith(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, task.ErrNotAssignable) {
+		t.Fatalf("EditTask: %v, want task.ErrNotAssignable", err)
+	}
 }
 
 // TestEditTaskClearsTheAssignee is EditTask's scenario "clears the assignee" (success).

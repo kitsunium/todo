@@ -71,11 +71,11 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `POST /api/groups/{id}/invitations` | invites a contact: `userId`, for the owner and the admins |
 | `GET /api/invitations`, `POST /api/invitations/{id}/accept` `decline` | the invitations the caller received, and their answer |
 | `PATCH` `DELETE /api/groups/{id}/members/{userId}` | sets a member's role (owner), removes a member or leaves the group |
-| `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `groupId` (a group the caller is in), `assigneeId` (the caller, a contact for a personal task, a member for a group's), `due` (RFC 3339) |
+| `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `groupId` (a group the caller is in), `assigneeId` (its owner, or a member of the group for a group's task), `due` (RFC 3339) |
 | `GET /api/tasks` | lists the tasks the caller sees, theirs, shared with them, assigned to them and on their groups' lists, not archived, the most urgent first; `?state=open\|done\|archived` lists one state; `?view=inbox\|today\|upcoming\|shared\|assigned\|completed\|group` lists a view (a view ignores `state`), `?group=<id>` narrows to a group (the `group` view needs it, a group the caller is not in is a 404), `?tz=<IANA zone>` says when the day ends (UTC by default) |
 | `GET /api/tasks/counts` | what the sidebar counts for the caller: `inbox`, `today`, `upcoming`, `shared`, `assigned`, `overdue`, `completedThisWeek` and the open tasks of each of their `groups`; `?tz=<IANA zone>` |
 | `GET /api/tasks/{id}` | one task the caller sees |
-| `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assigneeId` (empty clears it), `due`, each only when sent |
+| `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assigneeId` (its owner, a member it is shared with or a member of its group; empty clears it), `due`, each only when sent |
 | `DELETE /api/tasks/{id}` | deletes a task, for its owner, or for an owner or an admin of its group |
 | `POST /api/tasks/{id}/share` | shares a task with a contact: `userId`, for its owner |
 | `DELETE /api/tasks/{id}/share/{userId}` | ends the sharing with a member, for the owner or that member |

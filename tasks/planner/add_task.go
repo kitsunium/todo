@@ -43,7 +43,7 @@ func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTask
 		return AddTaskOutput{}, task.ErrNotMember
 	}
 	if t.AssigneeID != "" {
-		ok, err := assignable(ctx, h.groups, h.circle, t, in.Owner, t.AssigneeID)
+		ok, err := assignable(ctx, h.groups, t, t.AssigneeID)
 		if err != nil {
 			return AddTaskOutput{}, err
 		}
