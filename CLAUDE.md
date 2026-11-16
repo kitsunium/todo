@@ -62,7 +62,9 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   failed read (`Ledger.Seen`). `Tasks.Get` reads the key because a task
   that does not exist is the caller's error, answered 404.
 - **Logs name a task by its id**, never an assignee: `Assignee`, a mail's
-  `To` are tagged `app:"personal"`.
+  `To` are tagged `app:"personal"`, and `app:"personal,subject"` in the
+  entity a store keeps. A store that keeps personal data says for how long
+  in the design (`eraseAfter`, `deleteAfter`).
 - **No file names the tool** that generates, checks or runs the product in
   dev: this file, the README and the code say "the generator", "the
   check", "the dev tool". The product imports the SDK only.

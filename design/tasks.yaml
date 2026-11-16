@@ -169,14 +169,18 @@ domains:
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: Notes, type: string, tag: 'json:"notes" app:"public"'}
               - {name: Priority, type: string, tag: 'json:"priority" app:"public"'}
-              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal,subject"'}
               - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
               - {name: State, type: string, tag: 'json:"state" app:"public"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
               - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
               - {name: DoneAt, type: time.Time, tag: 'json:"doneAt" app:"public"'}
         stores:
-          - {name: tasks, entity: Record, key: ID, description: "Every task, keyed by its id."}
+          - name: tasks
+            entity: Record
+            key: ID
+            description: "Every task, keyed by its id; who it is assigned to is erased a year after it was last written."
+            eraseAfter: {delay: 8760h, since: UpdatedAt}
         adapters:
           - name: Tasks
             description: Tasks is TaskStore@v1 on the store "tasks".

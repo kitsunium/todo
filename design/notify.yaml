@@ -52,7 +52,7 @@ domains:
             description: A mail the product sent.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
-              - {name: To, type: string, tag: 'json:"to" app:"personal"'}
+              - {name: To, type: string, tag: 'json:"to" app:"personal,subject"'}
               - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
               - {name: Body, type: string, tag: 'json:"body" app:"public"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
@@ -73,7 +73,11 @@ domains:
           - {name: smtp-addr, type: string, default: "", description: "The SMTP relay's host and port; empty, the mails are kept and not relayed."}
           - {name: mail-from, type: string, default: "todo@localhost", description: The address the mails come from.}
         stores:
-          - {name: outbox, entity: Sent, key: ID, description: "Every mail sent, keyed by a time-ordered id."}
+          - name: outbox
+            entity: Sent
+            key: ID
+            description: "Every mail sent, keyed by its id; a mail is deleted thirty days after it was sent."
+            deleteAfter: {delay: 720h, since: At}
           - {name: reminded, entity: Reminded, key: TaskID, description: The tasks already reminded of.}
         adapters:
           - name: Relay

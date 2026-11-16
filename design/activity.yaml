@@ -19,7 +19,7 @@ domains:
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
-              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal"'}
+              - {name: Assignee, type: string, tag: 'json:"assignee" app:"personal,subject"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
         values:
           - name: Page
@@ -33,7 +33,11 @@ domains:
         constants:
           - {name: Keep, type: int, value: "200", description: Keep is how many entries the feed keeps.}
         stores:
-          - {name: entries, entity: Entry, key: ID, description: "The feed's entries, keyed by their id."}
+          - name: entries
+            entity: Entry
+            key: ID
+            description: "The feed's entries, keyed by their id; an entry is deleted ninety days after it was written."
+            deleteAfter: {delay: 2160h, since: At}
         adapters:
           - name: Feed
             description: Feed is Journal@v1 on the store "entries"; it keeps the latest Keep entries.

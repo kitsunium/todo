@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27ca09ed71b55775793a56323d68cbce853561b10ccbc6f7818f3315d9bdf827
+// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
 
 // Package outbox — The mails sent, kept, handed to the SMTP relay when one
 // is named, their HTTP read, and the log of the reminders.
@@ -30,7 +30,7 @@ type Reminded struct {
 // Sent — A mail the product sent.
 type Sent struct {
 	ID      string    `json:"id" app:"public"`
-	To      string    `json:"to" app:"personal"`
+	To      string    `json:"to" app:"personal,subject"`
 	Subject string    `json:"subject" app:"public"`
 	Body    string    `json:"body" app:"public"`
 	At      time.Time `json:"at" app:"public"`
@@ -98,8 +98,11 @@ var MailFromSetting = Service.Setting[string]("mail-from", "todo@localhost")
 // kept and not relayed.
 var SmtpAddrSetting = Service.Setting[string]("smtp-addr", "")
 
-// OutboxStore — Every mail sent, keyed by a time-ordered id.
-var OutboxStore = Service.Store("outbox", func(e Sent) string { return e.ID })
+// OutboxStore — Every mail sent, keyed by its id; a mail is deleted thirty
+// days after it was sent.
+var OutboxStore = Service.Store("outbox", func(e Sent) string { return e.ID },
+	app.DeleteAfter[Sent](time.Duration(2592000000000000) /* 720h */, func(e Sent) (time.Time, bool) { return e.At, !e.At.IsZero() }),
+)
 
 // RemindedStore — The tasks already reminded of.
 var RemindedStore = Service.Store("reminded", func(e Reminded) string { return e.TaskID })

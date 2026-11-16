@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27ca09ed71b55775793a56323d68cbce853561b10ccbc6f7818f3315d9bdf827
+// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
 
 // Package feed — The feed, written from what the tasks' use cases record,
 // and its HTTP read.
@@ -36,7 +36,7 @@ type Entry struct {
 	Kind     string    `json:"kind" app:"public"`
 	TaskID   string    `json:"taskId" app:"public"`
 	Title    string    `json:"title" app:"public"`
-	Assignee string    `json:"assignee" app:"personal"`
+	Assignee string    `json:"assignee" app:"personal,subject"`
 	At       time.Time `json:"at" app:"public"`
 }
 
@@ -70,8 +70,11 @@ var _ planner.JournalV1 = (*Feed)(nil)
 // Service is feed's framework service: what it declares, drawn and run.
 var Service = app.NewService("feed", "The feed, written from what the tasks' use cases record, and its HTTP read.")
 
-// EntriesStore — The feed's entries, keyed by their id.
-var EntriesStore = Service.Store("entries", func(e Entry) string { return e.ID })
+// EntriesStore — The feed's entries, keyed by their id; an entry is deleted
+// ninety days after it was written.
+var EntriesStore = Service.Store("entries", func(e Entry) string { return e.ID },
+	app.DeleteAfter[Entry](time.Duration(7776000000000000) /* 2160h */, func(e Entry) (time.Time, bool) { return e.At, !e.At.IsZero() }),
+)
 
 var _ = Service.Endpoint("GET /api/activity", Recent)
 

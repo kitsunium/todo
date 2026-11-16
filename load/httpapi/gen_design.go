@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:27ca09ed71b55775793a56323d68cbce853561b10ccbc6f7818f3315d9bdf827
+// design:digest sha256:370a82d053439cd8e17f0439915150946927d383504b60ee20d20c234deff80b
 
 // Package httpapi — The server's HTTP API, called over the network.
 //

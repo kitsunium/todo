@@ -64,6 +64,10 @@ interface, so a deployment names its address. Its data lives in
 | `SERVER_SMTP_ADDR` | empty | the SMTP relay's host and port (587, STARTTLS when the relay offers it); empty, the mails are kept in the outbox and not relayed |
 | `SERVER_MAIL_FROM` | `todo@localhost` | the address the mails come from |
 
+What the stores keep of a person has an end: a task's assignee is erased a
+year after the task was last written, a feed entry is deleted after ninety
+days, a mail after thirty.
+
 `go run ./cmd/todo config` prints every setting and where its value comes
 from.
 
