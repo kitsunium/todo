@@ -10,6 +10,7 @@ product:
   module: github.com/kitsunium/todo
   version: v0.3.0
   closed: true
+  config: [json]
 context:
   actors:
     - name: member

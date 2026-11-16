@@ -47,6 +47,9 @@ func start(t *testing.T, opts ...app.AppOption) *product {
 	t.Helper()
 	clk := clock.NewManualClock(epoch)
 	server.Wire(t.Context(), server.Build{})
+	// The role's dev configuration trusts addresses; a test proves them, as a
+	// deployment with a mail relay does, unless it says otherwise.
+	opts = append([]app.AppOption{app.Set("verify-addresses", true)}, opts...)
 	a := server.App.With(append([]app.AppOption{app.InMemory(), app.Listen("127.0.0.1:0"), app.Env(app.EnvDev), app.Logs(io.Discard), app.Clock(clk)}, opts...)...)
 	if err := a.Start(t.Context()); err != nil {
 		t.Fatal(err)

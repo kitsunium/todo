@@ -109,7 +109,7 @@ interface, so a deployment names its address. Its data lives in
 | `SERVER_ARCHIVE_AFTER` | `24h` | how long a done task stays listed before it is archived |
 | `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's owner is reminded |
 | `SERVER_BASE_URL` | `http://localhost:4000` | where members reach the product, for the links of its mails |
-| `SERVER_VERIFY_ADDRESSES` | `true` | whether a new account proves its address before it signs in; `false` where the deployment has no mail relay |
+| `SERVER_VERIFY_ADDRESSES` | `true`, `false` in dev | whether a new account proves its address before it signs in; `false` where the deployment has no mail relay |
 | `SERVER_SMTP_URL` | unset | where the mailer delivers: `smtp://user:pass@host:587?tls=starttls`; unset, the mails are captured for the dev tool and not delivered |
 
 What the stores keep of a person has an end: a task's assignee is erased a
@@ -117,6 +117,10 @@ year after the task was last written, a feed entry is deleted after ninety
 days, an account untouched for three years is erased,
 and a session is deleted a day after it expired. A password is kept
 stretched (PBKDF2-SHA256), a session's secret as its SHA-256.
+
+A role's configuration files are embedded in the binary:
+`cmd/todo/<role>/config/config.json` for every environment,
+`<env>.json` for one. The environment's variables win over them.
 
 `go run ./cmd/todo config` prints every setting and where its value comes
 from.
@@ -140,9 +144,9 @@ vital signs — so that there is something to watch:
 LOAD_TARGET=127.0.0.1:4000 go run ./cmd/todo load -for 2m -rate 5
 ```
 
-The load reads no mail: the server it is driven against runs with
-`SERVER_VERIFY_ADDRESSES=false`, or its member's address was proven once by
-hand.
+The load reads no mail: the server it is driven against trusts addresses,
+as one run in dev does (`cmd/todo/server/config/dev.json`), or its member's
+address was proven once by hand.
 
 `-for` is how long it lasts (default 30s), `-rate` how many calls a second
 (default 5). It prints how many calls it made and how many failed, and exits

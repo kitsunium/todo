@@ -116,6 +116,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   client): 2 a second, burst 5, where a stranger makes the product work
   (sign-up, sign-in, a contact request), 10 and 20 elsewhere. The buckets
   refill on the framework's clock: a test's client moves it on a 429.
+- **A setting's value for an environment is a file of the role**,
+  `cmd/todo/<role>/config/<env>.json`, embedded; a key no component of the
+  role declares stops the start. Dev trusts addresses there; a test of the
+  server role sets `verify-addresses` back to true.
 - **A request is decoded strictly**: a member the route does not declare
   is a 400. A client sends each route its own fields.
 

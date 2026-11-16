@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:2a2e1ae2f3c14afcf45b67e8c18923c85e5975df67c02bb2610e585bf5526ed2
+// design:digest sha256:0c616a2ddc211ada253896609000dcaab6758455e2991084b86e140dd79690fe
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"embed"
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/framework/model"
@@ -28,8 +29,14 @@ import (
 	"github.com/kitsunium/todo/web/site"
 )
 
+// configFiles are role server's configuration files, embedded from config: they
+// are hand-written.
+//
+//go:embed config
+var configFiles embed.FS
+
 // App is role server: the framework App of vault, authapi, linkstore, contactsapi, taskstore, api, feed, post, outbox, watch, census, site, profile server.
-var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, taskstore.Service, api.Service, feed.Service, post.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer))
+var App = app.NewApp("server", vault.Service, authapi.Service, linkstore.Service, contactsapi.Service, taskstore.Service, api.Service, feed.Service, post.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer), app.ConfigFiles(configFiles))
 
 // Build is what the binary's build says: its variables, set by -ldflags -X.
 type Build struct {
