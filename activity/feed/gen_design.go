@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:dc285aa32ac01223bd5391a33797b47de4d8712905df70ac47be37ef24229ff4
+// design:digest sha256:936de59371eaf041b79b89d401c656125e4aba3ce372c50c24d0f6af56d90f68
 
 // Package feed — The feed, written from what the tasks' use cases record,
 // and its HTTP read.
@@ -30,6 +30,8 @@ const (
 // Entry — One thing that happened to a task.
 type Entry struct {
 	ID string `json:"id" app:"public"`
+	// Seq orders the entries: each is one above the entry written before it.
+	Seq int64 `json:"seq" app:"public"`
 	// Kind is added, or the lifecycle event that moved the task.
 	Kind     string    `json:"kind" app:"public"`
 	TaskID   string    `json:"taskId" app:"public"`
@@ -68,7 +70,7 @@ var _ planner.JournalV1 = (*Feed)(nil)
 // Service is feed's framework service: what it declares, drawn and run.
 var Service = app.NewService("feed", "The feed, written from what the tasks' use cases record, and its HTTP read.")
 
-// EntriesStore — The feed's entries, keyed by a time-ordered id.
+// EntriesStore — The feed's entries, keyed by their id.
 var EntriesStore = Service.Store("entries", func(e Entry) string { return e.ID })
 
 var _ = Service.Endpoint("GET /api/activity", Recent)

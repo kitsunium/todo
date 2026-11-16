@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:dc285aa32ac01223bd5391a33797b47de4d8712905df70ac47be37ef24229ff4
+// design:digest sha256:936de59371eaf041b79b89d401c656125e4aba3ce372c50c24d0f6af56d90f68
 
 // Package api — The HTTP API of the tasks, and the job that archives what
 // was done long ago.

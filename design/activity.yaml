@@ -15,6 +15,7 @@ domains:
             description: One thing that happened to a task.
             fields:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Seq, type: int64, tag: 'json:"seq" app:"public"', description: "Seq orders the entries: each is one above the entry written before it."}
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added, or the lifecycle event that moved the task."}
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
@@ -32,7 +33,7 @@ domains:
         constants:
           - {name: Keep, type: int, value: "200", description: Keep is how many entries the feed keeps.}
         stores:
-          - {name: entries, entity: Entry, key: ID, description: "The feed's entries, keyed by a time-ordered id."}
+          - {name: entries, entity: Entry, key: ID, description: "The feed's entries, keyed by their id."}
         adapters:
           - name: Feed
             description: Feed is Journal@v1 on the store "entries"; it keeps the latest Keep entries.
