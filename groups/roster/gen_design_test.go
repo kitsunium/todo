@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 package roster
 
@@ -462,6 +462,11 @@ type recordedrosterGroupsV1 struct {
 	calls *[]string
 }
 
+func (x recordedrosterGroupsV1) Change(ctx context.Context, id string, change func(*team.Group) error) (team.Group, error) {
+	*x.calls = append(*x.calls, "groups/port/Groups@v1.Change")
+	return x.next.Change(ctx, id, change)
+}
+
 func (x recordedrosterGroupsV1) Delete(ctx context.Context, id string) error {
 	*x.calls = append(*x.calls, "groups/port/Groups@v1.Delete")
 	return x.next.Delete(ctx, id)
@@ -495,6 +500,11 @@ func (r sequenceRecorder) RecordRosterInvitationsV1(next InvitationsV1) Invitati
 type recordedrosterInvitationsV1 struct {
 	next  InvitationsV1
 	calls *[]string
+}
+
+func (x recordedrosterInvitationsV1) Change(ctx context.Context, id string, change func(*team.Invitation) error) (team.Invitation, error) {
+	*x.calls = append(*x.calls, "groups/port/Invitations@v1.Change")
+	return x.next.Change(ctx, id, change)
 }
 
 func (x recordedrosterInvitationsV1) Delete(ctx context.Context, id string) error {

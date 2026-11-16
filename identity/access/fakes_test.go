@@ -80,6 +80,18 @@ func (p accountsPort) Get(_ context.Context, id string) (account.Account, bool, 
 	return a, ok, nil
 }
 
+func (p accountsPort) Change(_ context.Context, id string, change func(*account.Account) error) (account.Account, error) {
+	a, ok := p.accounts[id]
+	if !ok {
+		return account.Account{}, account.ErrInvalidCredentials
+	}
+	if err := change(&a); err != nil {
+		return account.Account{}, err
+	}
+	p.accounts[id] = a
+	return a, nil
+}
+
 func (p accountsPort) ByEmail(_ context.Context, email string) (account.Account, bool, error) {
 	for _, a := range p.accounts {
 		if a.Email == email {

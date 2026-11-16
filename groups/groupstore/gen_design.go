@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package groupstore — The groups and their invitations in the framework's
 // store, what happens in a group on a topic, the directory asked of the
@@ -124,6 +124,11 @@ func NewGroups() *Groups {
 	return newGroups()
 }
 
+// Change is groups/port/Groups@v1's.
+func (self *Groups) Change(ctx context.Context, id string, change func(*team.Group) error) (team.Group, error) {
+	return self.change(ctx, id, change)
+}
+
 // Delete is groups/port/Groups@v1's.
 func (self *Groups) Delete(ctx context.Context, id string) error {
 	return self.deleteBody(ctx, id)
@@ -159,6 +164,11 @@ type Invitations struct {
 // NewInvitations builds Invitations: its body is the hand-written newInvitations.
 func NewInvitations() *Invitations {
 	return newInvitations()
+}
+
+// Change is groups/port/Invitations@v1's.
+func (a *Invitations) Change(ctx context.Context, id string, change func(*team.Invitation) error) (team.Invitation, error) {
+	return a.change(ctx, id, change)
 }
 
 // Delete is groups/port/Invitations@v1's.

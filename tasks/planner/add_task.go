@@ -43,11 +43,15 @@ func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTask
 		return AddTaskOutput{}, task.ErrNotMember
 	}
 	if t.AssigneeID != "" {
-		ok, err := assignable(ctx, h.groups, t, t.AssigneeID)
-		if err != nil {
-			return AddTaskOutput{}, err
+		inGroup := false
+		if t.GroupID != "" {
+			assignee, err := h.groups.RoleOf(ctx, t.GroupID, t.AssigneeID)
+			if err != nil {
+				return AddTaskOutput{}, err
+			}
+			inGroup = assignee != ""
 		}
-		if !ok {
+		if !assignable(t, t.AssigneeID, inGroup) {
 			return AddTaskOutput{}, task.ErrNotAssignable
 		}
 	}

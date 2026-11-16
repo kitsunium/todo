@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package circle — Asking a member to be a contact, answering, and listing
 // one's contacts.
@@ -42,6 +42,10 @@ type ClockV1 interface {
 // LinksV1 keeps the links.
 type LinksV1 interface {
 	ByPair(ctx context.Context, pair string) (link.Link, bool, error)
+	// Change applies a change to the link of an id as it is kept at that instant,
+	// alone among the writers of the store, and keeps the result; an error of the
+	// change keeps nothing, and a link that is not there is ErrNotFound.
+	Change(ctx context.Context, id string, change func(*link.Link) error) (link.Link, error)
 	Delete(ctx context.Context, id string) error
 	Get(ctx context.Context, id string) (link.Link, bool, error)
 	NewID(ctx context.Context) (string, error)
@@ -80,15 +84,15 @@ type AnswerRequestOutput struct {
 
 // AnswerRequestHandler runs AnswerRequest: its body is the hand-written execute.
 type AnswerRequestHandler struct {
-	links   LinksV1
 	clock   ClockV1
+	links   LinksV1
 	people  PeopleV1
 	notices NoticesV1
 }
 
 // NewAnswerRequest builds AnswerRequest on what it calls.
-func NewAnswerRequest(links LinksV1, clock ClockV1, people PeopleV1, notices NoticesV1) *AnswerRequestHandler {
-	return &AnswerRequestHandler{links: links, clock: clock, people: people, notices: notices}
+func NewAnswerRequest(clock ClockV1, links LinksV1, people PeopleV1, notices NoticesV1) *AnswerRequestHandler {
+	return &AnswerRequestHandler{clock: clock, links: links, people: people, notices: notices}
 }
 
 // Execute runs AnswerRequest.

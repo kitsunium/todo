@@ -18,15 +18,15 @@ const kindShared = "shared"
 // execute is ShareTask's body: the owner shares a task with one of their
 // contacts. Sharing it again with the same member changes nothing.
 func (h *ShareTaskHandler) execute(ctx context.Context, in *ShareTaskInput) (ShareTaskOutput, error) {
-	t, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.User)
+	seen, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.User)
 	if err != nil {
 		return ShareTaskOutput{}, err
 	}
-	if t.OwnerID != in.User {
+	if seen.OwnerID != in.User {
 		return ShareTaskOutput{}, task.ErrNotOwner
 	}
-	if in.With == t.OwnerID || slices.Contains(t.SharedWith, in.With) {
-		return ShareTaskOutput{Task: t}, nil
+	if in.With == seen.OwnerID || slices.Contains(seen.SharedWith, in.With) {
+		return ShareTaskOutput{Task: seen}, nil
 	}
 	friends, err := h.circle.AreContacts(ctx, in.User, in.With)
 	if err != nil {
@@ -35,12 +35,22 @@ func (h *ShareTaskHandler) execute(ctx context.Context, in *ShareTaskInput) (Sha
 	if !friends {
 		return ShareTaskOutput{}, task.ErrNotContact
 	}
-	t.SharedWith = append(slices.Clone(t.SharedWith), in.With)
-	if t.UpdatedAt, err = h.clock.Now(ctx); err != nil {
+	now, err := h.clock.Now(ctx)
+	if err != nil {
 		return ShareTaskOutput{}, err
 	}
-	if err := h.taskStore.Save(ctx, t); err != nil {
-		return ShareTaskOutput{}, err
+	added := false
+	t, err := change(ctx, h.taskStore, h.groups, in.ID, in.User, func(t *task.Task, _ string) error {
+		if t.OwnerID != in.User {
+			return task.ErrNotOwner
+		}
+		if added = !slices.Contains(t.SharedWith, in.With); added {
+			t.SharedWith, t.UpdatedAt = append(slices.Clone(t.SharedWith), in.With), now
+		}
+		return nil
+	})
+	if err != nil || !added {
+		return ShareTaskOutput{Task: t}, err
 	}
 	if err := h.journal.Record(ctx, kindShared, t); err != nil {
 		return ShareTaskOutput{}, err

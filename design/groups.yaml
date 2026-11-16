@@ -168,6 +168,7 @@ domains:
               - {name: Get, params: [{name: id, type: string}], results: [{type: team.Group}, {type: bool}]}
               - {name: Of, params: [{name: user, type: string}], results: [{type: "[]team.Group"}]}
               - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the group of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and a group that is not there is ErrNotFound.", params: [{name: id, type: string}, {name: change, type: "func(*team.Group) error"}], results: [{type: team.Group}]}
           - name: Invitations
             direction: out
             version: 1
@@ -179,6 +180,7 @@ domains:
               - {name: Of, params: [{name: user, type: string}], results: [{type: "[]team.Invitation"}]}
               - {name: OfGroup, params: [{name: group, type: string}], results: [{type: "[]team.Invitation"}]}
               - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the invitation of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and an invitation that is not there is ErrNoInvitation.", params: [{name: id, type: string}, {name: change, type: "func(*team.Invitation) error"}], results: [{type: team.Invitation}]}
           - name: People
             direction: out
             version: 1
@@ -229,7 +231,7 @@ domains:
             output:
               - {name: Group, type: GroupView}
             errors: [team.ErrNotFound, team.ErrNotManager, team.ErrBadName, team.ErrBadColor]
-            calls: [groups/port/Groups@v1.Get, groups/port/Clock@v1.Now, groups/port/Groups@v1.Save, groups/port/People@v1.ByID]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.Change, groups/port/People@v1.ByID]
             scenarios:
               - {name: edits a group, kind: success}
               - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
@@ -293,7 +295,7 @@ domains:
             output:
               - {name: Group, type: GroupView}
             errors: [team.ErrNoInvitation, team.ErrNotPending, team.ErrNotFound]
-            calls: [groups/port/Invitations@v1.Get, groups/port/Clock@v1.Now, groups/port/Groups@v1.Get, groups/port/Groups@v1.Save, groups/port/Invitations@v1.Save, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            calls: [groups/port/Clock@v1.Now, groups/port/Invitations@v1.Change, groups/port/Groups@v1.Change, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
             scenarios:
               - {name: accepts an invitation, kind: success}
               - {name: declines an invitation, kind: success}
@@ -316,7 +318,7 @@ domains:
               - {name: ID, type: string}
               - {name: Member, type: string}
             errors: [team.ErrNotFound, team.ErrNoMember, team.ErrOwnerStays, team.ErrCannotRemove]
-            calls: [groups/port/Groups@v1.Get, groups/port/Clock@v1.Now, groups/port/Groups@v1.Save, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.Change, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
             scenarios:
               - {name: leaves a group, kind: success}
               - {name: removes a member, kind: success}
@@ -336,7 +338,7 @@ domains:
             output:
               - {name: Group, type: GroupView}
             errors: [team.ErrBadRole, team.ErrNotFound, team.ErrNotOwner, team.ErrNoMember, team.ErrOwnerRole]
-            calls: [groups/port/Groups@v1.Get, groups/port/Clock@v1.Now, groups/port/Groups@v1.Save, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.Change, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
             scenarios:
               - {name: makes a member an admin, kind: success}
               - {name: refuses an unknown role, kind: refusal, error: team.ErrBadRole}

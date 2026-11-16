@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package access — Signing up, signing in and out, and naming the member a
 // session belongs to.
@@ -23,6 +23,10 @@ var errNotImplemented = errs.New(errs.Pack(64, 6, 2, 255), "NOT_IMPLEMENTED", "n
 // AccountsV1 keeps the accounts.
 type AccountsV1 interface {
 	ByEmail(ctx context.Context, email string) (account.Account, bool, error)
+	// Change applies a change to the account of an id as it is kept at that
+	// instant, alone among the writers of the store, and keeps the result; an
+	// error of the change keeps nothing.
+	Change(ctx context.Context, id string, change func(*account.Account) error) (account.Account, error)
 	Get(ctx context.Context, id string) (account.Account, bool, error)
 	NewID(ctx context.Context) (string, error)
 	Save(ctx context.Context, a account.Account) error

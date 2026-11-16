@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package roster — Creating and running a group, inviting a contact into it,
 // answering an invitation, and what the other components ask of one's groups.
@@ -82,6 +82,10 @@ type ClockV1 interface {
 
 // GroupsV1 keeps the groups.
 type GroupsV1 interface {
+	// Change applies a change to the group of an id as it is kept at that instant,
+	// alone among the writers of the store, and keeps the result; an error of the
+	// change keeps nothing, and a group that is not there is ErrNotFound.
+	Change(ctx context.Context, id string, change func(*team.Group) error) (team.Group, error)
 	Delete(ctx context.Context, id string) error
 	Get(ctx context.Context, id string) (team.Group, bool, error)
 	NewID(ctx context.Context) (string, error)
@@ -91,6 +95,11 @@ type GroupsV1 interface {
 
 // InvitationsV1 keeps the invitations.
 type InvitationsV1 interface {
+	// Change applies a change to the invitation of an id as it is kept at that
+	// instant, alone among the writers of the store, and keeps the result; an
+	// error of the change keeps nothing, and an invitation that is not there is
+	// ErrNoInvitation.
+	Change(ctx context.Context, id string, change func(*team.Invitation) error) (team.Invitation, error)
 	Delete(ctx context.Context, id string) error
 	Get(ctx context.Context, id string) (team.Invitation, bool, error)
 	NewID(ctx context.Context) (string, error)
@@ -130,16 +139,16 @@ type AnswerInvitationOutput struct {
 
 // AnswerInvitationHandler runs AnswerInvitation: its body is the hand-written execute.
 type AnswerInvitationHandler struct {
-	invitations InvitationsV1
 	clock       ClockV1
+	invitations InvitationsV1
 	groups      GroupsV1
 	people      PeopleV1
 	notices     NoticesV1
 }
 
 // NewAnswerInvitation builds AnswerInvitation on what it calls.
-func NewAnswerInvitation(invitations InvitationsV1, clock ClockV1, groups GroupsV1, people PeopleV1, notices NoticesV1) *AnswerInvitationHandler {
-	return &AnswerInvitationHandler{invitations: invitations, clock: clock, groups: groups, people: people, notices: notices}
+func NewAnswerInvitation(clock ClockV1, invitations InvitationsV1, groups GroupsV1, people PeopleV1, notices NoticesV1) *AnswerInvitationHandler {
+	return &AnswerInvitationHandler{clock: clock, invitations: invitations, groups: groups, people: people, notices: notices}
 }
 
 // Execute runs AnswerInvitation.
@@ -242,14 +251,14 @@ type EditGroupOutput struct {
 
 // EditGroupHandler runs EditGroup: its body is the hand-written execute.
 type EditGroupHandler struct {
-	groups GroupsV1
 	clock  ClockV1
+	groups GroupsV1
 	people PeopleV1
 }
 
 // NewEditGroup builds EditGroup on what it calls.
-func NewEditGroup(groups GroupsV1, clock ClockV1, people PeopleV1) *EditGroupHandler {
-	return &EditGroupHandler{groups: groups, clock: clock, people: people}
+func NewEditGroup(clock ClockV1, groups GroupsV1, people PeopleV1) *EditGroupHandler {
+	return &EditGroupHandler{clock: clock, groups: groups, people: people}
 }
 
 // Execute runs EditGroup.
@@ -487,15 +496,15 @@ type RemoveMemberOutput struct {
 
 // RemoveMemberHandler runs RemoveMember: its body is the hand-written execute.
 type RemoveMemberHandler struct {
-	groups  GroupsV1
 	clock   ClockV1
+	groups  GroupsV1
 	people  PeopleV1
 	notices NoticesV1
 }
 
 // NewRemoveMember builds RemoveMember on what it calls.
-func NewRemoveMember(groups GroupsV1, clock ClockV1, people PeopleV1, notices NoticesV1) *RemoveMemberHandler {
-	return &RemoveMemberHandler{groups: groups, clock: clock, people: people, notices: notices}
+func NewRemoveMember(clock ClockV1, groups GroupsV1, people PeopleV1, notices NoticesV1) *RemoveMemberHandler {
+	return &RemoveMemberHandler{clock: clock, groups: groups, people: people, notices: notices}
 }
 
 // Execute runs RemoveMember.
@@ -560,15 +569,15 @@ type SetRoleOutput struct {
 
 // SetRoleHandler runs SetRole: its body is the hand-written execute.
 type SetRoleHandler struct {
-	groups  GroupsV1
 	clock   ClockV1
+	groups  GroupsV1
 	people  PeopleV1
 	notices NoticesV1
 }
 
 // NewSetRole builds SetRole on what it calls.
-func NewSetRole(groups GroupsV1, clock ClockV1, people PeopleV1, notices NoticesV1) *SetRoleHandler {
-	return &SetRoleHandler{groups: groups, clock: clock, people: people, notices: notices}
+func NewSetRole(clock ClockV1, groups GroupsV1, people PeopleV1, notices NoticesV1) *SetRoleHandler {
+	return &SetRoleHandler{clock: clock, groups: groups, people: people, notices: notices}
 }
 
 // Execute runs SetRole.

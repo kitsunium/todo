@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package linkstore — The links in the framework's store, their events on a
 // topic, the directory asked of the identity, and the framework's clock.
@@ -102,6 +102,11 @@ func NewLinks() *Links {
 // ByPair is contacts/port/Links@v1's.
 func (self *Links) ByPair(ctx context.Context, pair string) (link.Link, bool, error) {
 	return self.byPair(ctx, pair)
+}
+
+// Change is contacts/port/Links@v1's.
+func (self *Links) Change(ctx context.Context, id string, change func(*link.Link) error) (link.Link, error) {
+	return self.change(ctx, id, change)
 }
 
 // Delete is contacts/port/Links@v1's.

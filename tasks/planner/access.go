@@ -44,6 +44,28 @@ func load(ctx context.Context, store TaskStoreV1, groups GroupsV1, id string, us
 	return t, role, nil
 }
 
+// change applies fn to a task a member sees, as the store holds it at that
+// instant and alone among its writers: two changes made at once both stay.
+// The member's role in the task's group is read first; fn is given it, and
+// the task as it is now. A task that left that group meanwhile is judged
+// with no role, and one the member no longer sees is not found.
+func change(ctx context.Context, store TaskStoreV1, groups GroupsV1, id string, user string, fn func(t *task.Task, role string) error) (task.Task, error) {
+	seen, role, err := load(ctx, store, groups, id, user)
+	if err != nil {
+		return task.Task{}, err
+	}
+	return store.Change(ctx, id, func(t *task.Task) error {
+		now := role
+		if t.GroupID != seen.GroupID {
+			now = ""
+		}
+		if !t.SeenBy(user, now != "") {
+			return task.ErrNotFound
+		}
+		return fn(t, now)
+	})
+}
+
 // manages reports whether a member deletes a task: its owner, or an owner or
 // an admin of its group, whose role is given.
 func manages(t task.Task, user string, role string) bool {
@@ -51,16 +73,10 @@ func manages(t task.Task, user string, role string) bool {
 }
 
 // assignable reports whether a task may be assigned to a member: its owner,
-// a member it is shared with, or a member of its group. Being a contact of
-// whoever asks is not enough: assigning a task lets its assignee see it, and
-// only its owner decides who else does, by sharing it.
-func assignable(ctx context.Context, groups GroupsV1, t task.Task, candidate string) (bool, error) {
-	if candidate == t.OwnerID || slices.Contains(t.SharedWith, candidate) {
-		return true, nil
-	}
-	if t.GroupID == "" {
-		return false, nil
-	}
-	role, err := groups.RoleOf(ctx, t.GroupID, candidate)
-	return role != "", err
+// a member it is shared with, or a member of its group, which the caller
+// asked of the groups. Being a contact of whoever asks is not enough:
+// assigning a task lets its assignee see it, and only its owner decides who
+// else does, by sharing it.
+func assignable(t task.Task, candidate string, inGroup bool) bool {
+	return candidate == t.OwnerID || slices.Contains(t.SharedWith, candidate) || inGroup && t.GroupID != ""
 }

@@ -89,6 +89,16 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   address has an account or not (sign-up, a new link, a forgotten
   password); an unknown address and a wrong password are answered alike, and cost the same time (`Stretcher.verify` on an empty
   hash).
+- **A record is changed where it is kept, never read then written back**:
+  a use case that changes a task, a group, an invitation, a link or an
+  account calls its store port's `Change(id, fn)`, and decides inside `fn`,
+  on the record as it is at that instant. The adapter runs it under the
+  store's `Update`, alone among the store's writers, so two changes made at
+  once both stay (`cmd/todo/server` holds it: acceptances, edits, requests
+  and sign-ups at the same instant). What needs another component (a role,
+  a contact) is asked before, and `fn` holds it to the record it then sees.
+  `fn` reads and writes nothing else. `Save` is for a record just made;
+  a unique index answers two creations at once.
 - **A component's data is its own**: another component reaches it through
   a query the owner declares (`vault.MemberQuery.Ask`,
   `api.CensusQuery.Ask`), a topic it publishes or a port, never its store.

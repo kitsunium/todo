@@ -12,6 +12,10 @@ import (
 	"github.com/kitsunium/todo/tasks/task"
 )
 
+// errUnchanged ends a change that has nothing to write: the store keeps the
+// task as it is.
+var errUnchanged = errors.New("unchanged")
+
 // execute is FollowGroup's body: of the tasks on the group's list, each read
 // again before it is changed, a deleted group's go back to their owners'
 // lists, and one assigned to a member who is no longer in the group, and no
@@ -41,28 +45,34 @@ func (h *FollowGroupHandler) execute(ctx context.Context, in *FollowGroupInput) 
 		if t.GroupID != in.Group {
 			continue // moved since it was listed
 		}
-		changed := false
-		if in.Deleted {
-			t.GroupID, changed = "", true
-		}
-		if t.AssigneeID != "" && t.AssigneeID != t.OwnerID && !slices.Contains(t.SharedWith, t.AssigneeID) {
-			stays := false
-			if !in.Deleted {
-				role, err := h.groups.RoleOf(ctx, in.Group, t.AssigneeID)
-				if err != nil {
-					return FollowGroupOutput{}, err
-				}
-				stays = role != ""
+		// Who is still in the group is asked before the change; the change
+		// holds it to the task as it is then.
+		assignee, stays := t.AssigneeID, false
+		if assignee != "" && !in.Deleted {
+			role, err := h.groups.RoleOf(ctx, in.Group, assignee)
+			if err != nil {
+				return FollowGroupOutput{}, err
 			}
-			if !stays {
+			stays = role != ""
+		}
+		_, err = h.taskStore.Change(ctx, t.ID, func(t *task.Task) error {
+			if t.GroupID != in.Group {
+				return errUnchanged // moved since it was listed
+			}
+			changed := false
+			if in.Deleted {
+				t.GroupID, changed = "", true
+			}
+			if t.AssigneeID != "" && t.AssigneeID != t.OwnerID && !slices.Contains(t.SharedWith, t.AssigneeID) && !(stays && t.AssigneeID == assignee) {
 				t.AssigneeID, changed = "", true
 			}
-		}
-		if !changed {
-			continue
-		}
-		t.UpdatedAt = now
-		if err := h.taskStore.Save(ctx, t); err != nil {
+			if !changed {
+				return errUnchanged
+			}
+			t.UpdatedAt = now
+			return nil
+		})
+		if err != nil && !errors.Is(err, errUnchanged) && !errors.Is(err, task.ErrNotFound) {
 			return FollowGroupOutput{}, err
 		}
 	}

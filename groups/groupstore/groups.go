@@ -82,3 +82,26 @@ func recordOfGroup(g team.Group) GroupRecord {
 		CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
 	}
 }
+
+// change is Groups.Change's body: the store applies the change to the record it
+// holds at that instant, alone among its writers, so two changes made at
+// once both stay. A group that is not there is ErrNotFound. The change's own error keeps nothing.
+func (a *Groups) change(ctx context.Context, id string, change func(*team.Group) error) (r0 team.Group, err error) {
+	rec, err := GroupsStore.Update(ctx, id, func(r *GroupRecord) error {
+		v := groupOf(*r)
+		if err := change(&v); err != nil {
+			return err
+		}
+		v.ID = r.ID // a change never renames a record
+		*r = recordOfGroup(v)
+		return nil
+	})
+	var refused *app.Error
+	switch {
+	case errors.As(err, &refused) && refused.Code == app.WireNotFound:
+		return team.Group{}, team.ErrNotFound
+	case err != nil:
+		return team.Group{}, err
+	}
+	return groupOf(rec), nil
+}

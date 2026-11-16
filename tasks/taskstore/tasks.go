@@ -67,6 +67,30 @@ func (a *Tasks) deleteBody(ctx context.Context, id string) (err error) {
 	return err
 }
 
+// change is Tasks.Change's body: the store applies the change to the record
+// it holds at that instant, alone among its writers, so two changes made at
+// once both stay. A task that is not there is ErrNotFound, and the change's
+// own error keeps nothing.
+func (a *Tasks) change(ctx context.Context, id string, change func(*task.Task) error) (r0 task.Task, err error) {
+	rec, err := TasksStore.Update(ctx, id, func(r *Record) error {
+		t := fromRecord(*r)
+		if err := change(&t); err != nil {
+			return err
+		}
+		t.ID = r.ID // a change never renames a task
+		*r = toRecord(t)
+		return nil
+	})
+	var refused *app.Error
+	switch {
+	case errors.As(err, &refused) && refused.Code == app.WireNotFound:
+		return task.Task{}, task.ErrNotFound
+	case err != nil:
+		return task.Task{}, err
+	}
+	return fromRecord(rec), nil
+}
+
 // toRecord is a task as the store keeps it.
 func toRecord(t task.Task) Record {
 	return Record{

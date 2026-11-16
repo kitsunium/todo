@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 package planner
 
@@ -554,6 +554,11 @@ type recordedplannerTaskStoreV1 struct {
 	calls *[]string
 }
 
+func (x recordedplannerTaskStoreV1) Change(ctx context.Context, id string, change func(*task.Task) error) (task.Task, error) {
+	*x.calls = append(*x.calls, "tasks/port/TaskStore@v1.Change")
+	return x.next.Change(ctx, id, change)
+}
+
 func (x recordedplannerTaskStoreV1) Delete(ctx context.Context, id string) error {
 	*x.calls = append(*x.calls, "tasks/port/TaskStore@v1.Delete")
 	return x.next.Delete(ctx, id)
@@ -587,7 +592,7 @@ func TestSequenceCompleteTask(t *testing.T) {
 	if err := run(t.Context()); err != nil {
 		t.Fatalf("the sequence failed: %v", err)
 	}
-	want := []string{"tasks/port/TaskStore@v1.Get", "tasks/port/Groups@v1.RoleOf", "tasks/port/Clock@v1.Now", "tasks/port/TaskStore@v1.Save", "tasks/port/Journal@v1.Record"}
+	want := []string{"tasks/port/Clock@v1.Now", "tasks/port/TaskStore@v1.Get", "tasks/port/Groups@v1.RoleOf", "tasks/port/TaskStore@v1.Change", "tasks/port/Journal@v1.Record"}
 	if !slices.Equal(got, want) {
 		t.Errorf("the calls: %q, want %q", got, want)
 	}

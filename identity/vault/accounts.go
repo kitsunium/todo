@@ -6,6 +6,7 @@ package vault
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/todo/identity/account"
@@ -47,10 +48,20 @@ func (a *Accounts) newID(ctx context.Context) (r0 string, err error) {
 
 // save is Accounts.Save's body: the account replaces what its id held.
 func (a *Accounts) save(ctx context.Context, acc account.Account) (err error) {
-	return AccountsStore.Put(ctx, AccountRecord{
+	err = AccountsStore.Put(ctx, recordOf(acc))
+	var refused *app.Error
+	if errors.As(err, &refused) && refused.Code == app.WireConflict {
+		return account.ErrEmailTaken // another account took the address since it was looked up
+	}
+	return err
+}
+
+// recordOf is an account as the store keeps it.
+func recordOf(acc account.Account) AccountRecord {
+	return AccountRecord{
 		ID: acc.ID, Email: acc.Email, Name: acc.Name, PasswordHash: acc.PasswordHash, Verified: acc.Verified,
 		FailedLogins: acc.FailedLogins, LockedUntil: acc.LockedUntil, CreatedAt: acc.CreatedAt, UpdatedAt: acc.UpdatedAt,
-	})
+	}
 }
 
 // accountOf is the account a record keeps.
@@ -59,4 +70,27 @@ func accountOf(r AccountRecord) account.Account {
 		ID: r.ID, Email: r.Email, Name: r.Name, PasswordHash: r.PasswordHash, Verified: r.Verified,
 		FailedLogins: r.FailedLogins, LockedUntil: r.LockedUntil, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+}
+
+// change is Accounts.Change's body: the store applies the change to the record it
+// holds at that instant, alone among its writers, so two changes made at
+// once both stay. An account that is gone is ErrInvalidCredentials: nobody signs in to it. The change's own error keeps nothing.
+func (a *Accounts) change(ctx context.Context, id string, change func(*account.Account) error) (r0 account.Account, err error) {
+	rec, err := AccountsStore.Update(ctx, id, func(r *AccountRecord) error {
+		v := accountOf(*r)
+		if err := change(&v); err != nil {
+			return err
+		}
+		v.ID = r.ID // a change never renames a record
+		*r = recordOf(v)
+		return nil
+	})
+	var refused *app.Error
+	switch {
+	case errors.As(err, &refused) && refused.Code == app.WireNotFound:
+		return account.Account{}, account.ErrInvalidCredentials
+	case err != nil:
+		return account.Account{}, err
+	}
+	return accountOf(rec), nil
 }

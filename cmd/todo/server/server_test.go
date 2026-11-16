@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1155,4 +1157,157 @@ func TestAGroupSharesAList(t *testing.T) {
 		t.Errorf("Ada's inbox: %q, want the two open tasks back", got)
 	}
 	ada.call(http.StatusNotFound, "GET", "/api/tasks?group="+g.ID, nil, nil)
+}
+
+// status sends one request and returns its status, with no retry and no
+// failure of its own: what a goroutine of a test calls.
+func (m *member) status(method, path string, in any) int {
+	var body io.Reader
+	if in != nil {
+		raw, _ := json.Marshal(in)
+		body = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequest(method, m.p.url+path, body)
+	if err != nil {
+		return 0
+	}
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if m.token != "" {
+		req.Header.Set("Authorization", "Bearer "+m.token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
+// together runs every call at the same instant and returns their statuses.
+func together(calls ...func() int) []int {
+	out := make([]int, len(calls))
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i, call := range calls {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			out[i] = call()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	return out
+}
+
+// Invitees who accept at the same instant all join: no acceptance writes the
+// group back over another's.
+func TestAcceptancesAtTheSameInstantAllJoin(t *testing.T) {
+	p := start(t)
+	ada := p.signUp("Ada", "ada@example.com")
+	var g groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Core"}, &g)
+	var accept []func() int
+	for _, name := range []string{"bob", "cy", "dee", "eve", "fay"} {
+		who := p.signUp(name, name+"@example.com")
+		ada.befriend(who, name+"@example.com")
+		var inv struct{ ID string }
+		ada.call(http.StatusOK, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{"userId": who.id}, &inv)
+		accept = append(accept, func() int { return who.status("POST", "/api/invitations/"+inv.ID+"/accept", nil) })
+	}
+	for i, code := range together(accept...) {
+		if code != http.StatusOK {
+			t.Errorf("acceptance %d: %d, want 200", i, code)
+		}
+	}
+	ada.call(http.StatusOK, "GET", "/api/groups/"+g.ID, nil, &g)
+	if len(g.Members) != 6 {
+		t.Errorf("the group has %d members after five acceptances at once, want 6: %v", len(g.Members), g.roles())
+	}
+}
+
+// Two changes of one task made at the same instant both stay: neither
+// writes the task back as it was before the other.
+func TestChangesOfATaskAtTheSameInstantBothStay(t *testing.T) {
+	p := start(t)
+	ada := p.signUp("Ada", "ada@example.com")
+	var tk struct{ ID, Title, Notes, State string }
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Start"}, &tk)
+	for round := range 8 {
+		title, notes := "title "+strconv.Itoa(round), "notes "+strconv.Itoa(round)
+		codes := together(
+			func() int { return ada.status("PATCH", "/api/tasks/"+tk.ID, map[string]any{"title": title}) },
+			func() int { return ada.status("PATCH", "/api/tasks/"+tk.ID, map[string]any{"notes": notes}) },
+		)
+		if codes[0] != http.StatusOK || codes[1] != http.StatusOK {
+			t.Fatalf("round %d: %v, want two 200", round, codes)
+		}
+		ada.call(http.StatusOK, "GET", "/api/tasks/"+tk.ID, nil, &tk)
+		if tk.Title != title || tk.Notes != notes {
+			t.Fatalf("round %d: the task holds %q and %q, want %q and %q: one change was lost", round, tk.Title, tk.Notes, title, notes)
+		}
+	}
+	// A move and an edit at once: the move stays, and so does the edit.
+	codes := together(
+		func() int { return ada.status("POST", "/api/tasks/"+tk.ID+"/complete", nil) },
+		func() int { return ada.status("PATCH", "/api/tasks/"+tk.ID, map[string]any{"notes": "last"}) },
+	)
+	ada.call(http.StatusOK, "GET", "/api/tasks/"+tk.ID, nil, &tk)
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK || tk.State != "done" || tk.Notes != "last" {
+		t.Errorf("a move and an edit at once: %v, the task is %s with notes %q, want it done with the last notes", codes, tk.State, tk.Notes)
+	}
+}
+
+// Two members who ask each other at the same instant make one request, not
+// two: the second is answered that one is waiting. And a wrong password
+// tried five times at once counts five times.
+func TestRequestsAtTheSameInstantMakeOneLink(t *testing.T) {
+	p := start(t)
+	ada, bob := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com")
+	codes := together(
+		func() int { return ada.status("POST", "/api/contacts", map[string]any{"email": "bob@example.com"}) },
+		func() int { return bob.status("POST", "/api/contacts", map[string]any{"email": "ada@example.com"}) },
+	)
+	slices.Sort(codes)
+	if !slices.Equal(codes, []int{http.StatusOK, http.StatusConflict}) {
+		t.Errorf("two requests at once: %v, want one 200 and one 409", codes)
+	}
+	var mine struct{ Incoming, Outgoing []struct{ ID string } }
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Incoming)+len(mine.Outgoing) != 1 {
+		t.Errorf("Ada has %d request(s) received and %d sent, want one in all", len(mine.Incoming), len(mine.Outgoing))
+	}
+
+	wrong := func() int {
+		return p.stranger().status("POST", "/api/auth/login", map[string]any{"email": "ada@example.com", "password": "not the right one"})
+	}
+	codes = together(wrong, wrong, wrong, wrong, wrong)
+	for _, code := range codes {
+		if code != http.StatusUnauthorized {
+			t.Fatalf("five wrong passwords at once: %v, want five 401", codes)
+		}
+	}
+	// The account is locked: the right password is refused with a 403.
+	p.stranger().call(http.StatusForbidden, "POST", "/api/auth/login", map[string]any{"email": "ada@example.com", "password": passphrase}, nil)
+}
+
+// Two sign-ups of one address at the same instant make one account, and
+// both are answered alike.
+func TestSignUpsAtTheSameInstantMakeOneAccount(t *testing.T) {
+	p := start(t)
+	signUp := func(name string) func() int {
+		return func() int {
+			return p.stranger().status("POST", "/api/auth/signup", map[string]any{"email": "ada@example.com", "name": name, "password": passphrase})
+		}
+	}
+	if codes := together(signUp("Ada"), signUp("Another Ada")); codes[0] != http.StatusOK || codes[1] != http.StatusOK {
+		t.Fatalf("two sign-ups at once: %v, want two 200", codes)
+	}
+	p.settle("the two mails", 50*time.Millisecond, func() bool {
+		return len(p.mails("ada@example.com", "Confirmez votre adresse")) == 1 && len(p.mails("ada@example.com", "Vous avez déjà un compte")) == 1
+	})
 }

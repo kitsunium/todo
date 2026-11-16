@@ -6,6 +6,7 @@ package access
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/kitsunium/todo/identity/account"
@@ -50,7 +51,16 @@ func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOut
 		return SignUpOutput{}, err
 	}
 	a := account.Account{ID: id, Email: email, Name: name, PasswordHash: hash, Verified: in.Trusted, CreatedAt: now, UpdatedAt: now}
-	if err := h.accounts.Save(ctx, a); err != nil {
+	if err := h.accounts.Save(ctx, a); errors.Is(err, account.ErrEmailTaken) {
+		// Two sign-ups of one address at the same instant: the second is
+		// answered like any taken address.
+		winner, found, err := h.accounts.ByEmail(ctx, email)
+		if err != nil || !found {
+			return out, err
+		}
+		out.Verified = false
+		return out, h.courier.AlreadyMember(ctx, winner)
+	} else if err != nil {
 		return SignUpOutput{}, err
 	}
 	if in.Trusted {

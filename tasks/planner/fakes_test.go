@@ -58,6 +58,18 @@ func (m *memTasks) Get(_ context.Context, id string) (task.Task, error) {
 	return t, nil
 }
 
+func (m *memTasks) Change(_ context.Context, id string, change func(*task.Task) error) (task.Task, error) {
+	t, ok := m.byID[id]
+	if !ok {
+		return task.Task{}, task.ErrNotFound
+	}
+	if err := change(&t); err != nil {
+		return task.Task{}, err
+	}
+	m.byID[id] = t
+	return t, nil
+}
+
 func (m *memTasks) Delete(_ context.Context, id string) error {
 	delete(m.byID, id)
 	return nil

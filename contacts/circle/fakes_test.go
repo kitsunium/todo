@@ -72,6 +72,18 @@ func (w *world) Of(_ context.Context, user string) ([]link.Link, error) {
 	return out, nil
 }
 
+func (w *world) Change(_ context.Context, id string, change func(*link.Link) error) (link.Link, error) {
+	l, ok := w.links[id]
+	if !ok {
+		return link.Link{}, link.ErrNotFound
+	}
+	if err := change(&l); err != nil {
+		return link.Link{}, err
+	}
+	w.links[id] = l
+	return l, nil
+}
+
 func (w *world) Delete(_ context.Context, id string) error {
 	delete(w.links, id)
 	return nil

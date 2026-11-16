@@ -16,28 +16,29 @@ import (
 // member nobody. Whoever leaves is not told, the others are; whoever is
 // removed is told with them.
 func (h *RemoveMemberHandler) execute(ctx context.Context, in *RemoveMemberInput) (RemoveMemberOutput, error) {
-	g, found, err := h.groups.Get(ctx, in.ID)
+	now, err := h.clock.Now(ctx)
 	if err != nil {
 		return RemoveMemberOutput{}, err
 	}
-	role, err := roleIn(g, found, in.User)
+	leaving := in.Member == in.User
+	g, err := h.groups.Change(ctx, in.ID, func(g *team.Group) error {
+		role, err := roleIn(*g, true, in.User)
+		if err != nil {
+			return err
+		}
+		switch target := g.RoleOf(in.Member); {
+		case target == "":
+			return team.ErrNoMember
+		case leaving && role == team.RoleOwner:
+			return team.ErrOwnerStays
+		case !leaving && (target == team.RoleOwner || role == team.RoleMember || (role == team.RoleAdmin && target == team.RoleAdmin)):
+			return team.ErrCannotRemove
+		}
+		g.Members = slices.DeleteFunc(slices.Clone(g.Members), func(m team.Membership) bool { return m.UserID == in.Member })
+		g.UpdatedAt = now
+		return nil
+	})
 	if err != nil {
-		return RemoveMemberOutput{}, err
-	}
-	target, leaving := g.RoleOf(in.Member), in.Member == in.User
-	switch {
-	case target == "":
-		return RemoveMemberOutput{}, team.ErrNoMember
-	case leaving && role == team.RoleOwner:
-		return RemoveMemberOutput{}, team.ErrOwnerStays
-	case !leaving && (target == team.RoleOwner || role == team.RoleMember || (role == team.RoleAdmin && target == team.RoleAdmin)):
-		return RemoveMemberOutput{}, team.ErrCannotRemove
-	}
-	if g.UpdatedAt, err = h.clock.Now(ctx); err != nil {
-		return RemoveMemberOutput{}, err
-	}
-	g.Members = slices.DeleteFunc(slices.Clone(g.Members), func(m team.Membership) bool { return m.UserID == in.Member })
-	if err := h.groups.Save(ctx, g); err != nil {
 		return RemoveMemberOutput{}, err
 	}
 	actor, err := personOf(ctx, h.people, in.User)

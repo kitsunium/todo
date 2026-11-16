@@ -14,18 +14,15 @@ import (
 // kept, and the journal told of the event. An event the task's state does
 // not answer, or one the lifecycle does not know, is ErrNotAllowed.
 func (h *MoveTaskHandler) execute(ctx context.Context, in *MoveTaskInput) (MoveTaskOutput, error) {
-	t, _, err := load(ctx, h.taskStore, h.groups, in.ID, in.Owner) // a task they do not see: as if there were none
-	if err != nil {
-		return MoveTaskOutput{}, err
-	}
 	now, err := h.clock.Now(ctx)
 	if err != nil {
 		return MoveTaskOutput{}, err
 	}
-	if err := move(ctx, &t, task.LifecycleEvent(in.Event), now); err != nil {
-		return MoveTaskOutput{}, err
-	}
-	if err := h.taskStore.Save(ctx, t); err != nil {
+	// A task they do not see: as if there were none.
+	t, err := change(ctx, h.taskStore, h.groups, in.ID, in.Owner, func(t *task.Task, _ string) error {
+		return move(ctx, t, task.LifecycleEvent(in.Event), now)
+	})
+	if err != nil {
 		return MoveTaskOutput{}, err
 	}
 	if err := h.journal.Record(ctx, in.Event, t); err != nil {

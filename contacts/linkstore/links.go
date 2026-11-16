@@ -71,10 +71,15 @@ func (a *Links) of(ctx context.Context, user string) (r0 []link.Link, err error)
 
 // save is Links.Save's body: the link replaces what its id held.
 func (a *Links) save(ctx context.Context, l link.Link) (err error) {
-	return LinksStore.Put(ctx, Record{
+	return LinksStore.Put(ctx, recordOf(l))
+}
+
+// recordOf is a link as the store keeps it.
+func recordOf(l link.Link) Record {
+	return Record{
 		ID: l.ID, Pair: l.Pair, RequesterID: l.RequesterID, AddresseeID: l.AddresseeID,
 		State: WaitingState(l.State), CreatedAt: l.CreatedAt, UpdatedAt: l.UpdatedAt,
-	})
+	}
 }
 
 // linkOf is the link a record keeps.
@@ -83,4 +88,27 @@ func linkOf(r Record) link.Link {
 		ID: r.ID, Pair: r.Pair, RequesterID: r.RequesterID, AddresseeID: r.AddresseeID,
 		State: link.RequestsState(r.State), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
+}
+
+// change is Links.Change's body: the store applies the change to the record it
+// holds at that instant, alone among its writers, so two changes made at
+// once both stay. A link that is not there is ErrNotFound. The change's own error keeps nothing.
+func (a *Links) change(ctx context.Context, id string, change func(*link.Link) error) (r0 link.Link, err error) {
+	rec, err := LinksStore.Update(ctx, id, func(r *Record) error {
+		v := linkOf(*r)
+		if err := change(&v); err != nil {
+			return err
+		}
+		v.ID = r.ID // a change never renames a record
+		*r = recordOf(v)
+		return nil
+	})
+	var refused *app.Error
+	switch {
+	case errors.As(err, &refused) && refused.Code == app.WireNotFound:
+		return link.Link{}, link.ErrNotFound
+	case err != nil:
+		return link.Link{}, err
+	}
+	return linkOf(rec), nil
 }

@@ -94,6 +94,7 @@ domains:
               - {name: Get, params: [{name: id, type: string}], results: [{type: task.Task}]}
               - {name: List, results: [{type: "[]task.Task"}]}
               - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the task of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing.", params: [{name: id, type: string}, {name: change, type: "func(*task.Task) error"}], results: [{type: task.Task}]}
           - name: Circle
             direction: out
             version: 1
@@ -152,7 +153,7 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotAllowed]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: completes an open task, kind: success}
               - {name: refuses an unknown task, kind: refusal, error: task.ErrNotFound}
@@ -228,7 +229,7 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrEmptyTitle, task.ErrTitleTooLong, task.ErrUnknownPriority, task.ErrNotAssignable]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: changes only what is given, kind: success}
               - {name: assigns a member of the group, kind: success}
@@ -258,7 +259,7 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotOwner, task.ErrNotContact]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Record]
             scenarios:
               - {name: shares with a contact, kind: success}
               - {name: refuses who is no contact, kind: refusal, error: task.ErrNotContact}
@@ -273,7 +274,7 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotOwner]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change]
             scenarios:
               - {name: lets a member leave a task, kind: success}
               - {name: refuses a member who removes another, kind: refusal, error: task.ErrNotOwner}
@@ -282,7 +283,7 @@ domains:
             input:
               - {name: Group, type: string}
               - {name: Deleted, type: bool}
-            calls: [tasks/port/TaskStore@v1.List, tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Save]
+            calls: [tasks/port/TaskStore@v1.List, tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change]
             scenarios:
               - {name: sends the tasks of a deleted group back to their owners, kind: success}
               - {name: unassigns who left the group, kind: success}
@@ -335,9 +336,9 @@ domains:
               params: [{name: t, type: "task.Task"}, {name: user, type: "string"}, {name: role, type: "string"}]
               results: [{type: "bool"}]
             - name: assignable
-              description: "assignable reports whether a task may be assigned to a member: its owner, a member it is shared with, or a member of its group."
-              params: [{name: ctx, type: "context.Context"}, {name: groups, type: "GroupsV1"}, {name: t, type: "task.Task"}, {name: candidate, type: "string"}]
-              results: [{type: "bool"}, {type: "error"}]
+              description: "assignable reports whether a task may be assigned to a member: its owner, a member it is shared with, or a member of its group, which the caller asked of the groups."
+              params: [{name: t, type: "task.Task"}, {name: candidate, type: "string"}, {name: inGroup, type: "bool"}]
+              results: [{type: "bool"}]
             - name: dayAndWeek
               description: "dayAndWeek places now in the member's time zone, an IANA name, UTC when none is given, and returns the end of their day and the start of their week, a Monday at midnight."
               params: [{name: now, type: "time.Time"}, {name: tz, type: "string"}]
@@ -350,6 +351,10 @@ domains:
               description: "byCompletion orders the completed view: the most recently finished first."
               params: [{name: a, type: "task.Task"}, {name: b, type: "task.Task"}]
               results: [{type: "int"}]
+            - name: change
+              description: "change applies fn to a task a member sees, as the store holds it at that instant and alone among its writers: two changes made at once both stay."
+              params: [{name: ctx, type: "context.Context"}, {name: store, type: "TaskStoreV1"}, {name: groups, type: "GroupsV1"}, {name: id, type: "string"}, {name: user, type: "string"}, {name: fn, type: "func(*task.Task, string) error"}]
+              results: [{type: "task.Task"}, {type: "error"}]
       - name: taskstore
         role: adapter
         code: 64.1.3
@@ -542,8 +547,8 @@ domains:
         description: A member completes a task; the feed is told.
         start: tasks/usecase/MoveTask
         steps:
+          - call: tasks/port/Clock@v1.Now
           - call: tasks/port/TaskStore@v1.Get
           - call: tasks/port/Groups@v1.RoleOf
-          - call: tasks/port/Clock@v1.Now
-          - call: tasks/port/TaskStore@v1.Save
+          - call: tasks/port/TaskStore@v1.Change
           - call: tasks/port/Journal@v1.Record

@@ -90,3 +90,26 @@ func invitationsFound(found []InvitationRecord, err error) ([]team.Invitation, e
 	}
 	return out, nil
 }
+
+// change is Invitations.Change's body: the store applies the change to the record it
+// holds at that instant, alone among its writers, so two changes made at
+// once both stay. An invitation that is not there is ErrNoInvitation. The change's own error keeps nothing.
+func (a *Invitations) change(ctx context.Context, id string, change func(*team.Invitation) error) (r0 team.Invitation, err error) {
+	rec, err := InvitationsStore.Update(ctx, id, func(r *InvitationRecord) error {
+		v := invitationOf(*r)
+		if err := change(&v); err != nil {
+			return err
+		}
+		v.ID = r.ID // a change never renames a record
+		*r = recordOfInvitation(v)
+		return nil
+	})
+	var refused *app.Error
+	switch {
+	case errors.As(err, &refused) && refused.Code == app.WireNotFound:
+		return team.Invitation{}, team.ErrNoInvitation
+	case err != nil:
+		return team.Invitation{}, err
+	}
+	return invitationOf(rec), nil
+}

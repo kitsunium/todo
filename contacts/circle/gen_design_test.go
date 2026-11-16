@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 package circle
 
@@ -170,6 +170,11 @@ type recordedcircleLinksV1 struct {
 func (x recordedcircleLinksV1) ByPair(ctx context.Context, pair string) (link.Link, bool, error) {
 	*x.calls = append(*x.calls, "contacts/port/Links@v1.ByPair")
 	return x.next.ByPair(ctx, pair)
+}
+
+func (x recordedcircleLinksV1) Change(ctx context.Context, id string, change func(*link.Link) error) (link.Link, error) {
+	*x.calls = append(*x.calls, "contacts/port/Links@v1.Change")
+	return x.next.Change(ctx, id, change)
 }
 
 func (x recordedcircleLinksV1) Delete(ctx context.Context, id string) error {

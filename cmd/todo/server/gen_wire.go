@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -71,7 +71,7 @@ func Wire(ctx context.Context, build Build) {
 	linkstoreWallClock := linkstore.NewWallClock()
 	announcer := linkstore.NewAnnouncer()
 	requestContact := circle.NewRequestContact(directory, links, linkstoreWallClock, announcer)
-	answerRequest := circle.NewAnswerRequest(links, linkstoreWallClock, directory, announcer)
+	answerRequest := circle.NewAnswerRequest(linkstoreWallClock, links, directory, announcer)
 	removeContact := circle.NewRemoveContact(links)
 	areContacts := circle.NewAreContacts(links)
 	groups := groupstore.NewGroups()
@@ -80,16 +80,16 @@ func Wire(ctx context.Context, build Build) {
 	groupstoreWallClock := groupstore.NewWallClock()
 	createGroup := roster.NewCreateGroup(groupstoreWallClock, groups, groupstoreDirectory)
 	getGroup := roster.NewGetGroup(groups, groupstoreDirectory)
-	editGroup := roster.NewEditGroup(groups, groupstoreWallClock, groupstoreDirectory)
+	editGroup := roster.NewEditGroup(groupstoreWallClock, groups, groupstoreDirectory)
 	invitations := groupstore.NewInvitations()
 	groupstoreAnnouncer := groupstore.NewAnnouncer()
 	deleteGroup := roster.NewDeleteGroup(groups, invitations, groupstoreDirectory, groupstoreAnnouncer)
 	friends := groupstore.NewFriends()
 	invite := roster.NewInvite(groups, friends, invitations, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
 	listInvitations := roster.NewListInvitations(invitations, groups, groupstoreDirectory)
-	answerInvitation := roster.NewAnswerInvitation(invitations, groupstoreWallClock, groups, groupstoreDirectory, groupstoreAnnouncer)
-	removeMember := roster.NewRemoveMember(groups, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
-	setRole := roster.NewSetRole(groups, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
+	answerInvitation := roster.NewAnswerInvitation(groupstoreWallClock, invitations, groups, groupstoreDirectory, groupstoreAnnouncer)
+	removeMember := roster.NewRemoveMember(groupstoreWallClock, groups, groupstoreDirectory, groupstoreAnnouncer)
+	setRole := roster.NewSetRole(groupstoreWallClock, groups, groupstoreDirectory, groupstoreAnnouncer)
 	roleOf := roster.NewRoleOf(groups)
 	memberships := roster.NewMemberships(groups)
 	membersOf := roster.NewMembersOf(groups)

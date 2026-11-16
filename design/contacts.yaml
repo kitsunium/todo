@@ -78,6 +78,7 @@ domains:
               - {name: ByPair, params: [{name: pair, type: string}], results: [{type: link.Link}, {type: bool}]}
               - {name: Of, params: [{name: user, type: string}], results: [{type: "[]link.Link"}]}
               - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the link of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and a link that is not there is ErrNotFound.", params: [{name: id, type: string}, {name: change, type: "func(*link.Link) error"}], results: [{type: link.Link}]}
           - name: People
             direction: out
             version: 1
@@ -122,7 +123,7 @@ domains:
             output:
               - {name: Link, type: link.Link}
             errors: [link.ErrNotFound, link.ErrNotAllowed]
-            calls: [contacts/port/Links@v1.Get, contacts/port/Clock@v1.Now, contacts/port/Links@v1.Save, contacts/port/People@v1.ByID, contacts/port/Notices@v1.Tell]
+            calls: [contacts/port/Clock@v1.Now, contacts/port/Links@v1.Change, contacts/port/People@v1.ByID, contacts/port/Notices@v1.Tell]
             scenarios:
               - {name: accepts a request, kind: success}
               - {name: refuses the request of others, kind: refusal, error: link.ErrNotFound}
@@ -223,6 +224,10 @@ domains:
               description: "linkOf is the link a record keeps."
               params: [{name: r, type: "Record"}]
               results: [{type: "link.Link"}]
+            - name: recordOf
+              description: "recordOf is a link as the store keeps it."
+              params: [{name: l, type: "link.Link"}]
+              results: [{type: "Record"}]
       - name: contactsapi
         role: presentation
         code: 64.8.4

@@ -109,6 +109,18 @@ func (p groupsPort) Of(_ context.Context, user string) ([]team.Group, error) {
 	return out, nil
 }
 
+func (p groupsPort) Change(_ context.Context, id string, change func(*team.Group) error) (team.Group, error) {
+	g, ok := p.w.groups[id]
+	if !ok {
+		return team.Group{}, team.ErrNotFound
+	}
+	if err := change(&g); err != nil {
+		return team.Group{}, err
+	}
+	p.w.groups[id] = g
+	return g, nil
+}
+
 func (p groupsPort) Delete(_ context.Context, id string) error {
 	delete(p.w.groups, id)
 	return nil
@@ -152,6 +164,18 @@ func (p invitationsPort) OfGroup(_ context.Context, group string) ([]team.Invita
 	return out, nil
 }
 
+func (p invitationsPort) Change(_ context.Context, id string, change func(*team.Invitation) error) (team.Invitation, error) {
+	inv, ok := p.w.invitations[id]
+	if !ok {
+		return team.Invitation{}, team.ErrNoInvitation
+	}
+	if err := change(&inv); err != nil {
+		return team.Invitation{}, err
+	}
+	p.w.invitations[id] = inv
+	return inv, nil
+}
+
 func (p invitationsPort) Delete(_ context.Context, id string) error {
 	delete(p.w.invitations, id)
 	return nil
@@ -176,7 +200,7 @@ func (w *world) groupsPort() groupsPort           { return groupsPort{w} }
 func (w *world) invitationsPort() invitationsPort { return invitationsPort{w} }
 
 func (w *world) create() CreateGroup { return NewCreateGroup(w, w.groupsPort(), w) }
-func (w *world) edit() EditGroup     { return NewEditGroup(w.groupsPort(), w, w) }
+func (w *world) edit() EditGroup     { return NewEditGroup(w, w.groupsPort(), w) }
 func (w *world) remove() DeleteGroup {
 	return NewDeleteGroup(w.groupsPort(), w.invitationsPort(), w, w)
 }
@@ -188,13 +212,13 @@ func (w *world) invite() Invite {
 	return NewInvite(w.groupsPort(), w, w.invitationsPort(), w, w, w)
 }
 func (w *world) answer() AnswerInvitation {
-	return NewAnswerInvitation(w.invitationsPort(), w, w.groupsPort(), w, w)
+	return NewAnswerInvitation(w, w.invitationsPort(), w.groupsPort(), w, w)
 }
 func (w *world) invitationsList() ListInvitations {
 	return NewListInvitations(w.invitationsPort(), w.groupsPort(), w)
 }
-func (w *world) leave() RemoveMember { return NewRemoveMember(w.groupsPort(), w, w, w) }
-func (w *world) setRole() SetRole    { return NewSetRole(w.groupsPort(), w, w, w) }
+func (w *world) leave() RemoveMember { return NewRemoveMember(w, w.groupsPort(), w, w) }
+func (w *world) setRole() SetRole    { return NewSetRole(w, w.groupsPort(), w, w) }
 func (w *world) roleOf() RoleOf      { return NewRoleOf(w.groupsPort()) }
 func (w *world) memberships() Memberships {
 	return NewMemberships(w.groupsPort())

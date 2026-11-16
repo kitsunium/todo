@@ -42,18 +42,24 @@ func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOut
 		return SignInOutput{}, err
 	}
 	if !ok {
-		a.FailedLogins++
-		if a.FailedLogins >= account.MaxFailedLogins {
-			a.FailedLogins, a.LockedUntil = 0, now.Add(account.LockFor)
-		}
-		if err := h.accounts.Save(ctx, a); err != nil {
+		// Counted on the account as it is at that instant: wrong passwords
+		// tried at once each count, and the fifth locks.
+		if _, err := h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+			a.FailedLogins++
+			if a.FailedLogins >= account.MaxFailedLogins {
+				a.FailedLogins, a.LockedUntil = 0, now.Add(account.LockFor)
+			}
+			return nil
+		}); err != nil {
 			return SignInOutput{}, err
 		}
 		return SignInOutput{}, account.ErrInvalidCredentials
 	}
 	if a.FailedLogins > 0 || !a.LockedUntil.IsZero() {
-		a.FailedLogins, a.LockedUntil = 0, time.Time{}
-		if err := h.accounts.Save(ctx, a); err != nil {
+		if a, err = h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+			a.FailedLogins, a.LockedUntil = 0, time.Time{}
+			return nil
+		}); err != nil {
 			return SignInOutput{}, err
 		}
 	}

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package account — The account, its lock after wrong passwords, and the
 // session.
@@ -21,6 +21,10 @@ var errNotImplemented = errs.New(errs.Pack(64, 6, 1, 255), "NOT_IMPLEMENTED", "n
 var (
 	// ErrBadLink is "this link is invalid or has expired: ask for a new one".
 	ErrBadLink = errs.New(errs.Pack(64, 6, 1, 9), "BAD_LINK", "this link is invalid or has expired: ask for a new one", "identity/error/ErrBadLink")
+	// ErrEmailTaken is what the store answers when two sign-ups of one address
+	// race: the use case answers the second like any taken address, and never says
+	// it.
+	ErrEmailTaken = errs.New(errs.Pack(64, 6, 1, 4), "EMAIL_TAKEN", "this address already has an account", "identity/error/ErrEmailTaken")
 	// ErrInvalidCredentials is "the email address or the password is not right".
 	ErrInvalidCredentials = errs.New(errs.Pack(64, 6, 1, 5), "INVALID_CREDENTIALS", "the email address or the password is not right", "identity/error/ErrInvalidCredentials")
 	// ErrInvalidEmail is "this is not an email address".

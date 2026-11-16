@@ -14,19 +14,10 @@ import (
 // name cleaned as at creation, a color of the palette (an empty one is not
 // one: only creation picks).
 func (h *EditGroupHandler) execute(ctx context.Context, in *EditGroupInput) (EditGroupOutput, error) {
-	g, found, err := h.groups.Get(ctx, in.ID)
-	if err != nil {
-		return EditGroupOutput{}, err
-	}
-	role, err := roleIn(g, found, in.User)
-	if err != nil {
-		return EditGroupOutput{}, err
-	}
-	if !team.Manages(role) {
-		return EditGroupOutput{}, team.ErrNotManager
-	}
+	var name string
 	if in.Name != nil {
-		if g.Name, err = team.CleanName(*in.Name); err != nil {
+		var err error
+		if name, err = team.CleanName(*in.Name); err != nil {
 			return EditGroupOutput{}, err
 		}
 	}
@@ -34,14 +25,32 @@ func (h *EditGroupHandler) execute(ctx context.Context, in *EditGroupInput) (Edi
 		if *in.Color == "" {
 			return EditGroupOutput{}, team.ErrBadColor
 		}
-		if g.Color, err = team.ColorFor(*in.Color, g.Name); err != nil {
+		if _, err := team.ColorFor(*in.Color, ""); err != nil {
 			return EditGroupOutput{}, err
 		}
 	}
-	if g.UpdatedAt, err = h.clock.Now(ctx); err != nil {
+	now, err := h.clock.Now(ctx)
+	if err != nil {
 		return EditGroupOutput{}, err
 	}
-	if err := h.groups.Save(ctx, g); err != nil {
+	g, err := h.groups.Change(ctx, in.ID, func(g *team.Group) error {
+		role, err := roleIn(*g, true, in.User)
+		if err != nil {
+			return err
+		}
+		if !team.Manages(role) {
+			return team.ErrNotManager
+		}
+		if in.Name != nil {
+			g.Name = name
+		}
+		if in.Color != nil {
+			g.Color = *in.Color
+		}
+		g.UpdatedAt = now
+		return nil
+	})
+	if err != nil {
 		return EditGroupOutput{}, err
 	}
 	v, err := present(ctx, h.people, in.User, g)

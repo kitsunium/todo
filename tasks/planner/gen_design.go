@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -42,6 +42,10 @@ type JournalV1 interface {
 
 // TaskStoreV1 keeps the tasks.
 type TaskStoreV1 interface {
+	// Change applies a change to the task of an id as it is kept at that instant,
+	// alone among the writers of the store, and keeps the result; an error of the
+	// change keeps nothing.
+	Change(ctx context.Context, id string, change func(*task.Task) error) (task.Task, error)
 	Delete(ctx context.Context, id string) error
 	Get(ctx context.Context, id string) (task.Task, error)
 	List(ctx context.Context) ([]task.Task, error)

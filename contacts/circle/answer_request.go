@@ -16,33 +16,34 @@ import (
 // and only while it is pending: anything else is not allowed. The requester
 // is told when their request is accepted.
 func (h *AnswerRequestHandler) execute(ctx context.Context, in *AnswerRequestInput) (AnswerRequestOutput, error) {
-	l, found, err := h.links.Get(ctx, in.ID)
-	if err != nil {
-		return AnswerRequestOutput{}, err
-	}
-	if _, mine := l.Other(in.User); !found || !mine {
-		return AnswerRequestOutput{}, link.ErrNotFound
-	}
 	event := link.RequestsEvent(in.Event)
-	if byAddressee := event != link.RequestsOnCancel; byAddressee != (in.User == l.AddresseeID) {
-		return AnswerRequestOutput{}, link.ErrNotAllowed
-	}
-	to, err := link.NewRequests().Fire(ctx, &l, l.State, event)
-	switch {
-	case errors.Is(err, link.ErrRequestsNoTransition):
-		return AnswerRequestOutput{}, link.ErrNotAllowed
-	case err != nil:
-		return AnswerRequestOutput{}, err
-	}
 	now, err := h.clock.Now(ctx)
 	if err != nil {
 		return AnswerRequestOutput{}, err
 	}
-	l.State, l.UpdatedAt = to, now
-	if err := h.links.Save(ctx, l); err != nil {
+	// The link is answered as it is at that instant: an acceptance and a
+	// cancellation made at once do not both stand.
+	l, err := h.links.Change(ctx, in.ID, func(l *link.Link) error {
+		if _, mine := l.Other(in.User); !mine {
+			return link.ErrNotFound
+		}
+		if byAddressee := event != link.RequestsOnCancel; byAddressee != (in.User == l.AddresseeID) {
+			return link.ErrNotAllowed
+		}
+		to, err := link.NewRequests().Fire(ctx, l, l.State, event)
+		switch {
+		case errors.Is(err, link.ErrRequestsNoTransition):
+			return link.ErrNotAllowed
+		case err != nil:
+			return err
+		}
+		l.State, l.UpdatedAt = to, now
+		return nil
+	})
+	if err != nil {
 		return AnswerRequestOutput{}, err
 	}
-	if to == link.RequestsAccepted {
+	if l.State == link.RequestsAccepted {
 		actor, _, err := h.people.ByID(ctx, in.User)
 		if err != nil {
 			return AnswerRequestOutput{}, err

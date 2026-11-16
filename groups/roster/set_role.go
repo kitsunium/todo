@@ -18,34 +18,34 @@ func (h *SetRoleHandler) execute(ctx context.Context, in *SetRoleInput) (SetRole
 	if err != nil {
 		return SetRoleOutput{}, err
 	}
-	g, found, err := h.groups.Get(ctx, in.ID)
+	now, err := h.clock.Now(ctx)
 	if err != nil {
 		return SetRoleOutput{}, err
 	}
-	caller, err := roleIn(g, found, in.User)
-	if err != nil {
-		return SetRoleOutput{}, err
-	}
-	switch target := g.RoleOf(in.Member); {
-	case caller != team.RoleOwner:
-		return SetRoleOutput{}, team.ErrNotOwner
-	case target == "":
-		return SetRoleOutput{}, team.ErrNoMember
-	case target == team.RoleOwner:
-		return SetRoleOutput{}, team.ErrOwnerRole
-	}
-	if g.UpdatedAt, err = h.clock.Now(ctx); err != nil {
-		return SetRoleOutput{}, err
-	}
-	members := make([]team.Membership, len(g.Members))
-	for i, m := range g.Members {
-		if m.UserID == in.Member {
-			m.Role = role
+	g, err := h.groups.Change(ctx, in.ID, func(g *team.Group) error {
+		caller, err := roleIn(*g, true, in.User)
+		if err != nil {
+			return err
 		}
-		members[i] = m
-	}
-	g.Members = members
-	if err := h.groups.Save(ctx, g); err != nil {
+		switch target := g.RoleOf(in.Member); {
+		case caller != team.RoleOwner:
+			return team.ErrNotOwner
+		case target == "":
+			return team.ErrNoMember
+		case target == team.RoleOwner:
+			return team.ErrOwnerRole
+		}
+		members := make([]team.Membership, len(g.Members))
+		for i, m := range g.Members {
+			if m.UserID == in.Member {
+				m.Role = role
+			}
+			members[i] = m
+		}
+		g.Members, g.UpdatedAt = members, now
+		return nil
+	})
+	if err != nil {
 		return SetRoleOutput{}, err
 	}
 	actor, err := personOf(ctx, h.people, in.User)

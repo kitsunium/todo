@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c64b5f4ee68d0e0de734834bbe3d83de5623419c1acb369cb084a2d557d20f34
+// design:digest sha256:0757f9190f7903d5d36f9b55df0eaeb8ed5e780c37781224ee0cf3f55442fb0d
 
 package access
 
@@ -308,6 +308,11 @@ type recordedaccessAccountsV1 struct {
 func (x recordedaccessAccountsV1) ByEmail(ctx context.Context, email string) (account.Account, bool, error) {
 	*x.calls = append(*x.calls, "identity/port/Accounts@v1.ByEmail")
 	return x.next.ByEmail(ctx, email)
+}
+
+func (x recordedaccessAccountsV1) Change(ctx context.Context, id string, change func(*account.Account) error) (account.Account, error) {
+	*x.calls = append(*x.calls, "identity/port/Accounts@v1.Change")
+	return x.next.Change(ctx, id, change)
 }
 
 func (x recordedaccessAccountsV1) Get(ctx context.Context, id string) (account.Account, bool, error) {

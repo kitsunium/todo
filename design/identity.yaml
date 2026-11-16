@@ -67,6 +67,7 @@ domains:
           - {name: ErrInvalidEmail, serial: 1, message: this is not an email address}
           - {name: ErrWeakPassword, serial: 2, message: a password is 10 to 128 characters long}
           - {name: ErrNameRequired, serial: 3, message: an account needs a name}
+          - {name: ErrEmailTaken, serial: 4, message: this address already has an account, description: "ErrEmailTaken is what the store answers when two sign-ups of one address race: the use case answers the second like any taken address, and never says it."}
           - {name: ErrInvalidCredentials, serial: 5, message: the email address or the password is not right}
           - {name: ErrLocked, serial: 6, message: "too many wrong passwords: the account is locked for 15 minutes"}
           - {name: ErrUnverified, serial: 8, message: "confirm your email address first: the link is in your inbox"}
@@ -87,6 +88,7 @@ domains:
               - {name: Save, params: [{name: a, type: account.Account}]}
               - {name: Get, params: [{name: id, type: string}], results: [{type: account.Account}, {type: bool}]}
               - {name: ByEmail, params: [{name: email, type: string}], results: [{type: account.Account}, {type: bool}]}
+              - {name: Change, description: "Change applies a change to the account of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing.", params: [{name: id, type: string}, {name: change, type: "func(*account.Account) error"}], results: [{type: account.Account}]}
           - name: Sessions
             direction: out
             version: 1
@@ -221,7 +223,7 @@ domains:
               - {name: Session, type: account.Session}
               - {name: Account, type: account.Account}
             errors: [account.ErrInvalidCredentials, account.ErrLocked, account.ErrUnverified]
-            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Clock@v1.Now, identity/port/Passwords@v1.Verify, identity/port/Accounts@v1.Save, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save]
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Clock@v1.Now, identity/port/Passwords@v1.Verify, identity/port/Accounts@v1.Change, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save]
             scenarios:
               - {name: opens a session, kind: success}
               - {name: refuses a wrong password, kind: refusal, error: account.ErrInvalidCredentials}
@@ -397,6 +399,10 @@ domains:
               description: "sessionOf is the session a record keeps."
               params: [{name: r, type: "SessionRecord"}]
               results: [{type: "account.Session"}]
+            - name: recordOf
+              description: "recordOf is an account as the store keeps it."
+              params: [{name: acc, type: "account.Account"}]
+              results: [{type: "AccountRecord"}]
           types:
             - name: Postman
               methods:
