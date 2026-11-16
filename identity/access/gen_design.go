@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:a531db8fdf9b03e4efb3cfcdc2c2b563c368ecbbcb719b2c42901921e493400b
+// design:digest sha256:f78b90bd39d042efd423450d5f8ea59f0f6ddf7d6ea3d6874b6a7bc17cd1eabd
 
 // Package access — Signing up, signing in and out, and naming the member a
 // session belongs to.
@@ -439,19 +439,23 @@ func (h *SignUpHandler) Execute(ctx context.Context, in SignUpInput) (SignUpOutp
 var _ SignUp = (*SignUpHandler)(nil)
 
 // VerifyEmail proves an account's address with the secret of the link it was
-// mailed.
+// mailed, and signs its member in, since the link was in their inbox.
 type VerifyEmail interface {
 	Execute(ctx context.Context, in VerifyEmailInput) (VerifyEmailOutput, error)
 }
 
 // VerifyEmailInput is VerifyEmail's input: a field added breaks no caller.
 type VerifyEmailInput struct {
-	Secret string
+	Secret    string
+	UserAgent string
+	IP        string
 }
 
 // VerifyEmailOutput is VerifyEmail's output.
 type VerifyEmailOutput struct {
-	Account account.Account
+	Account       account.Account
+	SessionSecret string
+	Session       account.Session
 }
 
 // VerifyEmailHandler runs VerifyEmail: its body is the hand-written execute.
@@ -460,11 +464,12 @@ type VerifyEmailHandler struct {
 	links    LinksV1
 	clock    ClockV1
 	accounts AccountsV1
+	sessions SessionsV1
 }
 
 // NewVerifyEmail builds VerifyEmail on what it calls.
-func NewVerifyEmail(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1) *VerifyEmailHandler {
-	return &VerifyEmailHandler{secrets: secrets, links: links, clock: clock, accounts: accounts}
+func NewVerifyEmail(secrets SecretsV1, links LinksV1, clock ClockV1, accounts AccountsV1, sessions SessionsV1) *VerifyEmailHandler {
+	return &VerifyEmailHandler{secrets: secrets, links: links, clock: clock, accounts: accounts, sessions: sessions}
 }
 
 // Execute runs VerifyEmail.

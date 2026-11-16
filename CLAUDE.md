@@ -96,6 +96,11 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
   `Waiting`): the framework fires the timed transition, whoever wrote the
   state. What a member does stays the domain's pure workflow, in a use
   case. The two name the same states: add one to both.
+- **The end-to-end tests of the server role stretch real passwords**: about
+  a minute and a half under `-race`, ten seconds without. Iterate with
+  `-run` and without `-race`; run the whole package under `-race` before a
+  commit. The link that proves an address signs its member in, so a test
+  member costs one stretching, not two.
 - **A subscription is delivered at least once, and later**: it keys what
   it writes by the event's own id and writes nothing the second time
   (`feed.record`). A test that reads what a subscription wrote moves the

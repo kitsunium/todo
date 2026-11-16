@@ -98,22 +98,21 @@ func (p *product) link(addr, want string) string {
 	return match[1]
 }
 
-// signUp makes an account, proves its address with the link it is mailed,
-// and signs it in.
+// signUp makes an account and proves its address with the link it is
+// mailed, which signs it in.
 func (p *product) signUp(name, email string) *member {
 	p.t.Helper()
 	m := p.stranger()
 	creds := map[string]any{"email": email, "name": name, "password": passphrase}
 	m.call(http.StatusOK, "POST", "/api/auth/signup", creds, nil)
-	m.call(http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": p.link(strings.ToLower(email), "Confirmez votre adresse")}, nil)
+	// The link signs its member in: no password is stretched a second time.
 	var in struct {
 		Token string `json:"token"`
 		User  struct {
 			ID string `json:"id"`
 		} `json:"user"`
 	}
-	delete(creds, "name") // a request is decoded strictly
-	m.call(http.StatusOK, "POST", "/api/auth/login", creds, &in)
+	m.call(http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": p.link(strings.ToLower(email), "Confirmez votre adresse")}, &in)
 	m.token, m.id = in.Token, in.User.ID
 	return m
 }
@@ -1126,11 +1125,13 @@ func TestAGroupSharesAList(t *testing.T) {
 	// A member removed from the group stops doing its tasks and no more sees
 	// them; the tasks of a deleted group go back to their owners.
 	ada.call(http.StatusOK, "DELETE", "/api/groups/"+g.ID+"/members/"+bob.id, nil, nil)
-	bob.call(http.StatusNotFound, "GET", "/api/tasks/"+first.ID, nil, nil)
+	// The tasks follow the group by a message: until it is heard, Bob still
+	// sees the task he is assigned, as its assignee.
 	p.settle("the task unassigned from Bob", 50*time.Millisecond, func() bool {
 		ada.call(http.StatusOK, "GET", "/api/tasks/"+first.ID, nil, &edited)
 		return edited.AssigneeID == ""
 	})
+	bob.call(http.StatusNotFound, "GET", "/api/tasks/"+first.ID, nil, nil)
 	if edited.GroupID != g.ID {
 		t.Errorf("the task Bob stopped doing: %+v, want it still on the group", edited)
 	}

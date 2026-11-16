@@ -191,7 +191,9 @@ if (location.pathname === "/verify" && token) {
   attempt(async () => {
     await call("POST", "/api/auth/verify", { token: token });
     history.replaceState(null, "", "/");
-    word("Votre adresse est confirmée. Connectez-vous.");
+    show(await call("GET", "/api/auth/me"));
+    word("Votre adresse est confirmée.");
+    await refresh();
   });
 } else if (location.pathname === "/reset" && token) {
   show(null, "renew");

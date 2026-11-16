@@ -33,14 +33,16 @@ func signUp(ctx context.Context, in SignUpRequest) (out SignedUp, err error) {
 	return out, nil
 }
 
-// verify is POST /api/auth/verify's body; what it uses is in wired.
-func verify(ctx context.Context, in LinkRequest) (out Profile, err error) {
-	res, err := wired.verifyEmail.Execute(ctx, access.VerifyEmailInput{Secret: in.Token})
+// verify is POST /api/auth/verify's body; what it uses is in wired. The
+// link signs its member in, as a sign-in does.
+func verify(ctx context.Context, in LinkRequest) (out SignedIn, err error) {
+	res, err := wired.verifyEmail.Execute(ctx, access.VerifyEmailInput{Secret: in.Token, UserAgent: app.UserAgent(ctx), IP: app.ClientIP(ctx)})
 	if err != nil {
-		return Profile{}, refusal(err)
+		return SignedIn{}, refusal(err)
 	}
 	logger.Info(ctx, app.Log(ctx), "address verified", logger.String("user", res.Account.ID))
-	return profileOf(res.Account), nil
+	setCookie(ctx, res.SessionSecret)
+	return SignedIn{User: profileOf(res.Account), Token: res.SessionSecret}, nil
 }
 
 // resend is POST /api/auth/verify/resend's body; what it uses is in wired.

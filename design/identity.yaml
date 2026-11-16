@@ -155,13 +155,17 @@ domains:
               - {name: refuses an invalid address, kind: refusal, error: account.ErrInvalidEmail}
               - {name: refuses a short password, kind: refusal, error: account.ErrWeakPassword}
           - name: VerifyEmail
-            description: VerifyEmail proves an account's address with the secret of the link it was mailed.
+            description: VerifyEmail proves an account's address with the secret of the link it was mailed, and signs its member in, since the link was in their inbox.
             input:
               - {name: Secret, type: string}
+              - {name: UserAgent, type: string}
+              - {name: IP, type: string}
             output:
               - {name: Account, type: account.Account}
+              - {name: SessionSecret, type: string}
+              - {name: Session, type: account.Session}
             errors: [account.ErrBadLink]
-            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save]
             scenarios:
               - {name: verifies the account of a link, kind: success}
               - {name: refuses an expired link, kind: refusal, error: account.ErrBadLink}
@@ -500,7 +504,7 @@ domains:
           calls: [identity/usecase/Authenticate]
         endpoints:
           - {route: "POST /api/auth/signup", request: SignUpRequest, response: SignedUp, handler: SignUp, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/SignUp, "setting:verify-addresses"], calls: [identity/usecase/SignUp]}
-          - {route: "POST /api/auth/verify", request: LinkRequest, response: Profile, handler: Verify, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/VerifyEmail], calls: [identity/usecase/VerifyEmail]}
+          - {route: "POST /api/auth/verify", request: LinkRequest, response: SignedIn, handler: Verify, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/VerifyEmail], calls: [identity/usecase/VerifyEmail]}
           - {route: "POST /api/auth/verify/resend", request: EmailRequest, response: NoInput, handler: Resend, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ResendVerification], calls: [identity/usecase/ResendVerification]}
           - {route: "POST /api/auth/password/forgot", request: EmailRequest, response: NoInput, handler: Forgot, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ForgotPassword], calls: [identity/usecase/ForgotPassword]}
           - {route: "POST /api/auth/password/reset", request: ResetRequest, response: NoInput, handler: Reset, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ResetPassword], calls: [identity/usecase/ResetPassword]}

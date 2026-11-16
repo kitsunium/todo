@@ -22,7 +22,7 @@ func unverified(purpose string, expires time.Time) (*world, account.Account) {
 }
 
 func (w *world) verify() VerifyEmail {
-	return NewVerifyEmail(secretsPort{w}, linksPort{w}, clockPort{w}, accountsPort{w})
+	return NewVerifyEmail(secretsPort{w}, linksPort{w}, clockPort{w}, accountsPort{w}, sessionsPort{w})
 }
 
 // givenVerifyEmailVerifiesTheAccountOfALink builds VerifyEmail for "verifies the account of a link": the use case, its input, and
@@ -35,6 +35,9 @@ func givenVerifyEmailVerifiesTheAccountOfALink(t *testing.T) (VerifyEmail, Verif
 		t.Helper()
 		if out.Account.ID != a.ID || !w.accounts[a.ID].Verified || len(w.links) != 0 {
 			t.Errorf("the account: %+v, the links left: %d", w.accounts[a.ID], len(w.links))
+		}
+		if kept := w.sessions[out.Session.ID]; out.SessionSecret == "" || kept.UserID != a.ID || kept.TokenHash != "digest:"+out.SessionSecret {
+			t.Errorf("the session opened: %+v, secret %q", kept, out.SessionSecret)
 		}
 		if _, err := uc.Execute(t.Context(), VerifyEmailInput{Secret: "secret_a"}); err == nil {
 			t.Error("the link works twice")

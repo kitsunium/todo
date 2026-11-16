@@ -52,7 +52,7 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | Route | Does |
 |---|---|
 | `POST /api/auth/signup` | creates an account: `email`, `name`, `password` (10 to 128 characters), and mails the link that proves the address; answers the same for an address that already has an account |
-| `POST /api/auth/verify` | proves an address: the `token` of the link |
+| `POST /api/auth/verify` | proves an address with the `token` of the link, and signs its member in |
 | `POST /api/auth/verify/resend` | mails a new link to an `email` not verified yet |
 | `POST /api/auth/password/forgot` | mails an `email` the link that chooses a new password |
 | `POST /api/auth/password/reset` | chooses a new `password` with the `token` of that link, and ends every session |
