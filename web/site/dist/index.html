@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Todo</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Todo</h1>
+    <p id="who" hidden><span id="who-name"></span> <button id="logout" type="button">Se déconnecter</button></p>
+  </header>
+
+  <p id="notice" role="alert" hidden></p>
+
+  <main id="door" hidden>
+    <form id="login">
+      <h2>Se connecter</h2>
+      <label>Adresse <input name="email" type="email" autocomplete="username" required></label>
+      <label>Mot de passe <input name="password" type="password" autocomplete="current-password" required></label>
+      <button>Se connecter</button>
+    </form>
+    <form id="signup">
+      <h2>Créer un compte</h2>
+      <label>Nom <input name="name" autocomplete="name" required></label>
+      <label>Adresse <input name="email" type="email" autocomplete="username" required></label>
+      <label>Mot de passe (10 caractères au moins) <input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+      <button>Créer le compte</button>
+    </form>
+  </main>
+
+  <main id="desk" hidden>
+    <form id="add">
+      <h2>Nouvelle tâche</h2>
+      <label>Titre <input name="title" maxlength="120" required></label>
+      <label>Priorité
+        <select name="priority">
+          <option value="normal">Normale</option>
+          <option value="high">Haute</option>
+          <option value="low">Basse</option>
+        </select>
+      </label>
+      <label>Pour <input name="assignee" placeholder="un nom, ou une adresse à prévenir"></label>
+      <label>Échéance <input name="due" type="datetime-local"></label>
+      <button>Ajouter</button>
+    </form>
+
+    <section>
+      <h2>Tâches</h2>
+      <nav id="states">
+        <button type="button" data-state="" aria-pressed="true">En cours et faites</button>
+        <button type="button" data-state="open" aria-pressed="false">À faire</button>
+        <button type="button" data-state="done" aria-pressed="false">Faites</button>
+        <button type="button" data-state="archived" aria-pressed="false">Archivées</button>
+      </nav>
+      <ul id="tasks"></ul>
+      <p id="empty" hidden>Rien ici.</p>
+    </section>
+
+    <section>
+      <h2>Activité</h2>
+      <ol id="feed"></ol>
+    </section>
+  </main>
+</body>
+</html>

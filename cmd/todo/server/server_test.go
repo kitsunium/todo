@@ -357,3 +357,34 @@ func TestTheLoadDrivesTheServer(t *testing.T) {
 		t.Errorf("the server counts %d task(s), want the one the load added", report.Latest.Total)
 	}
 }
+
+// The server serves the web app: its page at the root and at any path a
+// browser may be at, its style and its script beside it, and the API under
+// it still answers as the API.
+func TestTheServerServesTheWebApp(t *testing.T) {
+	p := start(t)
+	get := func(path string) (int, string, string) {
+		t.Helper()
+		resp, err := http.Get(p.url + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return resp.StatusCode, resp.Header.Get("Content-Type"), string(raw)
+	}
+	for _, path := range []string{"/", "/tasks"} {
+		if code, kind, body := get(path); code != http.StatusOK || !strings.HasPrefix(kind, "text/html") || !strings.Contains(body, `<script src="/app.js" defer>`) {
+			t.Errorf("GET %s: %d %s, want the page", path, code, kind)
+		}
+	}
+	if code, kind, body := get("/app.js"); code != http.StatusOK || !strings.Contains(kind, "javascript") || !strings.Contains(body, "/api/auth/login") {
+		t.Errorf("GET /app.js: %d %s, want the script", code, kind)
+	}
+	if code, kind, _ := get("/app.css"); code != http.StatusOK || !strings.HasPrefix(kind, "text/css") {
+		t.Errorf("GET /app.css: %d %s, want the style", code, kind)
+	}
+	if code, kind, _ := get("/api/tasks"); code != http.StatusUnauthorized || !strings.Contains(kind, "json") {
+		t.Errorf("GET /api/tasks: %d %s, want the API's 401", code, kind)
+	}
+}

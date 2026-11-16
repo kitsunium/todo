@@ -12,11 +12,12 @@ list of their own. They add tasks with a priority, an assignee and a due date, a
 them through their lifecycle: open, done, archived. Every move is published on a topic, and lands in their activity feed a
 moment later. A task done for a day is archived on its own, whoever a task
 due within a day is assigned to gets one reminder by mail, and the task list
-is counted every thirty seconds.
+is counted every thirty seconds. The server serves a small web app at `/`,
+in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
 lives — address verification and password reset by mail, contacts, groups,
-shared tasks, the web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
+shared tasks, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
 module of its own.
 
 ## The design
@@ -29,6 +30,7 @@ module of its own.
 | `design/activity.yaml` | activity | the feed, written from what the use cases record |
 | `design/notify.yaml` | notify | the reminders, the outbox and its SMTP connection, the sequence `remind-due` |
 | `design/stats.yaml` | stats | the vital signs, sampled by a job |
+| `design/web.yaml` | web | the web app's static files |
 | `design/load.yaml` | load | a load driven against a running server over its HTTP API |
 
 Each component of the design is a Go package, `<domain>/<component>`, whose
@@ -87,6 +89,14 @@ stretched (PBKDF2-SHA256), a session's secret as its SHA-256.
 
 `go run ./cmd/todo config` prints every setting and where its value comes
 from.
+
+## The web app
+
+`web/site/dist` holds three files written by hand — `index.html`, `app.css`,
+`app.js` — with no build step and no dependency; the binary embeds them. The
+page talks to the API above with the session cookie. The server answers the
+page for any path that names no file, and its content policy allows scripts
+and styles of its own origin only: nothing inline.
 
 ## Drive a load
 

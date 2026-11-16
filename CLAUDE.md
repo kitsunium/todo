@@ -31,6 +31,7 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `notify/outbox` | outbox (adapter) | the stores `outbox` and `reminded`, `Relay` (SMTP, its connection declared in the design) and `Ledger`, `GET /api/outbox` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
 | `stats/census` | census (presentation) | the store `snapshots`, the job `sample`, `GET /api/stats` |
+| `web/site` | site (presentation) | the web app: `dist/index.html`, `app.css`, `app.js`, embedded and served at `/` |
 | `load/driver` | driver (application) | `Drive`, the port `API` |
 | `load/httpapi` | httpapi (adapter) | `Client`, the API over HTTP, the setting `target` |
 | `load/loadcli` | loadcli (presentation) | the command `run` |
@@ -88,6 +89,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 - **No file names the tool** that generates, checks or runs the product in
   dev: this file, the README and the code say "the generator", "the
   check", "the dev tool". The product imports the SDK only.
+- **The web app is three files and no build**: no inline script or style
+  (the framework's content policy refuses them), every word of the page in
+  French, every call through `call` in `app.js`. A route the page uses
+  that changes shape changes `app.js` in the same commit.
 - The server role's App is named `server`, the load's `load`: their
   settings are `SERVER_<NAME>` and `LOAD_<NAME>`.
 - **A request is decoded strictly**: a member the route does not declare

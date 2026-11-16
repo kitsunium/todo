@@ -1,0 +1,24 @@
+:root { color-scheme: light; --ink: #1c1b22; --soft: #6b6a75; --line: #dddbe6; --accent: #4b3fd6; --bad: #b3261e; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 46rem; padding: 1rem; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: #fbfaff; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+h1 { margin: 0; font-size: 1.5rem; }
+h2 { margin: 1.5rem 0 .5rem; font-size: 1.1rem; }
+form { display: grid; gap: .5rem; }
+#door { display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+#door[hidden], #desk[hidden] { display: none; }
+label { display: grid; gap: .15rem; font-size: .9rem; color: var(--soft); }
+input, select, button { font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; color: var(--ink); }
+button { cursor: pointer; }
+form > button { justify-self: start; background: var(--accent); border-color: var(--accent); color: #fff; }
+#notice { padding: .5rem .75rem; border: 1px solid var(--bad); border-radius: .4rem; color: var(--bad); }
+#states { display: flex; flex-wrap: wrap; gap: .4rem; }
+#states button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+ul, ol { list-style: none; margin: .75rem 0 0; padding: 0; }
+#tasks li { display: grid; grid-template-columns: 1fr auto; gap: .25rem 1rem; padding: .6rem 0; border-top: 1px solid var(--line); }
+#tasks .title { font-weight: 600; }
+#tasks .done .title, #tasks .archived .title { text-decoration: line-through; color: var(--soft); }
+#tasks .meta, #feed li { font-size: .85rem; color: var(--soft); }
+#tasks .late { color: var(--bad); }
+#tasks .moves { display: flex; gap: .4rem; align-items: start; }
+#feed li { padding: .25rem 0; }

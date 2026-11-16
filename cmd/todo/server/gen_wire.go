@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:b8c6fb4903e1368054d808d160797f66a4b4f241102b577f4a124db5ec43a883
+// design:digest sha256:8d40d0873f391460466a0aa214adea3d028e9293117fc8bd920c20c5af44af3e
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -21,10 +21,11 @@ import (
 	"github.com/kitsunium/todo/tasks/api"
 	"github.com/kitsunium/todo/tasks/planner"
 	"github.com/kitsunium/todo/tasks/taskstore"
+	"github.com/kitsunium/todo/web/site"
 )
 
-// App is role server: the framework App of vault, authapi, taskstore, api, feed, outbox, watch, census, profile server.
-var App = app.NewApp("server", vault.Service, authapi.Service, taskstore.Service, api.Service, feed.Service, outbox.Service, watch.Service, census.Service).With(app.Profile(model.ProfileServer))
+// App is role server: the framework App of vault, authapi, taskstore, api, feed, outbox, watch, census, site, profile server.
+var App = app.NewApp("server", vault.Service, authapi.Service, taskstore.Service, api.Service, feed.Service, outbox.Service, watch.Service, census.Service, site.Service).With(app.Profile(model.ProfileServer))
 
 // Build is what the binary's build says: its variables, set by -ldflags -X.
 type Build struct {
@@ -61,4 +62,5 @@ func Wire(ctx context.Context, build Build) {
 	outbox.Wire()
 	watch.Wire(remindDue, watch.RemindWithinSetting)
 	census.Wire(countTasks)
+	site.Wire()
 }
