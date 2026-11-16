@@ -15,13 +15,15 @@ moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
 is counted every thirty seconds. Two members become contacts by a
 request one sends to the other's address and the other accepts; a request
-nobody answers expires after fourteen days. A member shares a task with a
+nobody answers expires after fourteen days. Members form groups: a group has an owner, admins and members, its owner
+and admins invite their contacts, and an invitation nobody answers expires
+after seven days. A member shares a task with a
 contact, who then sees it, edits it and moves it, and may leave it. The server serves a small web app at `/`,
 in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
 lives — mails in two languages and in HTML, invitations of people
-who have no account, groups, shared tasks, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
+who have no account, the lists of a group, assigning a task, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
 module of its own.
 
 ## The design
@@ -31,6 +33,7 @@ module of its own.
 | `design/product.yaml` | — | the product, its context (a member, an operator, the mail relay) and the binary `todo` with its two process roles, `server` and `load` |
 | `design/identity.yaml` | identity | the account and its lock, the session, four use cases and their five ports, the stores behind them, the HTTP API and the handler that says who calls a route, the sequence `sign-in` |
 | `design/contacts.yaml` | contacts | the link between two members and its request, five use cases and their four ports, the store and the topic behind them, the HTTP API, the sequence `request-contact` |
+| `design/groups.yaml` | groups | the group, its roles and its invitations, the use cases and their ports, the stores and the topic behind them, the HTTP API, the queries the rest of the product asks |
 | `design/tasks.yaml` | tasks | the task and its lifecycle, six use cases and their three ports, the store behind them, the HTTP API, the sequence `complete-task` |
 | `design/activity.yaml` | activity | the feed, written from what the use cases record |
 | `design/notify.yaml` | notify | the reminders, the mailer with its outbox and its SMTP connection, the command every mail goes through, the sequence `remind-due` |
@@ -60,6 +63,11 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `POST /api/contacts` | asks the member an `email` belongs to to be a contact |
 | `POST /api/contacts/{id}/accept` `decline` `cancel` | answers a request: its addressee accepts or declines, its requester cancels |
 | `DELETE /api/contacts/{id}` | ends a contact, for either member |
+| `GET /api/groups` `POST /api/groups` | the caller's groups; creates one: `name`, `color` |
+| `GET` `PATCH` `DELETE /api/groups/{id}` | reads a group, renames or recolours it (owner and admins), deletes it (owner) |
+| `POST /api/groups/{id}/invitations` | invites a contact: `userId`, for the owner and the admins |
+| `GET /api/invitations`, `POST /api/invitations/{id}/accept` `decline` | the invitations the caller received, and their answer |
+| `PATCH` `DELETE /api/groups/{id}/members/{userId}` | sets a member's role (owner), removes a member or leaves the group |
 | `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `assignee`, `due` (RFC 3339) |
 | `GET /api/tasks` | lists the tasks the caller sees, theirs and those shared with them, not archived, the most urgent first; `?state=open\|done\|archived` lists one state |
 | `GET /api/tasks/{id}` | one task the caller sees |
