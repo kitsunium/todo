@@ -9,7 +9,9 @@ and imports the SDK alone.
 
 A member signs up with an address and a password, proves the address by
 the link they are mailed, signs in, and has a task
-list of their own. They add tasks with a priority, an assignee and a due date, to their own list or to a group's, and move
+list of their own. Every mail the product sends is written in the language of
+the member who reads it, French or English, as HTML with a plain text
+alternative, and a due date in it is written in that member's time zone. They add tasks with a priority, an assignee and a due date, to their own list or to a group's, and move
 them through their lifecycle: open, done, archived. Every move is published on a topic, and lands in their activity feed a
 moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
@@ -28,7 +30,7 @@ the tasks of a group deleted go back to their owners' lists. The server serves a
 in French: sign up, sign in, add tasks, move them, read the feed.
 
 The former todo, written on the framework by hand, is where the rest still
-lives — mails in two languages and in HTML, its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
+lives — its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
 module of its own.
 
 ## The design
@@ -53,15 +55,16 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 
 | Route | Does |
 |---|---|
-| `POST /api/auth/signup` | creates an account: `email`, `name`, `password` (10 to 128 characters), and mails the link that proves the address; answers the same for an address that already has an account |
+| `POST /api/auth/signup` | creates an account: `email`, `name`, `password` (10 to 128 characters), and optionally `locale` (`fr` or `en`; when it is not sent, the language the `Accept-Language` header prefers, French by default) and `timeZone` (an IANA name like `Europe/Paris`; empty is UTC), and mails the link that proves the address, in that language; answers the same for an address that already has an account, whose member is told in their own language; 400 for a `locale` that is neither `fr` nor `en` or a `timeZone` that is not a zone of the database |
 | `POST /api/auth/verify` | proves an address with the `token` of the link, and signs its member in |
 | `POST /api/auth/verify/resend` | mails a new link to an `email` not verified yet |
 | `POST /api/auth/password/forgot` | mails an `email` the link that chooses a new password |
 | `POST /api/auth/password/reset` | chooses a new `password` with the `token` of that link, and ends every session |
 | `POST /api/auth/password` | changes the caller's password: `current`, `password`; ends their other sessions |
-| `POST /api/auth/login` | opens a session: `email`, `password`; sets the `todo_session` cookie and answers the same secret as `token` |
+| `POST /api/auth/login` | opens a session: `email`, `password`, and optionally `timeZone`, which becomes the account's; sets the `todo_session` cookie and answers the same secret as `token`; 400 for a `timeZone` that is not a zone of the database |
 | `POST /api/auth/logout` | ends the caller's session |
-| `GET /api/auth/me` | the caller |
+| `GET /api/auth/me` | the caller: `id`, `email`, `name`, `locale`, `timeZone` |
+| `PATCH /api/auth/me` | changes `name`, `locale` and `timeZone`, each only when it is sent (an empty `timeZone` is UTC), and answers the caller; the next mail is in the new language; 400 for an empty `name`, a `locale` that is neither `fr` nor `en` or a `timeZone` that is not a zone of the database, and for any other member of the request |
 | `GET /api/auth/sessions` | the caller's open sessions, with the browser and the address each signed in from |
 | `DELETE /api/auth/sessions/{id}` | ends one of the caller's sessions |
 | `GET /api/contacts` | the caller's contacts, the requests they received and those they sent, and `invites`, their invitations still waiting for an account, the newest first |
@@ -125,7 +128,7 @@ interface, so a deployment names its address. Its data lives in
 |---|---|---|
 | `SERVER_ARCHIVE_AFTER` | `24h` | how long a done task stays listed before it is archived |
 | `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's owner is reminded |
-| `SERVER_BASE_URL` | `http://localhost:4000` | where members reach the product, for the links of its mails |
+| `SERVER_BASE_URL` | `http://localhost:4000` | where members reach the product: every link of a mail is this address and a path of the web app |
 | `SERVER_VERIFY_ADDRESSES` | `true`, `false` in dev | whether a new account proves its address before it signs in; `false` where the deployment has no mail relay |
 | `SERVER_SMTP_URL` | unset | where the mailer delivers: `smtp://user:pass@host:587?tls=starttls`; unset, the mails are captured for the dev tool and not delivered |
 

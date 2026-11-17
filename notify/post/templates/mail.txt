@@ -1,0 +1,15 @@
+{{.Headline}}
+{{rule .Headline}}
+{{with .Greeting}}
+{{.}}
+{{end}}{{range .Body}}
+{{wrap .}}
+{{end}}{{with .Action}}
+{{.Label}}{{$.Colon}}
+{{.URL}}
+{{end}}{{range .Notes}}
+{{wrap .}}
+{{end}}
+--
+{{wrap .Reason}}
+{{.Tagline}} · {{.Home}}

@@ -30,6 +30,17 @@ func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOut
 	if !acceptable(in.Password) {
 		return SignUpOutput{}, account.ErrWeakPassword
 	}
+	locale := in.Locale
+	if locale == "" {
+		locale = account.LocaleFR // nothing said, nothing negotiated
+	}
+	if locale, err = checkLocale(locale); err != nil {
+		return SignUpOutput{}, err
+	}
+	zone, err := checkZone(in.TimeZone)
+	if err != nil {
+		return SignUpOutput{}, err
+	}
 	out := SignUpOutput{Email: email, Verified: in.Trusted}
 	existing, taken, err := h.accounts.ByEmail(ctx, email)
 	if err != nil {
@@ -50,7 +61,7 @@ func (h *SignUpHandler) execute(ctx context.Context, in *SignUpInput) (SignUpOut
 	if err != nil {
 		return SignUpOutput{}, err
 	}
-	a := account.Account{ID: id, Email: email, Name: name, PasswordHash: hash, Verified: in.Trusted, CreatedAt: now, UpdatedAt: now}
+	a := account.Account{ID: id, Email: email, Name: name, Locale: locale, TimeZone: zone, PasswordHash: hash, Verified: in.Trusted, CreatedAt: now, UpdatedAt: now}
 	if err := h.accounts.Save(ctx, a); errors.Is(err, account.ErrEmailTaken) {
 		// Two sign-ups of one address at the same instant: the second is
 		// answered like any taken address.

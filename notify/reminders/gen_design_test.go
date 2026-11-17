@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 package reminders
 
@@ -45,9 +45,9 @@ type recordedremindersDirectoryV1 struct {
 	calls *[]string
 }
 
-func (x recordedremindersDirectoryV1) Address(ctx context.Context, userID string) (string, bool, error) {
-	*x.calls = append(*x.calls, "notify/port/Directory@v1.Address")
-	return x.next.Address(ctx, userID)
+func (x recordedremindersDirectoryV1) Recipient(ctx context.Context, userID string) (Recipient, bool, error) {
+	*x.calls = append(*x.calls, "notify/port/Directory@v1.Recipient")
+	return x.next.Recipient(ctx, userID)
 }
 
 // RecordRemindersMailerV1 records the calls to next, then makes them.
@@ -93,7 +93,7 @@ func TestSequenceRemindDue(t *testing.T) {
 	if err := run(t.Context()); err != nil {
 		t.Fatalf("the sequence failed: %v", err)
 	}
-	want := []string{"notify/port/ReminderLog@v1.Seen", "notify/port/Directory@v1.Address", "notify/port/Mailer@v1.Send", "notify/port/ReminderLog@v1.Mark"}
+	want := []string{"notify/port/ReminderLog@v1.Seen", "notify/port/Directory@v1.Recipient", "notify/port/Mailer@v1.Send", "notify/port/ReminderLog@v1.Mark"}
 	if !slices.Equal(got, want) {
 		t.Errorf("the calls: %q, want %q", got, want)
 	}

@@ -21,7 +21,7 @@ func givenRemindDueMailsEachTaskDueSoonOnce(t *testing.T) (RemindDue, RemindDueI
 		if out.Sent != 1 || len(mailer.sent) != 1 {
 			t.Fatalf("sent %d, the mailer got %d mail(s), want 1", out.Sent, len(mailer.sent))
 		}
-		if m := mailer.sent[0]; m.To != "ada@example.com" || m.Subject != "Bientôt à échéance : ship the release" {
+		if m := mailer.sent[0]; m.To != everyone["user_ada"] || m.Title != "ship the release" || !m.Due.Equal(epoch.Add(time.Hour)) {
 			t.Errorf("the mail: %+v", m)
 		}
 		again, err := uc.Execute(t.Context(), in)

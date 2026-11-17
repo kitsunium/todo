@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package account — The account, its lock after wrong passwords, and the
 // session.
@@ -29,6 +29,11 @@ var (
 	ErrInvalidCredentials = errs.New(errs.Pack(64, 6, 1, 5), "INVALID_CREDENTIALS", "the email address or the password is not right", "identity/error/ErrInvalidCredentials")
 	// ErrInvalidEmail is "this is not an email address".
 	ErrInvalidEmail = errs.New(errs.Pack(64, 6, 1, 1), "INVALID_EMAIL", "this is not an email address", "identity/error/ErrInvalidEmail")
+	// ErrInvalidLocale is "the language is fr or en".
+	ErrInvalidLocale = errs.New(errs.Pack(64, 6, 1, 10), "INVALID_LOCALE", "the language is fr or en", "identity/error/ErrInvalidLocale")
+	// ErrInvalidTimeZone is "the time zone is a name of the IANA database, like
+	// Europe/Paris".
+	ErrInvalidTimeZone = errs.New(errs.Pack(64, 6, 1, 11), "INVALID_TIME_ZONE", "the time zone is a name of the IANA database, like Europe/Paris", "identity/error/ErrInvalidTimeZone")
 	// ErrLocked is "too many wrong passwords: the account is locked for 15
 	// minutes".
 	ErrLocked = errs.New(errs.Pack(64, 6, 1, 6), "LOCKED", "too many wrong passwords: the account is locked for 15 minutes", "identity/error/ErrLocked")
@@ -44,6 +49,10 @@ var (
 )
 
 const (
+	// LocaleEN is English.
+	LocaleEN string = "en"
+	// LocaleFR is French, the language of an account that chose none.
+	LocaleFR string = "fr"
 	// LockFor is how long a locked account refuses every password.
 	LockFor time.Duration = 15 * time.Minute
 	// MaxFailedLogins is how many wrong passwords in a row lock an account.
@@ -68,6 +77,12 @@ type Account struct {
 	ID    string `json:"id" app:"public"`
 	Email string `json:"email" app:"personal"`
 	Name  string `json:"name" app:"personal"`
+	// Locale is the language the member reads their mails in, fr or en; an account
+	// that has none reads French.
+	Locale string `json:"locale" app:"public"`
+	// TimeZone is the IANA zone the member's mails write times in; empty reads
+	// UTC.
+	TimeZone string `json:"timeZone" app:"personal"`
 	// PasswordHash is the password, stretched: never the password, never answered.
 	PasswordHash string `json:"-" app:"secret"`
 	// Verified says the member proved the address is theirs; an account that is

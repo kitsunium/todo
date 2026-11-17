@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package post — The product's mailer, its durable outbox and its transport,
 // and the command every component that writes to a member sends through.
@@ -20,13 +20,41 @@ import (
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 3, 4, 255), "NOT_IMPLEMENTED", "not implemented yet", "post: a hand-written body is still a skeleton")
 
-// Letter — A mail to one member, as plain text.
+const (
+	// KindDueSoon is the reminder of a task due soon; its params are title and
+	// due, the due date in RFC 3339.
+	KindDueSoon string = "due-soon"
+	// KindExists is the mail that tells an address it already has an account.
+	KindExists string = "exists"
+	// KindInvite is the mail that invites an address nobody has; its params are
+	// actor, the inviter's name.
+	KindInvite string = "invite"
+	// KindReset is the mail whose link chooses a new password: its path carries
+	// the link's secret.
+	KindReset string = "reset"
+	// KindVerify is the mail whose link proves an address: its path carries the
+	// link's secret.
+	KindVerify string = "verify"
+)
+
+// Letter — A mail to one member, as a kind and its parameters; the mailer
+// writes it in the member's language, as HTML and as plain text.
 type Letter struct {
 	To string `json:"to" app:"personal"`
 	// Name is the recipient's, beside the address; it may be empty.
-	Name    string `json:"name" app:"personal"`
-	Subject string `json:"subject" app:"public"`
-	Body    string `json:"body" app:"personal"`
+	Name string `json:"name" app:"personal"`
+	// Locale is the recipient's language, fr or en; anything else reads French.
+	Locale string `json:"locale" app:"public"`
+	// TimeZone is the IANA zone the recipient's dates are written in; empty or
+	// unknown reads UTC.
+	TimeZone string `json:"timeZone" app:"personal"`
+	// Kind is which mail it is, one of the Kind constants.
+	Kind string `json:"kind" app:"public"`
+	// Params are the values the kind's words and card are made of.
+	Params map[string]string `json:"params,omitempty" app:"personal"`
+	// Path is the action's path in the web app, with its query when it carries a
+	// secret; the link is base-url and this path. Empty for no action.
+	Path string `json:"path,omitempty" app:"secret"`
 }
 
 // Posted — A mail the outbox took.
@@ -53,6 +81,10 @@ var _ reminders.MailerV1 = (*Carrier)(nil)
 
 // Service is post's framework service: what it declares, drawn and run.
 var Service = app.NewService("post", "The product's mailer, its durable outbox and its transport, and the command every component that writes to a member sends through.")
+
+// BaseUrlSetting — Where members reach the product: every link of a mail is
+// this address and a path.
+var BaseUrlSetting = Service.Setting[string]("base-url", "http://localhost:4000")
 
 // SendCommand — Puts a mail in the outbox: the one path every mail of the
 // product takes.

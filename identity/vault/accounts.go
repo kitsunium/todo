@@ -59,7 +59,7 @@ func (a *Accounts) save(ctx context.Context, acc account.Account) (err error) {
 // recordOf is an account as the store keeps it.
 func recordOf(acc account.Account) AccountRecord {
 	return AccountRecord{
-		ID: acc.ID, Email: acc.Email, Name: acc.Name, PasswordHash: acc.PasswordHash, Verified: acc.Verified,
+		ID: acc.ID, Email: acc.Email, Name: acc.Name, Locale: acc.Locale, TimeZone: acc.TimeZone, PasswordHash: acc.PasswordHash, Verified: acc.Verified,
 		FailedLogins: acc.FailedLogins, LockedUntil: acc.LockedUntil, CreatedAt: acc.CreatedAt, UpdatedAt: acc.UpdatedAt,
 	}
 }
@@ -67,7 +67,7 @@ func recordOf(acc account.Account) AccountRecord {
 // accountOf is the account a record keeps.
 func accountOf(r AccountRecord) account.Account {
 	return account.Account{
-		ID: r.ID, Email: r.Email, Name: r.Name, PasswordHash: r.PasswordHash, Verified: r.Verified,
+		ID: r.ID, Email: r.Email, Name: r.Name, Locale: r.Locale, TimeZone: r.TimeZone, PasswordHash: r.PasswordHash, Verified: r.Verified,
 		FailedLogins: r.FailedLogins, LockedUntil: r.LockedUntil, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }

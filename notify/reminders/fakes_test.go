@@ -40,16 +40,16 @@ func (m *memMailer) Send(_ context.Context, mail Mail) error {
 	return nil
 }
 
-// directory is DirectoryV1 over the addresses it holds, by member.
-type directory map[string]string
+// directory is DirectoryV1 over the recipients it holds, by member.
+type directory map[string]Recipient
 
-func (d directory) Address(_ context.Context, userID string) (string, bool, error) {
+func (d directory) Recipient(_ context.Context, userID string) (Recipient, bool, error) {
 	to, ok := d[userID]
 	return to, ok, nil
 }
 
-// everyone is the directory of the tests: Ada, and nobody else.
-var everyone = directory{"user_ada": "ada@example.com"}
+// everyone is the directory of the tests: Ada, who reads English in Paris, and nobody else.
+var everyone = directory{"user_ada": {Address: "ada@example.com", Name: "Ada", Locale: "en", TimeZone: "Europe/Paris"}}
 
 // dueTask is an open task of owner due in an hour.
 func dueTask(id, owner string) task.Task {

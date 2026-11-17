@@ -15,9 +15,14 @@ import (
 // answered alike, and an unknown address still has a password checked, so
 // neither the answer nor its time says whether an address has an account.
 // The fifth wrong password in a row locks the account for LockFor; a right
-// one clears the count. An account whose address is not proven signs
+// one clears the count. A time zone sent with the password becomes the
+// account's once the password proved right. An account whose address is not proven signs
 // nobody in.
 func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOutput, error) {
+	zone, err := checkZone(in.TimeZone) // refused whoever the address is: it says nothing of an account
+	if err != nil {
+		return SignInOutput{}, err
+	}
 	email, err := account.NormalizeEmail(in.Email)
 	if err != nil {
 		email = "" // no account has it: answered as an unknown address
@@ -67,6 +72,15 @@ func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOut
 		// Said only once the password proved right: the answer never tells a
 		// stranger whether an address has an account.
 		return SignInOutput{}, account.ErrUnverified
+	}
+	if zone != "" && zone != a.TimeZone {
+		// A member who travelled has their mails in the zone they sign in from.
+		if a, err = h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+			a.TimeZone = zone
+			return nil
+		}); err != nil {
+			return SignInOutput{}, err
+		}
 	}
 	secret, digest, err := h.secrets.New(ctx)
 	if err != nil {

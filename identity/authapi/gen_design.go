@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package authapi — The HTTP API of the accounts, and the handler that says
 // who calls a route.
@@ -58,13 +58,27 @@ type Principal struct {
 	SessionID string `json:"sessionId" app:"public"`
 	Email     string `json:"email" app:"personal"`
 	Name      string `json:"name" app:"personal"`
+	Locale    string `json:"locale" app:"public"`
+	TimeZone  string `json:"timeZone" app:"personal"`
 }
 
 // Profile — A member, as the API answers them.
 type Profile struct {
-	ID    string `json:"id" app:"public"`
-	Email string `json:"email" app:"personal"`
-	Name  string `json:"name" app:"personal"`
+	ID       string `json:"id" app:"public"`
+	Email    string `json:"email" app:"personal"`
+	Name     string `json:"name" app:"personal"`
+	Locale   string `json:"locale" app:"public"`
+	TimeZone string `json:"timeZone" app:"personal"`
+}
+
+// ProfileRequest — What a member changes of their account; a member left out
+// stays as it is.
+type ProfileRequest struct {
+	Name *string `json:"name,omitempty" app:"personal"`
+	// Locale is the new language, fr or en: the next mails are in it.
+	Locale *string `json:"locale,omitempty" app:"public"`
+	// TimeZone is the new IANA zone; an empty name is UTC.
+	TimeZone *string `json:"timeZone,omitempty" app:"personal"`
 }
 
 // ResetRequest — The secret of a reset link and the new password.
@@ -94,10 +108,14 @@ type SessionView struct {
 	Current bool `json:"current" app:"public"`
 }
 
-// SignInRequest — An address and its password.
+// SignInRequest — An address and its password, and the time zone of the
+// browser it comes from.
 type SignInRequest struct {
 	Email    string `json:"email" app:"personal"`
 	Password string `json:"password" app:"secret"`
+	// TimeZone is the IANA zone of the browser; when it is sent, it becomes the
+	// account's.
+	TimeZone string `json:"timeZone"`
 }
 
 // SignUpRequest — What a stranger sends to become a member.
@@ -105,6 +123,13 @@ type SignUpRequest struct {
 	Email    string `json:"email" app:"personal"`
 	Name     string `json:"name" app:"personal"`
 	Password string `json:"password" app:"secret"`
+	// Locale is fr or en; when it is not sent, the language the Accept-Language
+	// header prefers, French by default.
+	Locale string `json:"locale"`
+	// TimeZone is the IANA zone of the member's browser, like Europe/Paris; empty
+	// reads UTC.
+	TimeZone       string `json:"timeZone"`
+	AcceptLanguage string `header:"Accept-Language"`
 }
 
 // SignedIn — A session just opened, the member and the secret a client that
@@ -207,6 +232,13 @@ func Me(ctx context.Context, in NoInput) (Profile, error) {
 	return me(ctx, in)
 }
 
+var _ = Service.Endpoint("PATCH /api/auth/me", UpdateMe, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// UpdateMe serves PATCH /api/auth/me: its body is the hand-written updateMe.
+func UpdateMe(ctx context.Context, in ProfileRequest) (Profile, error) {
+	return updateMe(ctx, in)
+}
+
 var _ = Service.AuthHandler("session", Authenticate)
 
 // Authenticate is the authentication "session": it reads a request's credentials and answers
@@ -230,12 +262,13 @@ var wired struct {
 	signOut                access.SignOut
 	listSessions           access.ListSessions
 	revokeSession          access.RevokeSession
+	updateProfile          access.UpdateProfile
 	authenticate           access.Authenticate
 }
 
 // Wire gives the handlers what they use: the role that mounts authapi calls it
 // before its App runs.
-func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verifyEmail access.VerifyEmail, resendVerification access.ResendVerification, forgotPassword access.ForgotPassword, resetPassword access.ResetPassword, changePassword access.ChangePassword, signIn access.SignIn, signOut access.SignOut, listSessions access.ListSessions, revokeSession access.RevokeSession, authenticate access.Authenticate) {
+func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verifyEmail access.VerifyEmail, resendVerification access.ResendVerification, forgotPassword access.ForgotPassword, resetPassword access.ResetPassword, changePassword access.ChangePassword, signIn access.SignIn, signOut access.SignOut, listSessions access.ListSessions, revokeSession access.RevokeSession, updateProfile access.UpdateProfile, authenticate access.Authenticate) {
 	wired.signUp = signUp
 	wired.verifyAddressesSetting = verifyAddressesSetting
 	wired.verifyEmail = verifyEmail
@@ -247,5 +280,6 @@ func Wire(signUp access.SignUp, verifyAddressesSetting *app.Setting[bool], verif
 	wired.signOut = signOut
 	wired.listSessions = listSessions
 	wired.revokeSession = revokeSession
+	wired.updateProfile = updateProfile
 	wired.authenticate = authenticate
 }

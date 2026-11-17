@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 package access
 
@@ -213,6 +213,25 @@ func TestSignInRefusesAnUnverifiedAccount(t *testing.T) {
 	}
 }
 
+// TestSignInFollowsTheTimeZoneOfTheBrowser is SignIn's scenario "follows the time zone of the browser" (success).
+func TestSignInFollowsTheTimeZoneOfTheBrowser(t *testing.T) {
+	uc, in, then := givenSignInFollowsTheTimeZoneOfTheBrowser(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("SignIn: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestSignInRefusesAnUnknownTimeZone is SignIn's scenario "refuses an unknown time zone" (refusal).
+func TestSignInRefusesAnUnknownTimeZone(t *testing.T) {
+	uc, in := givenSignInRefusesAnUnknownTimeZone(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrInvalidTimeZone) {
+		t.Fatalf("SignIn: %v, want account.ErrInvalidTimeZone", err)
+	}
+}
+
 // TestSignOutEndsTheSession is SignOut's scenario "ends the session" (success).
 func TestSignOutEndsTheSession(t *testing.T) {
 	uc, in, then := givenSignOutEndsTheSession(t)
@@ -268,6 +287,91 @@ func TestSignUpRefusesAShortPassword(t *testing.T) {
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, account.ErrWeakPassword) {
 		t.Fatalf("SignUp: %v, want account.ErrWeakPassword", err)
+	}
+}
+
+// TestSignUpKeepsTheLanguageAndTheTimeZone is SignUp's scenario "keeps the language and the time zone" (success).
+func TestSignUpKeepsTheLanguageAndTheTimeZone(t *testing.T) {
+	uc, in, then := givenSignUpKeepsTheLanguageAndTheTimeZone(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("SignUp: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestSignUpRefusesAnUnknownLanguage is SignUp's scenario "refuses an unknown language" (refusal).
+func TestSignUpRefusesAnUnknownLanguage(t *testing.T) {
+	uc, in := givenSignUpRefusesAnUnknownLanguage(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrInvalidLocale) {
+		t.Fatalf("SignUp: %v, want account.ErrInvalidLocale", err)
+	}
+}
+
+// TestSignUpRefusesAnUnknownTimeZone is SignUp's scenario "refuses an unknown time zone" (refusal).
+func TestSignUpRefusesAnUnknownTimeZone(t *testing.T) {
+	uc, in := givenSignUpRefusesAnUnknownTimeZone(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrInvalidTimeZone) {
+		t.Fatalf("SignUp: %v, want account.ErrInvalidTimeZone", err)
+	}
+}
+
+// TestUpdateProfileChangesWhatIsGiven is UpdateProfile's scenario "changes what is given" (success).
+func TestUpdateProfileChangesWhatIsGiven(t *testing.T) {
+	uc, in, then := givenUpdateProfileChangesWhatIsGiven(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestUpdateProfileKeepsWhatIsNotGiven is UpdateProfile's scenario "keeps what is not given" (success).
+func TestUpdateProfileKeepsWhatIsNotGiven(t *testing.T) {
+	uc, in, then := givenUpdateProfileKeepsWhatIsNotGiven(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestUpdateProfileEmptiesTheTimeZoneToUtc is UpdateProfile's scenario "empties the time zone to utc" (success).
+func TestUpdateProfileEmptiesTheTimeZoneToUtc(t *testing.T) {
+	uc, in, then := givenUpdateProfileEmptiesTheTimeZoneToUtc(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestUpdateProfileRefusesAnEmptyName is UpdateProfile's scenario "refuses an empty name" (refusal).
+func TestUpdateProfileRefusesAnEmptyName(t *testing.T) {
+	uc, in := givenUpdateProfileRefusesAnEmptyName(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrNameRequired) {
+		t.Fatalf("UpdateProfile: %v, want account.ErrNameRequired", err)
+	}
+}
+
+// TestUpdateProfileRefusesAnUnknownLanguage is UpdateProfile's scenario "refuses an unknown language" (refusal).
+func TestUpdateProfileRefusesAnUnknownLanguage(t *testing.T) {
+	uc, in := givenUpdateProfileRefusesAnUnknownLanguage(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrInvalidLocale) {
+		t.Fatalf("UpdateProfile: %v, want account.ErrInvalidLocale", err)
+	}
+}
+
+// TestUpdateProfileRefusesAnUnknownTimeZone is UpdateProfile's scenario "refuses an unknown time zone" (refusal).
+func TestUpdateProfileRefusesAnUnknownTimeZone(t *testing.T) {
+	uc, in := givenUpdateProfileRefusesAnUnknownTimeZone(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, account.ErrInvalidTimeZone) {
+		t.Fatalf("UpdateProfile: %v, want account.ErrInvalidTimeZone", err)
 	}
 }
 

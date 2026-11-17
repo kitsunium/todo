@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,8 +21,13 @@ import (
 // signUp is POST /api/auth/signup's body; what it uses is in wired. Its
 // answer is the same whether the address had an account or not.
 func signUp(ctx context.Context, in SignUpRequest) (out SignedUp, err error) {
+	locale := in.Locale
+	if locale == "" {
+		locale = negotiate(in.AcceptLanguage)
+	}
 	res, err := wired.signUp.Execute(ctx, access.SignUpInput{
 		Email: in.Email, Name: in.Name, Password: in.Password, Trusted: !wired.verifyAddressesSetting.Get(),
+		Locale: locale, TimeZone: in.TimeZone,
 	})
 	if err != nil {
 		return SignedUp{}, refusal(err)
@@ -86,7 +92,7 @@ func changePassword(ctx context.Context, in ChangeRequest) (out NoInput, err err
 // client that keeps none.
 func signIn(ctx context.Context, in SignInRequest) (out SignedIn, err error) {
 	res, err := wired.signIn.Execute(ctx, access.SignInInput{
-		Email: in.Email, Password: in.Password, UserAgent: app.UserAgent(ctx), IP: app.ClientIP(ctx),
+		Email: in.Email, Password: in.Password, UserAgent: app.UserAgent(ctx), IP: app.ClientIP(ctx), TimeZone: in.TimeZone,
 	})
 	if err != nil {
 		return SignedIn{}, refusal(err)
@@ -152,7 +158,22 @@ func me(ctx context.Context, in NoInput) (out Profile, err error) {
 		return Profile{}, app.Unauthenticated("sign in first")
 	}
 	p, _ := app.AuthData[Principal](ctx)
-	return Profile{ID: string(uid), Email: p.Email, Name: p.Name}, nil
+	return Profile{ID: string(uid), Email: p.Email, Name: p.Name, Locale: p.Locale, TimeZone: p.TimeZone}, nil
+}
+
+// updateMe is PATCH /api/auth/me's body; what it uses is in wired. What the
+// member sent is changed, the rest stays; the answer is the member as they
+// are now.
+func updateMe(ctx context.Context, in ProfileRequest) (out Profile, err error) {
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return Profile{}, app.Unauthenticated("sign in first")
+	}
+	res, err := wired.updateProfile.Execute(ctx, access.UpdateProfileInput{UserID: string(uid), Name: in.Name, Locale: in.Locale, TimeZone: in.TimeZone})
+	if err != nil {
+		return Profile{}, refusal(err)
+	}
+	return profileOf(res.Account), nil
 }
 
 // authenticate is the session handler's body: it says who calls. The secret
@@ -181,7 +202,7 @@ func authenticate(ctx context.Context, in Credentials) (uid app.UID, data Princi
 	if fromCookie && res.Renewed {
 		setCookie(ctx, secret)
 	}
-	return app.UID(res.Account.ID), Principal{SessionID: res.Session.ID, Email: res.Account.Email, Name: res.Account.Name}, nil
+	return app.UID(res.Account.ID), Principal{SessionID: res.Session.ID, Email: res.Account.Email, Name: res.Account.Name, Locale: localeOf(res.Account), TimeZone: res.Account.TimeZone}, nil
 }
 
 // setCookie gives the browser the session's secret. The framework adds
@@ -196,7 +217,7 @@ func setCookie(ctx context.Context, secret string) {
 
 // profileOf is an account as the API answers it.
 func profileOf(a account.Account) Profile {
-	return Profile{ID: a.ID, Email: a.Email, Name: a.Name}
+	return Profile{ID: a.ID, Email: a.Email, Name: a.Name, Locale: localeOf(a), TimeZone: a.TimeZone}
 }
 
 // refusal is a use case's error as the API answers it, with the codes a
@@ -213,6 +234,10 @@ func refusal(err error) error {
 		return invalid("email", "email", err)
 	case errors.Is(err, account.ErrNameRequired):
 		return invalid("name", "required", err)
+	case errors.Is(err, account.ErrInvalidLocale):
+		return invalid("locale", "one_of", err)
+	case errors.Is(err, account.ErrInvalidTimeZone):
+		return invalid("timeZone", "time_zone", err)
 	case errors.Is(err, account.ErrWeakPassword):
 		return invalid("password", "length", err)
 	case errors.Is(err, account.ErrUnverified):
@@ -225,4 +250,38 @@ func refusal(err error) error {
 		return &app.Error{Status: http.StatusForbidden, Code: "account_locked", Message: "too many wrong passwords: the account is locked for 15 minutes"}
 	}
 	return err
+}
+
+// localeOf is the language an account reads, French when it chose none.
+func localeOf(a account.Account) string {
+	if a.Locale == "" {
+		return account.LocaleFR
+	}
+	return a.Locale
+}
+
+// negotiate is the language an Accept-Language header prefers among fr and
+// en: each tag with its weight (q, 1 by default), the highest weight first,
+// the header's order among equals, a language alone or with a region
+// ("fr-CA") counting for itself; fr when the header names neither, or none.
+// A malformed member of the header is skipped, never an error.
+func negotiate(header string) string {
+	best, bestQ := account.LocaleFR, 0.0
+	for _, item := range strings.Split(header, ",") {
+		tag, params, _ := strings.Cut(item, ";")
+		q := 1.0
+		if rest := strings.TrimSpace(params); rest != "" {
+			name, val, ok := strings.Cut(rest, "=")
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+			if !ok || !strings.EqualFold(strings.TrimSpace(name), "q") || err != nil || parsed < 0 || parsed > 1 {
+				continue
+			}
+			q = parsed
+		}
+		lang, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(tag)), "-")
+		if (lang == account.LocaleFR || lang == account.LocaleEN) && q > bestQ {
+			best, bestQ = lang, q
+		}
+	}
+	return best
 }

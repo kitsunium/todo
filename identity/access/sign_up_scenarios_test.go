@@ -5,6 +5,8 @@
 package access
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kitsunium/todo/identity/account"
@@ -96,4 +98,55 @@ func givenSignUpRefusesAnInvalidAddress(t *testing.T) (SignUp, SignUpInput) {
 func givenSignUpRefusesAShortPassword(t *testing.T) (SignUp, SignUpInput) {
 	t.Helper()
 	return newWorld().signUp(), SignUpInput{Email: "ada@example.com", Name: "Ada", Password: "too short"}
+}
+
+// givenSignUpKeepsTheLanguageAndTheTimeZone builds SignUp for "keeps the language and the time zone": the use case, its input, and
+// what its output must be.
+func givenSignUpKeepsTheLanguageAndTheTimeZone(t *testing.T) (SignUp, SignUpInput, func(*testing.T, SignUpOutput)) {
+	t.Helper()
+	w := newWorld()
+	in := SignUpInput{Email: "ada@example.com", Name: "Ada", Password: passphrase, Locale: "en", TimeZone: " Europe/Paris "}
+	return w.signUp(), in, func(t *testing.T, out SignUpOutput) {
+		t.Helper()
+		a := w.byEmail(t, "ada@example.com")
+		if a.Locale != account.LocaleEN || a.TimeZone != "Europe/Paris" {
+			t.Errorf("the account keeps %q and %q, want en and Europe/Paris", a.Locale, a.TimeZone)
+		}
+		// Nothing said is French and UTC.
+		w2 := newWorld()
+		if _, err := w2.signUp().Execute(t.Context(), SignUpInput{Email: "bob@example.com", Name: "Bob", Password: passphrase}); err != nil {
+			t.Fatal(err)
+		}
+		if b := w2.byEmail(t, "bob@example.com"); b.Locale != account.LocaleFR || b.TimeZone != "" {
+			t.Errorf("the account with nothing said: %q and %q, want fr and none", b.Locale, b.TimeZone)
+		}
+	}
+}
+
+// givenSignUpRefusesAnUnknownLanguage builds SignUp for "refuses an unknown language": the use case and the input it
+// refuses with account.ErrInvalidLocale.
+func givenSignUpRefusesAnUnknownLanguage(t *testing.T) (SignUp, SignUpInput) {
+	t.Helper()
+	return newWorld().signUp(), SignUpInput{Email: "ada@example.com", Name: "Ada", Password: passphrase, Locale: "de"}
+}
+
+// givenSignUpRefusesAnUnknownTimeZone builds SignUp for "refuses an unknown time zone": the use case and the input it
+// refuses with account.ErrInvalidTimeZone.
+func givenSignUpRefusesAnUnknownTimeZone(t *testing.T) (SignUp, SignUpInput) {
+	t.Helper()
+	return newWorld().signUp(), SignUpInput{Email: "ada@example.com", Name: "Ada", Password: passphrase, TimeZone: "Mars/Olympus"}
+}
+
+// Zones are spelled as the database spells them, and nothing else is one.
+func TestCheckZone(t *testing.T) {
+	for _, ok := range []string{"", "UTC", "Europe/Paris", "America/Argentina/Buenos_Aires", "  Asia/Tokyo "} {
+		if _, err := checkZone(ok); err != nil {
+			t.Errorf("checkZone(%q): %v, want it taken", ok, err)
+		}
+	}
+	for _, bad := range []string{"Local", "europe/paris", "Europe//Paris", "Europe/Nowhere", "/etc/passwd", "../Europe/Paris", strings.Repeat("A", 65)} {
+		if _, err := checkZone(bad); !errors.Is(err, account.ErrInvalidTimeZone) {
+			t.Errorf("checkZone(%q): %v, want ErrInvalidTimeZone", bad, err)
+		}
+	}
 }

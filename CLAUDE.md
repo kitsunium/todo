@@ -18,10 +18,10 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | Path | Component (role) | Holds |
 |---|---|---|
 | `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
-| `identity/account` | account (domain) | `Account` and its lock, `Session`, `NormalizeEmail`, the errors |
-| `identity/access` | access (application) | the use cases `SignUp` `VerifyEmail` `ResendVerification` `SignIn` `Authenticate` `SignOut` `ListSessions` `RevokeSession` `ForgotPassword` `ResetPassword` `ChangePassword`, the ports `Accounts` `Sessions` `Links` `Courier` `Announcements` `Passwords` `Secrets` `Clock`; `links.go` is what the one-time links share |
-| `identity/vault` | vault (adapter) | the stores `accounts`, `sessions` and `links` with their indexes, `Postman` (the mails of an account, sent through `post`), the setting `base-url`, the topic `accounts` (an address proven) and its publisher `Herald`, the queries `member` and `member-by-email` (the directory), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
-| `identity/authapi` | authapi (presentation) | the routes of `/api/auth`, the session handler `Authenticate`, the cookie `todo_session`, the setting `verify-addresses` |
+| `identity/account` | account (domain) | `Account` (with its `Locale` and `TimeZone`) and its lock, `Session`, `NormalizeEmail`, the errors |
+| `identity/access` | access (application) | the use cases `SignUp` `VerifyEmail` `ResendVerification` `SignIn` `Authenticate` `SignOut` `ListSessions` `RevokeSession` `ForgotPassword` `ResetPassword` `ChangePassword` `UpdateProfile`, the ports `Accounts` `Sessions` `Links` `Courier` `Announcements` `Passwords` `Secrets` `Clock`; `links.go` is what the one-time links share |
+| `identity/vault` | vault (adapter) | the stores `accounts`, `sessions` and `links` with their indexes, `Postman` (the mails of an account, sent through `post`), the topic `accounts` (an address proven) and its publisher `Herald`, the queries `member` and `member-by-email` (the directory, with each member's language and time zone), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
+| `identity/authapi` | authapi (presentation) | the routes of `/api/auth` (`PATCH /api/auth/me` changes the name, the language and the time zone; the sign-up negotiates the language from `Accept-Language`), the session handler `Authenticate`, the cookie `todo_session`, the setting `verify-addresses` |
 | `contacts/link` | link (domain) | `Link`, `Invite` (an invitation to an address with no account), `PairOf`, the `Requests` workflow, the errors |
 | `contacts/circle` | circle (application) | the use cases `RequestContact` (a request, or an invitation to an address nobody has) `AnswerRequest` `CancelInvite` `ClaimInvites` `RemoveContact` `ListContacts` `AreContacts`, the ports `Links` `Invites` `Inviter` `People` `Notices` `Clock` |
 | `contacts/linkstore` | linkstore (adapter) | the stores `links` and `invites` (deleted after ninety days), its workflow `Waiting` (a request expires after fourteen days), the topic `events`, `Links`, `Invitations`, `Courier` (mails an invitation through `post`), `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
@@ -35,8 +35,8 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `tasks/taskstore` | taskstore (adapter) | the store `tasks`, its workflow `Shelf` (a done task is archived after `archive-after`), the topic `events`, `Tasks`, `Announcer` (the use cases' `Journal`, which publishes, to everyone who sees the task), `Friends` (their `Circle`, which asks the contacts' query), `Groups` (their `Groups`, which asks the groups' queries `role` and `memberships`), `AppClock`, and the subscription `groups`, by which the tasks follow a group deleted or a member who left it |
 | `tasks/api` | api (presentation) | the routes of `/api/tasks` (views and `counts` included), the query `census` |
 | `activity/feed` | feed (adapter) | the store `entries`, the subscriptions `tasks`, `contacts` and `groups` to their events, `GET /api/activity` |
-| `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer` and `ReminderLog` |
-| `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through, `Carrier` (the reminders' `Mailer`, its SMTP connection declared in the design) |
+| `notify/reminders` | reminders (application) | `RemindDue`, the ports `Mailer`, `Directory` (who a member is written to: address, name, language, time zone) and `ReminderLog` |
+| `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through (a letter: recipient, kind, parameters, action path), the words (`locales/fr.json`, `locales/en.json`) and the design (`templates/`, HTML and text) of every mail, the setting `base-url`, `Carrier` (the reminders' `Mailer`, its SMTP connection declared in the design) |
 | `notify/outbox` | outbox (adapter) | the store `reminded`, `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
 | `stats/census` | census (presentation) | the store `snapshots`, the job `sample`, `GET /api/stats` |
@@ -120,10 +120,15 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 - **Ask "is there one?" with `Filter`, not `Get`**: a missing key is a
   failed read (`Ledger.Seen`). `Tasks.Get` reads the key because a task
   that does not exist is the caller's error, answered 404.
-- **Every mail goes through `post`**, in French, as plain text, its
+- **Every mail goes through `post`**, in the reader's language (French or
+  English, French by default), as HTML with a plain text alternative, its
   subject one line: a component that writes to a member dispatches
-  `post.SendCommand` or goes through `Carrier`, never a transport of its
-  own. A test reads what was sent with `post.MailMailer.Captured()`.
+  `post.SendCommand` with a kind, its parameters and the member's `Locale` and
+  `TimeZone`, or goes through `Carrier`, never a transport of its own. The
+  words are in `notify/post/locales`, one catalogue per language with the same
+  keys (a test holds it), and the layout in `notify/post/templates`; a link is
+  `base-url` and a path. A test reads what was sent with
+  `post.MailMailer.Captured()`.
 - **Logs name a task by its id**, never an assignee: `AssigneeID`, a mail's
   `To` are tagged `app:"personal"`, and `app:"personal,subject"` in the
   entity a store keeps. A store that keeps personal data says for how long

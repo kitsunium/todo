@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package circle — Asking a member to be a contact, answering, and listing
 // one's contacts.
@@ -47,6 +47,9 @@ type Person struct {
 	ID    string `json:"id" app:"public"`
 	Email string `json:"email" app:"personal"`
 	Name  string `json:"name" app:"personal"`
+	// Locale is the language the member reads, fr or en: it is never answered, it
+	// decides the language of a mail written for them.
+	Locale string `json:"-" app:"public"`
 }
 
 // ClockV1 tells the time.

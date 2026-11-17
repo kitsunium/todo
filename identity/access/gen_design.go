@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package access — Signing up, signing in and out, and naming the member a
 // session belongs to.
@@ -347,6 +347,7 @@ type SignInInput struct {
 	Password  string
 	UserAgent string
 	IP        string
+	TimeZone  string
 }
 
 // SignInOutput is SignIn's output.
@@ -420,6 +421,8 @@ type SignUpInput struct {
 	Name     string
 	Password string
 	Trusted  bool
+	Locale   string
+	TimeZone string
 }
 
 // SignUpOutput is SignUp's output.
@@ -450,6 +453,43 @@ func (h *SignUpHandler) Execute(ctx context.Context, in SignUpInput) (SignUpOutp
 }
 
 var _ SignUp = (*SignUpHandler)(nil)
+
+// UpdateProfile changes the name, the language and the time zone of a member,
+// each only when it is given.
+type UpdateProfile interface {
+	Execute(ctx context.Context, in UpdateProfileInput) (UpdateProfileOutput, error)
+}
+
+// UpdateProfileInput is UpdateProfile's input: a field added breaks no caller.
+type UpdateProfileInput struct {
+	UserID   string
+	Name     *string
+	Locale   *string
+	TimeZone *string
+}
+
+// UpdateProfileOutput is UpdateProfile's output.
+type UpdateProfileOutput struct {
+	Account account.Account
+}
+
+// UpdateProfileHandler runs UpdateProfile: its body is the hand-written execute.
+type UpdateProfileHandler struct {
+	clock    ClockV1
+	accounts AccountsV1
+}
+
+// NewUpdateProfile builds UpdateProfile on what it calls.
+func NewUpdateProfile(clock ClockV1, accounts AccountsV1) *UpdateProfileHandler {
+	return &UpdateProfileHandler{clock: clock, accounts: accounts}
+}
+
+// Execute runs UpdateProfile.
+func (h *UpdateProfileHandler) Execute(ctx context.Context, in UpdateProfileInput) (UpdateProfileOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ UpdateProfile = (*UpdateProfileHandler)(nil)
 
 // VerifyEmail proves an account's address with the secret of the link it was
 // mailed, and signs its member in, since the link was in their inbox.

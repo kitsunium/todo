@@ -88,3 +88,35 @@ func givenSignInRefusesAnUnverifiedAccount(t *testing.T) (SignIn, SignInInput) {
 	w.accounts[a.ID] = a
 	return w.signIn(), SignInInput{Email: a.Email, Password: passphrase}
 }
+
+// givenSignInFollowsTheTimeZoneOfTheBrowser builds SignIn for "follows the time zone of the browser": the use case, its input, and
+// what its output must be.
+func givenSignInFollowsTheTimeZoneOfTheBrowser(t *testing.T) (SignIn, SignInInput, func(*testing.T, SignInOutput)) {
+	t.Helper()
+	w := newWorld()
+	a := w.member("ada@example.com")
+	a.TimeZone = "Europe/Paris"
+	w.accounts[a.ID] = a
+	return w.signIn(), SignInInput{Email: a.Email, Password: passphrase, TimeZone: "America/New_York"}, func(t *testing.T, out SignInOutput) {
+		t.Helper()
+		if out.Account.TimeZone != "America/New_York" || w.accounts[a.ID].TimeZone != "America/New_York" {
+			t.Errorf("the zone: answered %q, kept %q, want the browser's", out.Account.TimeZone, w.accounts[a.ID].TimeZone)
+		}
+		// Sending none leaves the zone as it is.
+		if _, err := w.signIn().Execute(t.Context(), SignInInput{Email: a.Email, Password: passphrase}); err != nil {
+			t.Fatal(err)
+		}
+		if w.accounts[a.ID].TimeZone != "America/New_York" {
+			t.Errorf("a sign-in with no zone changed it to %q", w.accounts[a.ID].TimeZone)
+		}
+	}
+}
+
+// givenSignInRefusesAnUnknownTimeZone builds SignIn for "refuses an unknown time zone": the use case and the input it
+// refuses with account.ErrInvalidTimeZone.
+func givenSignInRefusesAnUnknownTimeZone(t *testing.T) (SignIn, SignInInput) {
+	t.Helper()
+	w := newWorld()
+	a := w.member("ada@example.com")
+	return w.signIn(), SignInInput{Email: a.Email, Password: passphrase, TimeZone: "Local"}
+}

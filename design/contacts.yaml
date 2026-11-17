@@ -74,6 +74,7 @@ domains:
               - {name: ID, type: string, tag: 'json:"id" app:"public"'}
               - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
               - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"-" app:"public"', description: "Locale is the language the member reads, fr or en: it is never answered, it decides the language of a mail written for them."}
           - name: Invitation
             description: An invitation a member sent, as they read it.
             fields:

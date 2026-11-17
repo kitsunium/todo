@@ -11,25 +11,32 @@ domains:
         description: Who is reminded of what, and what that needs.
         evidence: [legacy-product]
         values:
-          - name: Mail
-            description: A mail, as plain text.
+          - name: Recipient
+            description: Who a reminder is written to, and how they read it.
             fields:
-              - {name: To, type: string, tag: 'json:"to" app:"personal"'}
-              - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
-              - {name: Body, type: string, tag: 'json:"body" app:"personal"'}
+              - {name: Address, type: string, tag: 'json:"address" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"', description: "Locale is fr or en; empty reads French."}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"', description: "TimeZone is the IANA zone the due date is written in; empty reads UTC."}
+          - name: Mail
+            description: A reminder to write, a task due soon, for the mailer to say in the recipient's language.
+            fields:
+              - {name: To, type: Recipient, tag: 'json:"to"'}
+              - {name: Title, type: string, tag: 'json:"title" app:"personal"'}
+              - {name: Due, type: time.Time, tag: 'json:"due" app:"public"'}
         ports:
           - name: Mailer
             direction: out
             version: 1
-            description: MailerV1 sends a mail.
+            description: MailerV1 sends a reminder.
             methods:
               - {name: Send, params: [{name: m, type: Mail}]}
           - name: Directory
             direction: out
             version: 1
-            description: DirectoryV1 gives the address a member is written to.
+            description: DirectoryV1 gives who a member is written to, and how they read.
             methods:
-              - {name: Address, params: [{name: userID, type: string}], results: [{type: string}, {type: bool}]}
+              - {name: Recipient, params: [{name: userID, type: string}], results: [{type: Recipient}, {type: bool}]}
           - name: ReminderLog
             direction: out
             version: 1
@@ -44,7 +51,7 @@ domains:
               - {name: Within, type: time.Duration}
             output:
               - {name: Sent, type: int}
-            calls: [tasks/usecase/DueSoon, notify/port/ReminderLog@v1.Seen, notify/port/Directory@v1.Address, notify/port/Mailer@v1.Send, notify/port/ReminderLog@v1.Mark]
+            calls: [tasks/usecase/DueSoon, notify/port/ReminderLog@v1.Seen, notify/port/Directory@v1.Recipient, notify/port/Mailer@v1.Send, notify/port/ReminderLog@v1.Mark]
             scenarios:
               - {name: mails each task due soon once, kind: success}
               - {name: skips a task whose owner is gone, kind: success}
@@ -52,21 +59,32 @@ domains:
           functions:
             - name: reminder
               description: "reminder is the mail a task due soon is reminded of with."
-              params: [{name: t, type: "task.Task"}, {name: to, type: "string"}]
+              params: [{name: t, type: "task.Task"}, {name: to, type: "Recipient"}]
               results: [{type: "Mail"}]
       - name: post
         role: adapter
         code: 64.3.4
         uses: [reminders]
         description: The product's mailer, its durable outbox and its transport, and the command every component that writes to a member sends through.
+        constants:
+          - {name: KindVerify, type: string, value: '"verify"', description: "KindVerify is the mail whose link proves an address: its path carries the link's secret."}
+          - {name: KindReset, type: string, value: '"reset"', description: "KindReset is the mail whose link chooses a new password: its path carries the link's secret."}
+          - {name: KindExists, type: string, value: '"exists"', description: "KindExists is the mail that tells an address it already has an account."}
+          - {name: KindInvite, type: string, value: '"invite"', description: "KindInvite is the mail that invites an address nobody has; its params are actor, the inviter's name."}
+          - {name: KindDueSoon, type: string, value: '"due-soon"', description: "KindDueSoon is the reminder of a task due soon; its params are title and due, the due date in RFC 3339."}
+        settings:
+          - {name: base-url, type: string, default: "http://localhost:4000", description: "Where members reach the product: every link of a mail is this address and a path."}
         values:
           - name: Letter
-            description: A mail to one member, as plain text.
+            description: A mail to one member, as a kind and its parameters; the mailer writes it in the member's language, as HTML and as plain text.
             fields:
               - {name: To, type: string, tag: 'json:"to" app:"personal"'}
               - {name: Name, type: string, tag: 'json:"name" app:"personal"', description: "Name is the recipient's, beside the address; it may be empty."}
-              - {name: Subject, type: string, tag: 'json:"subject" app:"public"'}
-              - {name: Body, type: string, tag: 'json:"body" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"', description: "Locale is the recipient's language, fr or en; anything else reads French."}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"', description: "TimeZone is the IANA zone the recipient's dates are written in; empty or unknown reads UTC."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is which mail it is, one of the Kind constants."}
+              - {name: Params, type: "map[string]string", tag: 'json:"params,omitempty" app:"personal"', description: "Params are the values the kind's words and card are made of."}
+              - {name: Path, type: string, tag: 'json:"path,omitempty" app:"secret"', description: "Path is the action's path in the web app, with its query when it carries a secret; the link is base-url and this path. Empty for no action."}
           - name: Posted
             description: A mail the outbox took.
             fields:
@@ -84,9 +102,71 @@ domains:
         internals:
           functions:
             - name: post
-              description: "post puts a letter in the mailer's outbox, which delivers it, tries again when the relay refuses it, and only captures it when the deployment names no relay."
+              description: "post writes a letter in the recipient's language and puts it in the mailer's outbox, which delivers it, tries again when the relay refuses it, and only captures it when the deployment names no relay."
               params: [{name: ctx, type: "context.Context"}, {name: l, type: "Letter"}]
               results: [{type: "Posted"}, {type: "error"}]
+            - name: write
+              description: "write is a letter as the message it says and its two renderings, the links built on base."
+              params: [{name: l, type: "Letter"}, {name: base, type: "string"}]
+              results: [{name: m, type: "message"}, {name: html, type: "string"}, {name: text, type: "string"}, {name: err, type: "error"}]
+            - name: line
+              description: "line is a text on one line: its runs of white space, line breaks included, are one space."
+              params: [{name: s, type: "string"}]
+              results: [{type: "string"}]
+            - name: clip
+              description: "clip is s cut to n characters, with an ellipsis when it was longer."
+              params: [{name: s, type: "string"}, {name: n, type: "int"}]
+              results: [{type: "string"}]
+            - name: render
+              description: "render pours a message into the HTML layout and the text layout."
+              params: [{name: m, type: "message"}, {name: w, type: "*words"}, {name: home, type: "string"}]
+              results: [{name: html, type: "string"}, {name: text, type: "string"}, {name: err, type: "error"}]
+            - name: link
+              description: "link is the address of a page of the web app: the base address and the path, which starts with a slash and names no other host."
+              params: [{name: base, type: "string"}, {name: path, type: "string"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: wrap
+              description: "wrap folds a paragraph at textWidth columns, between words."
+              params: [{name: s, type: "string"}]
+              results: [{type: "string"}]
+            - name: breakable
+              description: "breakable reports whether a line may break at r: at a space, but not at a no-break space."
+              params: [{name: r, type: "rune"}]
+              results: [{type: "bool"}]
+            - name: rule
+              description: "rule underlines a headline in the plain text part."
+              params: [{name: s, type: "string"}]
+              results: [{type: "string"}]
+            - name: loadCatalogues
+              description: "loadCatalogues reads the catalogue of each language from dir: exactly one file per language, every one with the keys of the first."
+              params: [{name: fsys, type: "fs.FS"}, {name: dir, type: "string"}]
+              results: [{type: "map[string]catalogue"}, {type: "error"}]
+            - name: keysOnlyIn
+              description: "keysOnlyIn are the keys of a that b lacks, in order."
+              params: [{name: a, type: "catalogue"}, {name: b, type: "catalogue"}]
+              results: [{type: "[]string"}]
+            - name: wordsIn
+              description: "wordsIn starts writing a mail in locale, French when it is none the product speaks, with its times in zone, UTC when it is empty or unknown."
+              params: [{name: locale, type: "string"}, {name: zone, type: "string"}]
+              results: [{type: "*words"}]
+          types:
+            - name: words
+              methods:
+                - name: say
+                  receiver: pointer
+                  description: "say is the message key with its {name} placeholders filled from the name, value pairs."
+                  params: [{name: key, type: "string"}, {name: pairs, type: "...string"}]
+                  results: [{type: "string"}]
+                - name: greeting
+                  receiver: pointer
+                  description: "greeting opens a mail with the recipient's name: \"Bonjour Ada,\", \"Hi Ada,\", or no name when there is none."
+                  params: [{name: name, type: "string"}]
+                  results: [{type: "string"}]
+                - name: date
+                  receiver: pointer
+                  description: "date writes a moment the way the language does, in the reader's zone: \"jeudi 24 septembre à 19:00 CEST\", \"Thursday, September 24 at 13:00 EDT\"."
+                  params: [{name: t, type: "time.Time"}]
+                  results: [{type: "string"}]
       - name: outbox
         role: adapter
         code: 64.3.2
@@ -107,6 +187,15 @@ domains:
           - name: Ledger
             description: Ledger is ReminderLog@v1 on the store "reminded".
             implements: [notify/port/ReminderLog@v1]
+        internals:
+          types:
+            - name: Members
+              methods:
+                - name: recipient
+                  receiver: pointer
+                  description: "recipient is Members.Recipient's body."
+                  params: [{name: ctx, type: "context.Context"}, {name: userID, type: "string"}]
+                  results: [{name: r0, type: "reminders.Recipient"}, {name: r1, type: "bool"}, {name: err, type: "error"}]
       - name: watch
         role: presentation
         code: 64.3.3
@@ -122,6 +211,6 @@ domains:
         start: notify/usecase/RemindDue
         steps:
           - call: notify/port/ReminderLog@v1.Seen
-          - call: notify/port/Directory@v1.Address
+          - call: notify/port/Directory@v1.Recipient
           - call: notify/port/Mailer@v1.Send
           - call: notify/port/ReminderLog@v1.Mark

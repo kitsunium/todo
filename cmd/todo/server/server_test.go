@@ -73,6 +73,7 @@ type member struct {
 	p     *product
 	token string
 	id    string
+	lang  string // the Accept-Language the member's browser sends, when it sends one
 }
 
 // stranger is a caller with no session.
@@ -146,6 +147,9 @@ func (m *member) retry(retries, status int, method, path string, in, out any) ht
 	}
 	if m.token != "" {
 		req.Header.Set("Authorization", "Bearer "+m.token)
+	}
+	if m.lang != "" {
+		req.Header.Set("Accept-Language", m.lang)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -317,7 +321,7 @@ func TestTheJobsRunOnTheClock(t *testing.T) {
 	p.settle("the reminder", 10*time.Second, func() bool { return len(reminders()) > 0 })
 	p.clk.Advance(5 * time.Minute) // more runs of the job: the task is reminded of once
 	time.Sleep(20 * time.Millisecond)
-	if got := reminders(); len(got) != 1 || got[0].Subject != "Bientôt à échéance : Ship the release" {
+	if got := reminders(); len(got) != 1 || got[0].Subject != "Bientôt à échéance\u00a0: Ship the release" {
 		t.Errorf("the reminders: %+v, want the one", got)
 	}
 
@@ -1381,8 +1385,8 @@ func TestAStrangerIsInvitedAndJoins(t *testing.T) {
 	p.settle("the invitation mailed", 50*time.Millisecond, func() bool {
 		return len(p.mails("zoe@example.com", "Créez votre compte avec cette adresse")) > 0
 	})
-	if mails := p.mails("zoe@example.com", "Créez votre compte avec cette adresse"); len(mails) != 1 || !strings.Contains(mails[0].Subject, "Ada") || strings.Contains(mails[0].Text, "http") {
-		t.Fatalf("the mails to Zoe: %+v, want one that names Ada and carries no link", mails)
+	if mails := p.mails("zoe@example.com", "Créez votre compte avec cette adresse"); len(mails) != 1 || !strings.Contains(mails[0].Subject, "Ada") || !strings.Contains(mails[0].Text, "http://localhost:4000/\n") || mails[0].HTML == "" {
+		t.Fatalf("the mails to Zoe: %+v, want one that names Ada, with a link to the web app's root and an HTML part", mails)
 	}
 
 	type listing struct {
@@ -1464,4 +1468,165 @@ func (m *member) firstInvite(t *testing.T) string {
 		t.Fatalf("invitations: %+v, want one", l.Invites)
 	}
 	return l.Invites[0].ID
+}
+
+// profile is a member as the API answers them.
+type profile struct {
+	ID, Email, Name, Locale, TimeZone string
+}
+
+// signUpIn signs a member up with what the form sends and the browser's
+// Accept-Language, proves the address with the link of the mail whose subject
+// holds subject, and returns the member signed in, that mail, and the profile
+// the link answered.
+func (p *product) signUpIn(accept string, form map[string]any, subject string) (*member, mailPair, profile) {
+	p.t.Helper()
+	m := p.stranger()
+	m.lang = accept
+	m.call(http.StatusOK, "POST", "/api/auth/signup", form, nil)
+	secret := p.link(form["email"].(string), subject)
+	var in struct {
+		Token string
+		User  profile
+	}
+	m.call(http.StatusOK, "POST", "/api/auth/verify", map[string]any{"token": secret}, &in)
+	m.token, m.id, m.lang = in.Token, in.User.ID, ""
+	mails := p.mails(form["email"].(string), subject)
+	return m, mailPair{mails[len(mails)-1]}, in.User
+}
+
+// mailPair is a mail, to read its two parts.
+type mailPair struct{ model.MailMessage }
+
+// page checks the mail is an HTML page in lang with a plain text twin that
+// holds none of the layout's tags (a person's own words are text, whatever they look like).
+func (m mailPair) page(t *testing.T, lang string) {
+	t.Helper()
+	if !strings.HasPrefix(m.HTML, "<!doctype html>") || !strings.Contains(m.HTML, `<html lang="`+lang+`">`) {
+		t.Errorf("%q: the HTML part is not a page in %s: %.100q", m.Subject, lang, m.HTML)
+	}
+	if m.Text == "" || regexp.MustCompile(`</?(html|head|body|table|tr|td|p|a|div|h1|style)[\s>/]`).MatchString(m.Text) {
+		t.Errorf("%q: the text part is empty or holds markup: %q", m.Subject, m.Text)
+	}
+}
+
+// A mail is written in the language of its reader, as HTML with a plain text
+// twin: the form's locale first, else the browser's Accept-Language, else
+// French; PATCH /api/auth/me changes it for the next mail; a language or a
+// time zone that does not exist is refused; a reminder writes its due date in
+// the owner's time zone; an invitation is in its inviter's language.
+func TestMailsFollowTheMembersLanguage(t *testing.T) {
+	p := start(t)
+	anon := p.stranger()
+
+	ada, verifyAda, me := p.signUpIn("fr-FR,fr;q=0.9", map[string]any{
+		"email": "ada@example.com", "name": "Ada Lovelace", "password": passphrase, "locale": "en", "timeZone": "America/New_York",
+	}, "Confirm your email address")
+	verifyAda.page(t, "en")
+	if me.Locale != "en" || me.TimeZone != "America/New_York" || !strings.Contains(verifyAda.Text, "Hi Ada Lovelace,") || !strings.Contains(verifyAda.Text, "http://localhost:4000/verify?token=") {
+		t.Errorf("the form's locale wins over the header: %+v, %q", me, verifyAda.Text)
+	}
+
+	bob, verifyBob, me := p.signUpIn("fr-FR,fr;q=0.9", map[string]any{"email": "bob@example.com", "name": "Bob", "password": passphrase}, "Confirmez votre adresse")
+	verifyBob.page(t, "fr")
+	if me.Locale != "fr" || me.TimeZone != "" || !strings.Contains(verifyBob.Text, "Bonjour Bob,") {
+		t.Errorf("the header's language: %+v, %q", me, verifyBob.Text)
+	}
+	_, verifyCy, me := p.signUpIn("de;q=0.9,en-US;q=0.8,fr;q=0.2", map[string]any{"email": "cy@example.com", "name": "Cy", "password": passphrase}, "Confirm your email address")
+	verifyCy.page(t, "en")
+	if me.Locale != "en" {
+		t.Errorf("the header's heaviest language: %+v", me)
+	}
+	dee, verifyDee, me := p.signUpIn("", map[string]any{"email": "dee@example.com", "name": "Dee", "password": passphrase}, "Confirmez votre adresse")
+	verifyDee.page(t, "fr")
+	if me.Locale != "fr" {
+		t.Errorf("no language said: %+v, want French", me)
+	}
+
+	// The account shows both.
+	var got profile
+	ada.call(http.StatusOK, "GET", "/api/auth/me", nil, &got)
+	if got.ID != ada.id || got.Locale != "en" || got.TimeZone != "America/New_York" {
+		t.Errorf("me: %+v", got)
+	}
+
+	// A language or a zone that does not exist is a 400, and so is a member
+	// the route does not declare.
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/signup", map[string]any{"email": "eve@example.com", "name": "Eve", "password": passphrase, "locale": "de"}, nil)
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/signup", map[string]any{"email": "eve@example.com", "name": "Eve", "password": passphrase, "locale": "FR"}, nil)
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/signup", map[string]any{"email": "eve@example.com", "name": "Eve", "password": passphrase, "timeZone": "Mars/Olympus"}, nil)
+	anon.call(http.StatusBadRequest, "POST", "/api/auth/login", map[string]any{"email": "ada@example.com", "password": passphrase, "timeZone": "Local"}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/auth/me", map[string]any{"locale": "de"}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/auth/me", map[string]any{"locale": ""}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/auth/me", map[string]any{"timeZone": "nowhere"}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/auth/me", map[string]any{"name": "   "}, nil)
+	ada.call(http.StatusBadRequest, "PATCH", "/api/auth/me", map[string]any{"password": "x"}, nil)
+	anon.call(http.StatusUnauthorized, "PATCH", "/api/auth/me", map[string]any{"locale": "en"}, nil)
+	ada.call(http.StatusOK, "GET", "/api/auth/me", nil, &got)
+	if got.Locale != "en" || got.TimeZone != "America/New_York" || got.Name != "Ada Lovelace" {
+		t.Errorf("the refusals changed the account: %+v", got)
+	}
+
+	// Bob switches to English: his next mail is.
+	var after profile
+	bob.call(http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"locale": "en", "name": " Bob   Martin "}, &after)
+	if after.Locale != "en" || after.Name != "Bob Martin" || after.TimeZone != "" {
+		t.Errorf("the profile after the change: %+v", after)
+	}
+	anon.call(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "bob@example.com"}, nil)
+	p.settle("the reset mail in English", 50*time.Millisecond, func() bool {
+		return len(p.mails("bob@example.com", "Reset your Todo password")) == 1
+	})
+	reset := mailPair{p.mails("bob@example.com", "Reset your Todo password")[0]}
+	reset.page(t, "en")
+	if !strings.Contains(reset.Text, "Hi Bob Martin,") || !strings.Contains(reset.Text, "http://localhost:4000/reset?token=") {
+		t.Errorf("the reset mail: %q", reset.Text)
+	}
+	// ... and back to French, with a zone the next sign-in keeps.
+	bob.call(http.StatusOK, "PATCH", "/api/auth/me", map[string]any{"locale": "fr", "timeZone": "Asia/Tokyo"}, nil)
+	anon.call(http.StatusOK, "POST", "/api/auth/password/forgot", map[string]any{"email": "bob@example.com"}, nil)
+	p.settle("the reset mail in French", 50*time.Millisecond, func() bool {
+		return len(p.mails("bob@example.com", "Choisissez un nouveau mot de passe")) == 1
+	})
+	mailPair{p.mails("bob@example.com", "Choisissez un nouveau mot de passe")[0]}.page(t, "fr")
+	anon.call(http.StatusOK, "POST", "/api/auth/login", map[string]any{"email": "bob@example.com", "password": passphrase, "timeZone": "Europe/Paris"}, nil)
+	bob.call(http.StatusOK, "GET", "/api/auth/me", nil, &got)
+	if got.TimeZone != "Europe/Paris" || got.Locale != "fr" {
+		t.Errorf("a sign-in from Paris: %+v, want the zone followed and the language kept", got)
+	}
+	// An address that has an account is told in that account's language.
+	anon.call(http.StatusOK, "POST", "/api/auth/signup", map[string]any{"email": "ada@example.com", "name": "Someone", "password": passphrase, "locale": "fr"}, nil)
+	p.settle("the mail that says so", 50*time.Millisecond, func() bool {
+		return len(p.mails("ada@example.com", "You already have a Todo account")) == 1
+	})
+	mailPair{p.mails("ada@example.com", "You already have a Todo account")[0]}.page(t, "en")
+
+	// An invitation is in the inviter's language: Ada's, English.
+	ada.call(http.StatusOK, "POST", "/api/contacts", map[string]any{"email": "zoe@example.com"}, nil)
+	p.settle("the invitation", 50*time.Millisecond, func() bool {
+		return len(p.mails("zoe@example.com", "Ada Lovelace invited you to Todo")) == 1
+	})
+	invite := mailPair{p.mails("zoe@example.com", "Ada Lovelace invited you to Todo")[0]}
+	invite.page(t, "en")
+	if !strings.Contains(invite.Text, "http://localhost:4000/\n") {
+		t.Errorf("the invitation carries no link to the web app: %q", invite.Text)
+	}
+
+	// A reminder writes its due date in the owner's zone: New York for Ada, UTC for Dee.
+	var task taskView
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Ship <b>the</b> release", "due": epoch.Add(6 * time.Hour)}, &task)
+	dee.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Rendre le dossier", "due": epoch.Add(7 * time.Hour)}, &task)
+	p.settle("the reminders", 10*time.Second, func() bool {
+		return len(p.mails("ada@example.com", "Due soon")) == 1 && len(p.mails("dee@example.com", "Bientôt à échéance")) == 1
+	})
+	french := mailPair{p.mails("dee@example.com", "Bientôt à échéance")[0]}
+	french.page(t, "fr")
+	if !strings.Contains(strings.Join(strings.Fields(french.Text), " "), "arrive à échéance le lundi 16 novembre à 16:00 UTC.") {
+		t.Errorf("the reminder to a member with no zone: %q", french.Text)
+	}
+	reminder := mailPair{p.mails("ada@example.com", "Due soon")[0]}
+	reminder.page(t, "en")
+	if reminder.Subject != "Due soon: Ship <b>the</b> release" || !strings.Contains(strings.Join(strings.Fields(reminder.Text), " "), "is due Monday, November 16 at 10:00 EST.") || strings.Contains(reminder.HTML, "<b>the</b>") {
+		t.Errorf("the reminder: %q, %q", reminder.Subject, reminder.Text)
+	}
 }

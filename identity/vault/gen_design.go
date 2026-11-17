@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package vault — The accounts, the sessions and the one-time links in the
 // framework's stores, the mails of an account, the directory the rest of the
@@ -34,6 +34,8 @@ type AccountRecord struct {
 	ID           string    `json:"id" app:"public"`
 	Email        string    `json:"email" app:"personal,subject"`
 	Name         string    `json:"name" app:"personal"`
+	Locale       string    `json:"locale" app:"public"`
+	TimeZone     string    `json:"timeZone" app:"personal"`
 	PasswordHash string    `json:"passwordHash" app:"secret"`
 	Verified     bool      `json:"verified" app:"public"`
 	FailedLogins int       `json:"failedLogins" app:"public"`
@@ -94,6 +96,10 @@ type Member struct {
 	ID    string `json:"id" app:"public"`
 	Email string `json:"email" app:"personal"`
 	Name  string `json:"name" app:"personal"`
+	// Locale is fr or en: the language a mail to them is written in.
+	Locale string `json:"locale" app:"public"`
+	// TimeZone is the IANA zone their mails write times in; empty reads UTC.
+	TimeZone string `json:"timeZone" app:"personal"`
 }
 
 // Accounts is Accounts@v1 on the store "accounts".
@@ -204,15 +210,15 @@ func (a *OneTimeLinks) Save(ctx context.Context, l account.Link) error {
 
 var _ access.LinksV1 = (*OneTimeLinks)(nil)
 
-// Postman is Courier@v1; it writes the mails of an account, in French, and
-// sends them through the product's mailer.
+// Postman is Courier@v1; it hands the mails of an account, in the member's
+// language, to the command send of post.
 type Postman struct {
 	postman // its own state, hand-written
 }
 
 // NewPostman builds Postman: its body is the hand-written newPostman.
-func NewPostman(baseUrlSetting *app.Setting[string]) *Postman {
-	return newPostman(baseUrlSetting)
+func NewPostman() *Postman {
+	return newPostman()
 }
 
 // AlreadyMember is identity/port/Courier@v1's.
@@ -315,10 +321,6 @@ var _ access.ClockV1 = (*WallClock)(nil)
 
 // Service is vault's framework service: what it declares, drawn and run.
 var Service = app.NewService("vault", "The accounts, the sessions and the one-time links in the framework's stores, the mails of an account, the directory the rest of the product asks, the passwords stretched, the secrets drawn.")
-
-// BaseUrlSetting — Where members reach the product, for the links of its
-// mails.
-var BaseUrlSetting = Service.Setting[string]("base-url", "http://localhost:4000")
 
 // AccountsStore — Every account, keyed by its id; one untouched for three
 // years is erased.

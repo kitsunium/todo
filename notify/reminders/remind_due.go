@@ -13,7 +13,8 @@ import (
 )
 
 // execute is RemindDue's body: the owner of each open task due within
-// Within is mailed about it once, at the address the directory gives. The mail leaves before the
+// Within is mailed about it once, at the address the directory gives, in the language
+// and the time zone it gives. The mail leaves before the
 // task is marked, so a mail that fails is tried again at the next run, and
 // one that left is never sent twice unless the mark itself fails.
 func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (RemindDueOutput, error) {
@@ -30,7 +31,7 @@ func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (Rem
 		if seen {
 			continue
 		}
-		to, found, err := h.directory.Address(ctx, t.OwnerID)
+		to, found, err := h.directory.Recipient(ctx, t.OwnerID)
 		if err != nil {
 			return out, err
 		}
@@ -48,13 +49,9 @@ func (h *RemindDueHandler) execute(ctx context.Context, in *RemindDueInput) (Rem
 	return out, nil
 }
 
-// reminder is the mail a task due soon is reminded of with. The title goes
-// into the subject as one line: a line break there would be a header.
-func reminder(t task.Task, to string) Mail {
-	title := strings.Join(strings.Fields(t.Title), " ")
-	return Mail{
-		To:      to,
-		Subject: "Bientôt à échéance : " + title,
-		Body:    "Bonjour,\n\nVotre tâche « " + title + " » arrive à échéance le " + t.Due.UTC().Format("02/01/2006 à 15:04") + " UTC.\n",
-	}
+// reminder is the mail a task due soon is reminded of with: the title as one
+// line, a line break there would be a header; the mailer writes it in the
+// recipient's language and the due date in their time zone.
+func reminder(t task.Task, to Recipient) Mail {
+	return Mail{To: to, Title: strings.Join(strings.Fields(t.Title), " "), Due: t.Due}
 }

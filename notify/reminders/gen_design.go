@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package reminders — Who is reminded of what, and what that needs.
 //
@@ -19,19 +19,30 @@ import (
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 3, 1, 255), "NOT_IMPLEMENTED", "not implemented yet", "reminders: a hand-written body is still a skeleton")
 
-// Mail — A mail, as plain text.
+// Mail — A reminder to write, a task due soon, for the mailer to say in the
+// recipient's language.
 type Mail struct {
-	To      string `json:"to" app:"personal"`
-	Subject string `json:"subject" app:"public"`
-	Body    string `json:"body" app:"personal"`
+	To    Recipient `json:"to"`
+	Title string    `json:"title" app:"personal"`
+	Due   time.Time `json:"due" app:"public"`
 }
 
-// DirectoryV1 gives the address a member is written to.
+// Recipient — Who a reminder is written to, and how they read it.
+type Recipient struct {
+	Address string `json:"address" app:"personal"`
+	Name    string `json:"name" app:"personal"`
+	// Locale is fr or en; empty reads French.
+	Locale string `json:"locale" app:"public"`
+	// TimeZone is the IANA zone the due date is written in; empty reads UTC.
+	TimeZone string `json:"timeZone" app:"personal"`
+}
+
+// DirectoryV1 gives who a member is written to, and how they read.
 type DirectoryV1 interface {
-	Address(ctx context.Context, userID string) (string, bool, error)
+	Recipient(ctx context.Context, userID string) (Recipient, bool, error)
 }
 
-// MailerV1 sends a mail.
+// MailerV1 sends a reminder.
 type MailerV1 interface {
 	Send(ctx context.Context, m Mail) error
 }

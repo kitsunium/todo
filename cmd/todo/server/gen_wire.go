@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -52,7 +52,7 @@ func Wire(ctx context.Context, build Build) {
 	wallClock := vault.NewWallClock()
 	oneTimeLinks := vault.NewOneTimeLinks()
 	drawer := vault.NewDrawer()
-	postman := vault.NewPostman(vault.BaseUrlSetting)
+	postman := vault.NewPostman()
 	herald := vault.NewHerald()
 	signUp := access.NewSignUp(accounts, stretcher, wallClock, oneTimeLinks, drawer, postman, herald)
 	sessions := vault.NewSessions()
@@ -65,6 +65,7 @@ func Wire(ctx context.Context, build Build) {
 	signOut := access.NewSignOut(sessions)
 	listSessions := access.NewListSessions(sessions, wallClock)
 	revokeSession := access.NewRevokeSession(sessions)
+	updateProfile := access.NewUpdateProfile(wallClock, accounts)
 	authenticate := access.NewAuthenticate(drawer, sessions, wallClock, accounts)
 	links := linkstore.NewLinks()
 	directory := linkstore.NewDirectory()
@@ -120,7 +121,7 @@ func Wire(ctx context.Context, build Build) {
 	carrier := post.NewCarrier()
 	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, carrier)
 	vault.Wire()
-	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, listSessions, revokeSession, authenticate)
+	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, listSessions, revokeSession, updateProfile, authenticate)
 	linkstore.Wire()
 	contactsapi.Wire(listContacts, requestContact, answerRequest, cancelInvite, removeContact, claimInvites, areContacts)
 	groupstore.Wire()

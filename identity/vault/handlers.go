@@ -18,7 +18,7 @@ func directory(ctx context.Context, in ByID) (out Member, err error) {
 	if err != nil || len(found) == 0 {
 		return Member{}, err
 	}
-	return Member{Found: true, ID: found[0].ID, Email: found[0].Email, Name: found[0].Name}, nil
+	return memberOf(found[0]), nil
 }
 
 // lookup is the query "member-by-email"'s body: whose account an address
@@ -33,5 +33,10 @@ func lookup(ctx context.Context, in ByEmail) (out Member, err error) {
 	if err != nil || len(found) == 0 {
 		return Member{}, err
 	}
-	return Member{Found: true, ID: found[0].ID, Email: found[0].Email, Name: found[0].Name}, nil
+	return memberOf(found[0]), nil
+}
+
+// memberOf is a record as the directory answers it.
+func memberOf(r AccountRecord) Member {
+	return Member{Found: true, ID: r.ID, Email: r.Email, Name: r.Name, Locale: r.Locale, TimeZone: r.TimeZone}
 }

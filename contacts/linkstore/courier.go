@@ -6,7 +6,6 @@ package linkstore
 
 import (
 	"context"
-	"strings"
 
 	"github.com/kitsunium/todo/contacts/circle"
 	"github.com/kitsunium/todo/notify/post"
@@ -21,18 +20,13 @@ func newCourier() *Courier {
 	return &Courier{courier{}}
 }
 
-// invite is Courier.Invite's body: the address nobody has is told, in
-// French and as plain text, who asks to be its contact and that an account
-// made with this address answers the request. The mail carries no link: the
-// address of the web app is the member's to know.
+// invite is Courier.Invite's body: the address nobody has is told who asks to
+// be its contact and that an account made with this address answers the
+// request, in the language of the member who asks, since the address has none.
+// The mail links to the web app's root, where the account is made.
 func (a *Courier) invite(ctx context.Context, to string, by circle.Person) (err error) {
-	who := strings.Join(strings.Fields(by.Name), " ")
-	if who == "" {
-		who = "Un membre"
-	}
-	body := "Bonjour,\n\n" + who + " souhaite vous compter parmi ses contacts sur la liste de tâches de l’équipe, mais cette adresse n’a pas encore de compte.\n\n" +
-		"Créez votre compte avec cette adresse pour répondre à sa demande.\n\n" +
-		"Si vous ne connaissez pas cette personne, ignorez ce message.\n"
-	_, err = post.SendCommand.Dispatch(ctx, post.Letter{To: to, Subject: who + " vous invite à créer un compte", Body: body})
+	_, err = post.SendCommand.Dispatch(ctx, post.Letter{
+		To: to, Locale: by.Locale, Kind: post.KindInvite, Path: "/", Params: map[string]string{"actor": by.Name},
+	})
 	return err
 }

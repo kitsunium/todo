@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:d9e6eb32619ad64ff259ee580b4b28ea598fe9a15bc77181628dbbd887d57f92
+// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
 
 // Package outbox — The log of the reminders, and the directory they ask.
 //
@@ -58,9 +58,9 @@ func NewMembers() *Members {
 	return newMembers()
 }
 
-// Address is notify/port/Directory@v1's.
-func (a *Members) Address(ctx context.Context, userID string) (string, bool, error) {
-	return a.address(ctx, userID)
+// Recipient is notify/port/Directory@v1's.
+func (a *Members) Recipient(ctx context.Context, userID string) (reminders.Recipient, bool, error) {
+	return a.recipient(ctx, userID)
 }
 
 var _ reminders.DirectoryV1 = (*Members)(nil)
