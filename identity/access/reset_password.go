@@ -34,9 +34,14 @@ func (h *ResetPasswordHandler) execute(ctx context.Context, in *ResetPasswordInp
 	if err != nil {
 		return ResetPasswordOutput{}, err
 	}
-	proven := !a.Verified // the link proves an address that was not
-	a.PasswordHash, a.Verified, a.FailedLogins, a.LockedUntil, a.UpdatedAt = hash, true, 0, time.Time{}, now
-	if err := h.accounts.Save(ctx, a); err != nil {
+	// Written to the account as it is at that instant: what another request
+	// changed meanwhile stays.
+	proven := false
+	if a, err = h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+		proven = !a.Verified // the link proves an address that was not
+		a.PasswordHash, a.Verified, a.FailedLogins, a.LockedUntil, a.UpdatedAt = hash, true, 0, time.Time{}, now
+		return nil
+	}); err != nil {
 		return ResetPasswordOutput{}, err
 	}
 	if proven {

@@ -89,8 +89,15 @@ func (self *Invitations) of(ctx context.Context, user string) (r0 []link.Invite,
 }
 
 // save is Invitations.Save's body: the invitation replaces what its id held.
+// The store keeps one waiting invitation by member and address: a second,
+// kept at the same instant by another request, is ErrInvited.
 func (self *Invitations) save(ctx context.Context, i link.Invite) (err error) {
-	return InvitesStore.Put(ctx, inviteRecordOf(i))
+	err = InvitesStore.Put(ctx, inviteRecordOf(i))
+	var refused *app.Error
+	if errors.As(err, &refused) && refused.Code == app.WireConflict {
+		return link.ErrInvited
+	}
+	return err
 }
 
 // invitesOf is the invitations some records keep.
@@ -107,7 +114,13 @@ func inviteOf(r InviteRecord) link.Invite {
 	return link.Invite{ID: r.ID, InviterID: r.InviterID, Email: r.Email, Status: r.Status, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
-// inviteRecordOf is an invitation as the store keeps it.
+// inviteRecordOf is an invitation as the store keeps it. While it waits it
+// holds the slot of its inviter and its address, which the store's unique
+// index gives to one invitation alone; once joined it frees it for another.
 func inviteRecordOf(i link.Invite) InviteRecord {
-	return InviteRecord{ID: i.ID, InviterID: i.InviterID, Email: i.Email, Status: i.Status, CreatedAt: i.CreatedAt, UpdatedAt: i.UpdatedAt}
+	slot := i.ID
+	if i.Status == link.InvitePending {
+		slot = i.InviterID + "|" + i.Email
+	}
+	return InviteRecord{ID: i.ID, InviterID: i.InviterID, Email: i.Email, Status: i.Status, Slot: slot, CreatedAt: i.CreatedAt, UpdatedAt: i.UpdatedAt}
 }

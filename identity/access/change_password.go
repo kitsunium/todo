@@ -39,8 +39,17 @@ func (h *ChangePasswordHandler) execute(ctx context.Context, in *ChangePasswordI
 	if err != nil {
 		return ChangePasswordOutput{}, err
 	}
-	a.PasswordHash, a.UpdatedAt = hash, now
-	if err := h.accounts.Save(ctx, a); err != nil {
+	// Written to the account as it is at that instant: what another request
+	// changed meanwhile stays, and a password that changed meanwhile is no
+	// longer the one that was proven.
+	proven := a.PasswordHash
+	if _, err := h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+		if a.PasswordHash != proven {
+			return account.ErrInvalidCredentials
+		}
+		a.PasswordHash, a.UpdatedAt = hash, now
+		return nil
+	}); err != nil {
 		return ChangePasswordOutput{}, err
 	}
 	return ChangePasswordOutput{}, h.sessions.DeleteOf(ctx, a.ID, in.SessionID)

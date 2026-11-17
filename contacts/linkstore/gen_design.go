@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:fff3fa1ce1d5d0ffb043be2f4bd6a1b7fa06f149490a7503c5b7744197cb6684
+// design:digest sha256:c271ffbb7f79392b92d047af5a7ca10e928937bb8069c729a3e1af2db051e98e
 
 // Package linkstore — The links and the invitations in the framework's
 // stores, their events on a topic, the directory asked of the identity, and
@@ -25,10 +25,13 @@ var errNotImplemented = errs.New(errs.Pack(64, 8, 3, 255), "NOT_IMPLEMENTED", "n
 
 // InviteRecord — An invitation as the store keeps it, field for field.
 type InviteRecord struct {
-	ID        string    `json:"id" app:"public"`
-	InviterID string    `json:"inviterId" app:"public"`
-	Email     string    `json:"email" app:"personal,subject"`
-	Status    string    `json:"status" app:"public"`
+	ID        string `json:"id" app:"public"`
+	InviterID string `json:"inviterId" app:"public"`
+	Email     string `json:"email" app:"personal,subject"`
+	Status    string `json:"status" app:"public"`
+	// Slot is the place a waiting invitation holds, its inviter and its address,
+	// which no other invitation may hold; one that joined holds its own id.
+	Slot      string    `json:"slot" app:"personal"`
 	CreatedAt time.Time `json:"createdAt" app:"public"`
 	UpdatedAt time.Time `json:"updatedAt" app:"public"`
 }
@@ -78,7 +81,8 @@ func (a *Announcer) Tell(ctx context.Context, kind string, l link.Link, actor ci
 var _ circle.NoticesV1 = (*Announcer)(nil)
 
 // Courier is Inviter@v1; it writes to an address nobody has the invitation to
-// sign up, in French, and sends it through the product's mailer.
+// sign up, in the language of the member who asks, through the product's
+// mailer.
 type Courier struct {
 	courier // its own state, hand-written
 }
@@ -269,6 +273,7 @@ var LinksStore = Service.Store("links", func(e Record) string { return e.ID },
 var InvitesStore = Service.Store("invites", func(e InviteRecord) string { return e.ID },
 	app.DeleteAfter[InviteRecord](time.Duration(7776000000000000) /* 2160h */, func(e InviteRecord) (time.Time, bool) { return e.CreatedAt, !e.CreatedAt.IsZero() }),
 	app.Index[InviteRecord]("by-email", func(e InviteRecord) []string { return []string{e.Email} }),
+	app.Unique[InviteRecord]("by-slot", func(e InviteRecord) string { return e.Slot }),
 )
 
 // EventsTopic — What happened to the links: a request received, a request

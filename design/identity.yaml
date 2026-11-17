@@ -184,7 +184,7 @@ domains:
               - {name: SessionSecret, type: string}
               - {name: Session, type: account.Session}
             errors: [account.ErrBadLink]
-            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save, identity/port/Announcements@v1.Verified]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Change, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save, identity/port/Announcements@v1.Verified]
             scenarios:
               - {name: verifies the account of a link, kind: success}
               - {name: refuses an expired link, kind: refusal, error: account.ErrBadLink}
@@ -211,7 +211,7 @@ domains:
               - {name: Secret, type: string}
               - {name: Password, type: string}
             errors: [account.ErrBadLink, account.ErrWeakPassword]
-            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Hash, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Sessions@v1.DeleteOf, identity/port/Announcements@v1.Verified]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Hash, identity/port/Accounts@v1.Change, identity/port/Links@v1.DeleteOf, identity/port/Sessions@v1.DeleteOf, identity/port/Announcements@v1.Verified]
             scenarios:
               - {name: chooses a new password, kind: success}
               - {name: refuses a link used once, kind: refusal, error: account.ErrBadLink}
@@ -225,7 +225,7 @@ domains:
               - {name: Current, type: string}
               - {name: Password, type: string}
             errors: [account.ErrInvalidCredentials, account.ErrWeakPassword]
-            calls: [identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Verify, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Save, identity/port/Sessions@v1.DeleteOf]
+            calls: [identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Verify, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Change, identity/port/Sessions@v1.DeleteOf]
             scenarios:
               - {name: replaces the password, kind: success}
               - {name: refuses a wrong current password, kind: refusal, error: account.ErrInvalidCredentials}

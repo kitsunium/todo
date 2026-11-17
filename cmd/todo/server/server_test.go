@@ -1352,6 +1352,51 @@ func TestSignUpsAtTheSameInstantMakeOneAccount(t *testing.T) {
 	})
 }
 
+// A member who invites one address twice at the same instant keeps one
+// invitation, and the address is not invited twice by them.
+func TestInvitationsAtTheSameInstantMakeOne(t *testing.T) {
+	p := start(t)
+	ada := p.signUp("Ada", "ada@example.com")
+	invite := func() int { return ada.status("POST", "/api/contacts", map[string]any{"email": "zoe@example.com"}) }
+	codes := together(invite, invite, invite)
+	slices.Sort(codes)
+	if !slices.Equal(codes, []int{http.StatusOK, http.StatusConflict, http.StatusConflict}) {
+		t.Errorf("three invitations at once: %v, want one 200 and two 409", codes)
+	}
+	var mine struct{ Invites []invitation }
+	ada.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
+	if len(mine.Invites) != 1 {
+		t.Errorf("Ada has %d invitation(s) to one address, want one", len(mine.Invites))
+	}
+}
+
+// A member who changes their name while their password is being changed
+// keeps both: the password is written to the account as it is at that
+// instant, not to the copy read before the new one was stretched.
+func TestAProfileChangeDuringAPasswordChangeStays(t *testing.T) {
+	p := start(t)
+	ada := p.signUp("Ada", "ada@example.com")
+	const renewed = "a brand new passphrase"
+	codes := together(
+		func() int {
+			return ada.status("POST", "/api/auth/password", map[string]any{"current": passphrase, "password": renewed})
+		},
+		func() int {
+			time.Sleep(20 * time.Millisecond) // lands while the new password is stretched
+			return ada.status("PATCH", "/api/auth/me", map[string]any{"name": "Ada King", "locale": "en"})
+		},
+	)
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK {
+		t.Fatalf("a password change and a profile change at once: %v, want two 200", codes)
+	}
+	var me profile
+	ada.call(http.StatusOK, "GET", "/api/auth/me", nil, &me)
+	if me.Name != "Ada King" || me.Locale != "en" {
+		t.Errorf("the profile after both: %+v, want the new name and language", me)
+	}
+	p.stranger().call(http.StatusOK, "POST", "/api/auth/login", map[string]any{"email": "ada@example.com", "password": renewed}, nil)
+}
+
 // invitation is what a route that invites answers, and what a listing keeps.
 type invitation struct {
 	ID, Email, CreatedAt string

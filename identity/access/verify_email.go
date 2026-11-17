@@ -25,8 +25,12 @@ func (h *VerifyEmailHandler) execute(ctx context.Context, in *VerifyEmailInput) 
 	if !found {
 		return VerifyEmailOutput{}, account.ErrBadLink
 	}
-	a.Verified, a.UpdatedAt = true, now
-	if err := h.accounts.Save(ctx, a); err != nil {
+	// Written to the account as it is at that instant: what another request
+	// changed meanwhile stays.
+	if a, err = h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+		a.Verified, a.UpdatedAt = true, now
+		return nil
+	}); err != nil {
 		return VerifyEmailOutput{}, err
 	}
 	// Told before the link is spent: a failure leaves the link to try again.
