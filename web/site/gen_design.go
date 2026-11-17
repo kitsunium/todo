@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c271ffbb7f79392b92d047af5a7ca10e928937bb8069c729a3e1af2db051e98e
+// design:digest sha256:6a4c0cc7ef82f45cbf05f7471fb6e2644c468fdaa00e78e6aa4e3dd63779cfee
 
 // Package site — The web app, a few static files that talk to the HTTP API
 // with the session cookie.
@@ -22,15 +22,15 @@ var errNotImplemented = errs.New(errs.Pack(64, 7, 1, 255), "NOT_IMPLEMENTED", "n
 // Service is site's framework service: what it declares, drawn and run.
 var Service = app.NewService("site", "The web app, a few static files that talk to the HTTP API with the session cookie.")
 
-// appFiles are the files of the frontend "app", embedded from dist: the directory
+// appFiles are the files of the frontend "app", embedded from page: the directory
 // is hand-written, or a build's output.
 //
-//go:embed dist
+//go:embed page
 var appFiles embed.FS
 
 // AppFrontend — The web app: one page, its style and its script, written by
 // hand, with no build step.
-var AppFrontend = Service.Static("app", "/", appFiles, app.Root("dist"))
+var AppFrontend = Service.Static("app", "/", appFiles, app.Root("page"))
 
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).

@@ -10,4 +10,4 @@ domains:
         description: The web app, a few static files that talk to the HTTP API with the session cookie.
         evidence: [legacy-product]
         statics:
-          - {name: app, prefix: /, dir: dist, description: "The web app: one page, its style and its script, written by hand, with no build step."}
+          - {name: app, prefix: /, dir: page, description: "The web app: one page, its style and its script, written by hand, with no build step."}

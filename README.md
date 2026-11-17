@@ -147,7 +147,7 @@ from.
 
 ## The web app
 
-`web/site/dist` holds three files written by hand — `index.html`, `app.css`,
+`web/site/page` holds three files written by hand — `index.html`, `app.css`,
 `app.js` — with no build step and no dependency; the binary embeds them. The
 page talks to the API above with the session cookie. The server answers the
 page for any path that names no file, and its content policy allows scripts
