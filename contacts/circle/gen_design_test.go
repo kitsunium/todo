@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:6a4c0cc7ef82f45cbf05f7471fb6e2644c468fdaa00e78e6aa4e3dd63779cfee
+// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
 
 package circle
 
@@ -131,6 +131,16 @@ func TestClaimInvitesClaimsTwiceAsOnce(t *testing.T) {
 // TestClaimInvitesIgnoresAnAddressNobodyInvited is ClaimInvites's scenario "ignores an address nobody invited" (success).
 func TestClaimInvitesIgnoresAnAddressNobodyInvited(t *testing.T) {
 	uc, in, then := givenClaimInvitesIgnoresAnAddressNobodyInvited(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ClaimInvites: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestClaimInvitesIgnoresAMemberTheDirectoryDoesNotKnow is ClaimInvites's scenario "ignores a member the directory does not know" (success).
+func TestClaimInvitesIgnoresAMemberTheDirectoryDoesNotKnow(t *testing.T) {
+	uc, in, then := givenClaimInvitesIgnoresAMemberTheDirectoryDoesNotKnow(t)
 	out, err := uc.Execute(t.Context(), in)
 	if err != nil {
 		t.Fatalf("ClaimInvites: %v, want a success", err)

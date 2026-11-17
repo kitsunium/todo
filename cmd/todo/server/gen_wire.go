@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:6a4c0cc7ef82f45cbf05f7471fb6e2644c468fdaa00e78e6aa4e3dd63779cfee
+// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -78,7 +78,7 @@ func Wire(ctx context.Context, build Build) {
 	answerRequest := circle.NewAnswerRequest(linkstoreWallClock, links, directory, announcer)
 	cancelInvite := circle.NewCancelInvite(invitations)
 	removeContact := circle.NewRemoveContact(links)
-	claimInvites := circle.NewClaimInvites(invitations, links, linkstoreWallClock, directory, announcer)
+	claimInvites := circle.NewClaimInvites(directory, invitations, links, linkstoreWallClock, announcer)
 	areContacts := circle.NewAreContacts(links)
 	groups := groupstore.NewGroups()
 	groupstoreDirectory := groupstore.NewDirectory()

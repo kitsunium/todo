@@ -12,14 +12,20 @@ import (
 	"github.com/kitsunium/todo/contacts/link"
 )
 
-// execute is ClaimInvites's body: each invitation waiting for the address
+// execute is ClaimInvites's body: the member's address is read from the
+// directory, as the announcement carries the id only; a member the directory
+// does not know has nothing to claim. Each invitation waiting for the address
 // becomes a request from its inviter to the member, told in the member's
 // feed as any request is, then is marked joined. A pair already linked is
 // left alone, and so is an inviter who is the member. The request is made
 // before the mark, and an invitation already joined is skipped: a message
 // delivered twice changes nothing the second time.
 func (h *ClaimInvitesHandler) execute(ctx context.Context, in *ClaimInvitesInput) (ClaimInvitesOutput, error) {
-	waiting, err := h.invites.ByEmail(ctx, in.Email)
+	member, known, err := h.people.ByID(ctx, in.UserID)
+	if err != nil || !known {
+		return ClaimInvitesOutput{}, err
+	}
+	waiting, err := h.invites.ByEmail(ctx, member.Email)
 	if err != nil {
 		return ClaimInvitesOutput{}, err
 	}

@@ -22,9 +22,10 @@ func newHerald() *Herald {
 }
 
 // verified is Herald.Verified's body: the account's address, proven, is
-// published on the topic "accounts", under a message id of its own.
+// published on the topic "accounts", under a message id of its own, told by
+// the member's id and never by the address.
 func (a *Herald) verified(ctx context.Context, acc account.Account) (err error) {
 	return AccountsTopic.Publish(ctx, Announcement{
-		ID: app.NewID("account"), Kind: KindVerified, UserID: acc.ID, Email: acc.Email, At: app.Now(ctx).UTC().Truncate(time.Millisecond),
+		ID: app.NewID("account"), Kind: KindVerified, UserID: acc.ID, At: app.Now(ctx).UTC().Truncate(time.Millisecond),
 	})
 }

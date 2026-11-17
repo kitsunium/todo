@@ -192,5 +192,5 @@ func (w *world) request() RequestContact {
 }
 func (w *world) answer() AnswerRequest { return NewAnswerRequest(w, w, w, w) }
 func (w *world) claim() ClaimInvites {
-	return NewClaimInvites(w.invitations(), w, w, w, w)
+	return NewClaimInvites(w, w.invitations(), w, w, w)
 }

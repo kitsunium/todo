@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:6a4c0cc7ef82f45cbf05f7471fb6e2644c468fdaa00e78e6aa4e3dd63779cfee
+// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
 
 // Package circle — Asking a member to be a contact, answering, and listing
 // one's contacts.
@@ -220,7 +220,6 @@ type ClaimInvites interface {
 // ClaimInvitesInput is ClaimInvites's input: a field added breaks no caller.
 type ClaimInvitesInput struct {
 	UserID string
-	Email  string
 }
 
 // ClaimInvitesOutput is ClaimInvites's output.
@@ -229,16 +228,16 @@ type ClaimInvitesOutput struct {
 
 // ClaimInvitesHandler runs ClaimInvites: its body is the hand-written execute.
 type ClaimInvitesHandler struct {
+	people  PeopleV1
 	invites InvitesV1
 	links   LinksV1
 	clock   ClockV1
-	people  PeopleV1
 	notices NoticesV1
 }
 
 // NewClaimInvites builds ClaimInvites on what it calls.
-func NewClaimInvites(invites InvitesV1, links LinksV1, clock ClockV1, people PeopleV1, notices NoticesV1) *ClaimInvitesHandler {
-	return &ClaimInvitesHandler{invites: invites, links: links, clock: clock, people: people, notices: notices}
+func NewClaimInvites(people PeopleV1, invites InvitesV1, links LinksV1, clock ClockV1, notices NoticesV1) *ClaimInvitesHandler {
+	return &ClaimInvitesHandler{people: people, invites: invites, links: links, clock: clock, notices: notices}
 }
 
 // Execute runs ClaimInvites.

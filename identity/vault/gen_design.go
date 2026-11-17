@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:6a4c0cc7ef82f45cbf05f7471fb6e2644c468fdaa00e78e6aa4e3dd63779cfee
+// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
 
 // Package vault — The accounts, the sessions and the one-time links in the
 // framework's stores, the mails of an account, the directory the rest of the
@@ -75,7 +75,6 @@ type Announcement struct {
 	// Kind is verified: the address of the account is proven.
 	Kind   string    `json:"kind" app:"public"`
 	UserID string    `json:"userId" app:"public"`
-	Email  string    `json:"email" app:"personal"`
 	At     time.Time `json:"at" app:"public"`
 }
 
@@ -361,8 +360,8 @@ func Lookup(ctx context.Context, in ByEmail) (Member, error) {
 	return lookup(ctx, in)
 }
 
-// AccountsTopic — What happened to the accounts: an address proven,
-// delivered at least once.
+// AccountsTopic — What happened to the accounts: an address proven, told by
+// the id of its member and never by the address, delivered at least once.
 var AccountsTopic = Service.Topic[Announcement]("accounts")
 
 // wired is what the handlers' twins reach, set by the role that mounts

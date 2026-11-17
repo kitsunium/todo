@@ -12,14 +12,21 @@ import (
 	"github.com/kitsunium/todo/contacts/link"
 )
 
-// zoe is the member whose address was just proven.
-var zoe = ClaimInvitesInput{UserID: "user_zoe", Email: "zoe@example.com"}
+// zoe is the member whose address was just proven: the input carries the id,
+// the directory holds the address.
+var zoe = ClaimInvitesInput{UserID: "user_zoe"}
+
+// withZoe adds the member to the directory of a world.
+func withZoe(w *world) *world {
+	w.people["user_zoe"] = Person{ID: "user_zoe", Email: "zoe@example.com", Name: "Zoe"}
+	return w
+}
 
 // givenClaimInvitesTurnsInvitationsIntoRequests builds ClaimInvites for "turns invitations into requests": the use case, its input, and
 // what its output must be.
 func givenClaimInvitesTurnsInvitationsIntoRequests(t *testing.T) (ClaimInvites, ClaimInvitesInput, func(*testing.T, ClaimInvitesOutput)) {
 	t.Helper()
-	w := newWorld()
+	w := withZoe(newWorld())
 	ada, bob := w.invited("user_ada", "zoe@example.com"), w.invited("user_bob", "zoe@example.com")
 	other := w.invited("user_cy", "kim@example.com") // for another address
 	return w.claim(), zoe, func(t *testing.T, _ ClaimInvitesOutput) {
@@ -46,8 +53,7 @@ func givenClaimInvitesTurnsInvitationsIntoRequests(t *testing.T) (ClaimInvites, 
 // what its output must be.
 func givenClaimInvitesLeavesAPairAlreadyLinkedAlone(t *testing.T) (ClaimInvites, ClaimInvitesInput, func(*testing.T, ClaimInvitesOutput)) {
 	t.Helper()
-	w := newWorld()
-	w.people["user_zoe"] = Person{ID: "user_zoe", Email: "zoe@example.com", Name: "Zoe"}
+	w := withZoe(newWorld())
 	linked := w.linked("user_ada", "user_zoe", link.RequestsAccepted)
 	inv := w.invited("user_ada", "zoe@example.com")
 	return w.claim(), zoe, func(t *testing.T, _ ClaimInvitesOutput) {
@@ -65,7 +71,7 @@ func givenClaimInvitesLeavesAPairAlreadyLinkedAlone(t *testing.T) (ClaimInvites,
 // what its output must be.
 func givenClaimInvitesSkipsAnInviterWhoIsTheMember(t *testing.T) (ClaimInvites, ClaimInvitesInput, func(*testing.T, ClaimInvitesOutput)) {
 	t.Helper()
-	w := newWorld()
+	w := withZoe(newWorld())
 	inv := w.invited("user_zoe", "zoe@example.com")
 	return w.claim(), zoe, func(t *testing.T, _ ClaimInvitesOutput) {
 		t.Helper()
@@ -79,7 +85,7 @@ func givenClaimInvitesSkipsAnInviterWhoIsTheMember(t *testing.T) (ClaimInvites, 
 // what its output must be.
 func givenClaimInvitesClaimsTwiceAsOnce(t *testing.T) (ClaimInvites, ClaimInvitesInput, func(*testing.T, ClaimInvitesOutput)) {
 	t.Helper()
-	w := newWorld()
+	w := withZoe(newWorld())
 	w.invited("user_ada", "zoe@example.com")
 	uc := w.claim()
 	return uc, zoe, func(t *testing.T, _ ClaimInvitesOutput) {
@@ -107,12 +113,26 @@ func givenClaimInvitesClaimsTwiceAsOnce(t *testing.T) (ClaimInvites, ClaimInvite
 // what its output must be.
 func givenClaimInvitesIgnoresAnAddressNobodyInvited(t *testing.T) (ClaimInvites, ClaimInvitesInput, func(*testing.T, ClaimInvitesOutput)) {
 	t.Helper()
-	w := newWorld()
+	w := withZoe(newWorld())
 	w.invited("user_ada", "kim@example.com")
 	return w.claim(), zoe, func(t *testing.T, _ ClaimInvitesOutput) {
 		t.Helper()
 		if len(w.links) != 0 || len(w.notices) != 0 {
 			t.Errorf("links %+v, notices %q, want nothing", w.links, w.notices)
+		}
+	}
+}
+
+// givenClaimInvitesIgnoresAMemberTheDirectoryDoesNotKnow builds ClaimInvites for "ignores a member the directory does not know": the use case, its input, and
+// what its output must be.
+func givenClaimInvitesIgnoresAMemberTheDirectoryDoesNotKnow(t *testing.T) (ClaimInvites, ClaimInvitesInput, func(*testing.T, ClaimInvitesOutput)) {
+	t.Helper()
+	w := newWorld() // the directory has no user_zoe
+	inv := w.invited("user_ada", "zoe@example.com")
+	return w.claim(), zoe, func(t *testing.T, _ ClaimInvitesOutput) {
+		t.Helper()
+		if len(w.links) != 0 || len(w.notices) != 0 || w.invites[inv.ID].Status != link.InvitePending {
+			t.Errorf("links %+v, notices %q, invitation %+v, want nothing done", w.links, w.notices, w.invites[inv.ID])
 		}
 	}
 }

@@ -395,7 +395,6 @@ domains:
               - {name: ID, type: string, tag: 'json:"id" app:"public"', description: "ID is the message's own: a listener that is delivered it twice keys what it writes by it."}
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is verified: the address of the account is proven."}
               - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
-              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
         queries:
           - {name: member, input: ByID, output: Member, handler: Directory, description: "The directory: a member's address and name by their id, for the components that write to them."}
@@ -403,7 +402,7 @@ domains:
         constants:
           - {name: KindVerified, type: string, value: '"verified"', description: "KindVerified is the kind of the message that says the address of an account is proven."}
         topics:
-          - {name: accounts, message: Announcement, description: "What happened to the accounts: an address proven, delivered at least once."}
+          - {name: accounts, message: Announcement, description: "What happened to the accounts: an address proven, told by the id of its member and never by the address, delivered at least once."}
         stores:
           - name: accounts
             entity: AccountRecord

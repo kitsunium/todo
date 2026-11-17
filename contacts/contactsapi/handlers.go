@@ -91,7 +91,7 @@ func claim(ctx context.Context, msg vault.Announcement) error {
 	if msg.Kind != vault.KindVerified {
 		return nil
 	}
-	_, err := wired.claimInvites.Execute(ctx, circle.ClaimInvitesInput{UserID: msg.UserID, Email: msg.Email})
+	_, err := wired.claimInvites.Execute(ctx, circle.ClaimInvitesInput{UserID: msg.UserID})
 	return err
 }
 

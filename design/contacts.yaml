@@ -193,14 +193,14 @@ domains:
             description: ClaimInvites turns every invitation waiting for an address that was just proven into a request from its inviter to the new member, and marks it joined; a pair already linked and an inviter who is the member are left alone, and claiming twice changes nothing.
             input:
               - {name: UserID, type: string}
-              - {name: Email, type: string}
-            calls: [contacts/port/Invites@v1.ByEmail, contacts/port/Links@v1.ByPair, contacts/port/Links@v1.Delete, contacts/port/Clock@v1.Now, contacts/port/Links@v1.NewID, contacts/port/Links@v1.Save, contacts/port/People@v1.ByID, contacts/port/Notices@v1.Tell, contacts/port/Invites@v1.Change]
+            calls: [contacts/port/People@v1.ByID, contacts/port/Invites@v1.ByEmail, contacts/port/Links@v1.ByPair, contacts/port/Links@v1.Delete, contacts/port/Clock@v1.Now, contacts/port/Links@v1.NewID, contacts/port/Links@v1.Save, contacts/port/Notices@v1.Tell, contacts/port/Invites@v1.Change]
             scenarios:
               - {name: turns invitations into requests, kind: success}
               - {name: leaves a pair already linked alone, kind: success}
               - {name: skips an inviter who is the member, kind: success}
               - {name: claims twice as once, kind: success}
               - {name: ignores an address nobody invited, kind: success}
+              - {name: ignores a member the directory does not know, kind: success}
           - name: RemoveContact
             description: RemoveContact ends a contact, for either of its two members.
             input:
