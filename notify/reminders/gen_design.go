@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package reminders — Who is reminded of what, and what that needs.
 //
@@ -19,12 +19,46 @@ import (
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 3, 1, 255), "NOT_IMPLEMENTED", "not implemented yet", "reminders: a hand-written body is still a skeleton")
 
+const (
+	// OnAssigned is the kind of the event of a task assigned to a member by
+	// another: the assignee is written to.
+	OnAssigned string = "assigned"
+	// OnContactAccepted is the kind of the event of a contact request accepted:
+	// the requester is written to.
+	OnContactAccepted string = "contact-accepted"
+	// OnContactRequested is the kind of the event of a contact request received:
+	// the addressee is written to.
+	OnContactRequested string = "contact-requested"
+	// OnGroupInvited is the kind of the event of a group invitation received: the
+	// invitee is written to.
+	OnGroupInvited string = "group-invited"
+	// OnShared is the kind of the event of a task shared with a member: that
+	// member is written to.
+	OnShared string = "shared"
+)
+
 // Mail — A reminder to write, a task due soon, for the mailer to say in the
 // recipient's language.
 type Mail struct {
 	To    Recipient `json:"to"`
 	Title string    `json:"title" app:"personal"`
 	Due   time.Time `json:"due" app:"public"`
+}
+
+// Notice — What a member did that another is written to about, for the
+// mailer to say in the recipient's language: one of the On kinds, the actor's
+// name, the task or the group.
+type Notice struct {
+	To Recipient `json:"to"`
+	// Kind is one of the On constants.
+	Kind string `json:"kind" app:"public"`
+	// Actor is the name of the member who did it.
+	Actor string `json:"actor" app:"personal"`
+	// Subject is the title of the task or the name of the group; empty for a
+	// contact.
+	Subject string `json:"subject" app:"personal"`
+	// SubjectID is the id of the task, which the action leads to; empty otherwise.
+	SubjectID string `json:"subjectId" app:"public"`
 }
 
 // Recipient — Who a reminder is written to, and how they read it.
@@ -37,6 +71,13 @@ type Recipient struct {
 	TimeZone string `json:"timeZone" app:"personal"`
 }
 
+// ActionLogV1 remembers which events were mailed to which member, so each is
+// once.
+type ActionLogV1 interface {
+	Mark(ctx context.Context, key string) error
+	Seen(ctx context.Context, key string) (bool, error)
+}
+
 // DirectoryV1 gives who a member is written to, and how they read.
 type DirectoryV1 interface {
 	Recipient(ctx context.Context, userID string) (Recipient, bool, error)
@@ -47,11 +88,58 @@ type MailerV1 interface {
 	Send(ctx context.Context, m Mail) error
 }
 
+// NotifierV1 sends a member what another did.
+type NotifierV1 interface {
+	Notify(ctx context.Context, n Notice) error
+}
+
 // ReminderLogV1 remembers which tasks were reminded of, so each is once.
 type ReminderLogV1 interface {
 	Mark(ctx context.Context, taskID string) error
 	Seen(ctx context.Context, taskID string) (bool, error)
 }
+
+// MailAction mails a member what another did to them or with them: a contact
+// request received or accepted, a group invitation, a task shared or assigned;
+// once for each event and member, and never about what a member did to
+// themselves.
+type MailAction interface {
+	Execute(ctx context.Context, in MailActionInput) (MailActionOutput, error)
+}
+
+// MailActionInput is MailAction's input: a field added breaks no caller.
+type MailActionInput struct {
+	EventID   string
+	Kind      string
+	ActorID   string
+	UserID    string
+	Subject   string
+	SubjectID string
+}
+
+// MailActionOutput is MailAction's output.
+type MailActionOutput struct {
+	Sent int
+}
+
+// MailActionHandler runs MailAction: its body is the hand-written execute.
+type MailActionHandler struct {
+	actionLog ActionLogV1
+	directory DirectoryV1
+	notifier  NotifierV1
+}
+
+// NewMailAction builds MailAction on what it calls.
+func NewMailAction(actionLog ActionLogV1, directory DirectoryV1, notifier NotifierV1) *MailActionHandler {
+	return &MailActionHandler{actionLog: actionLog, directory: directory, notifier: notifier}
+}
+
+// Execute runs MailAction.
+func (h *MailActionHandler) Execute(ctx context.Context, in MailActionInput) (MailActionOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ MailAction = (*MailActionHandler)(nil)
 
 // RemindDue mails the owner of each open task due within a delay, once per
 // task.

@@ -11,7 +11,14 @@ A member signs up with an address and a password, proves the address by
 the link they are mailed, signs in, and has a task
 list of their own. Every mail the product sends is written in the language of
 the member who reads it, French or English, as HTML with a plain text
-alternative, and a due date in it is written in that member's time zone. They add tasks with a priority, an assignee and a due date, to their own list or to a group's, and move
+alternative, and a due date in it is written in that member's time zone. Ten kinds of mail go out: the five the
+account and the reminders need (the link that proves an address, the one that chooses a new
+password, an address that already has an account, an invitation to sign up, a
+reminder of a task due soon) and the five that tell a member what another did,
+a contact request received or accepted, a group invitation, a task shared with
+them or assigned to them, each in the language and the time zone of the member
+it is written to and naming who did it; a task a member assigns to themselves
+is mailed to nobody, and an event delivered twice is mailed once. One limit is known and kept: a mail leaves before its event is marked as mailed, so a process that dies between the two sends that mail a second time when the event is delivered again, as it does for a reminder; the other order would lose a mail instead. They add tasks with a priority, an assignee and a due date, to their own list or to a group's, and move
 them through their lifecycle: open, done, archived. Every move is published on a topic, and lands in their activity feed a
 moment later. A task done for a day is archived on its own, the owner of a task
 due within a day gets one reminder by mail, and the task list
@@ -44,8 +51,8 @@ app no longer does anything this one does not.
 | `design/contacts.yaml` | contacts | the link between two members and its request, seven use cases and their six ports, the stores (links and invitations) and the topic behind them, the subscription to the accounts' announcements, the HTTP API, the sequence `request-contact` |
 | `design/groups.yaml` | groups | the group, its roles and its invitations, the use cases and their ports (the invitations a group waits on are listed and withdrawn by its owner and admins), the stores and the topic behind them, the HTTP API, the queries the rest of the product asks |
 | `design/tasks.yaml` | tasks | the task and its lifecycle, its use cases and their ports (the directory among them, asked for a name alone), the store behind them, the HTTP API, the sequence `complete-task` |
-| `design/activity.yaml` | activity | the feed, written from what the use cases record |
-| `design/notify.yaml` | notify | the reminders, the mailer with its outbox and its SMTP connection, the command every mail goes through, the sequence `remind-due` |
+| `design/activity.yaml` | activity | the feed, written from what the use cases record, what was read of it, and the query that counts what was not |
+| `design/notify.yaml` | notify | the reminders and the mails about what others did (two use cases, their ports and the log that keeps each event mailed once), the mailer with its outbox and its SMTP connection, the command every mail goes through, the subscriptions to the tasks', contacts' and groups' topics, the sequence `remind-due` |
 | `design/stats.yaml` | stats | the vital signs, sampled by a job |
 | `design/web.yaml` | web | the web app's static files |
 | `design/load.yaml` | load | a load driven against a running server over its HTTP API |
@@ -84,14 +91,15 @@ Each component of the design is a Go package, `<domain>/<component>`, whose
 | `PATCH` `DELETE /api/groups/{id}/members/{userId}` | sets a member's role (owner), removes a member or leaves the group |
 | `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `groupId` (a group the caller is in), `assigneeId` (its owner, or a member of the group for a group's task), `due` (RFC 3339) |
 | `GET /api/tasks` | lists the tasks the caller sees, theirs, shared with them, assigned to them and on their groups' lists, not archived, the most urgent first, and answers `{"tasks":[…],"people":[{"id","name"}]}`, the `people` being every owner, assignee and member a task is shared with, each once, by name and never by address (a member the directory does not know is left out); `?state=open\|done\|archived` lists one state; `?view=inbox\|today\|upcoming\|shared\|assigned\|completed\|group` lists a view (a view ignores `state`), `?group=<id>` narrows to a group (the `group` view needs it, a group the caller is not in is a 404), `?tz=<IANA zone>` says when the day ends (UTC by default) |
-| `GET /api/tasks/counts` | what the sidebar counts for the caller: `inbox`, `today`, `upcoming`, `shared`, `assigned`, `overdue`, `completedThisWeek` and the open tasks of each of their `groups`; `?tz=<IANA zone>` |
+| `GET /api/tasks/counts` | what the sidebar counts for the caller: `inbox`, `today`, `upcoming`, `shared`, `assigned`, `unread` (the entries of their feed not read yet), `overdue`, `completedThisWeek` and the open tasks of each of their `groups`; `?tz=<IANA zone>` |
 | `GET /api/tasks/{id}` | one task the caller sees, with `people`: `[{"id","name"}]`, its owner, assignee and the members it is shared with, each once (every route that answers one task, adding, editing, sharing, moving, answers it the same) |
 | `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assigneeId` (its owner, a member it is shared with or a member of its group; empty clears it), `groupId` (its owner moves it to another of their groups, or to none), `due`, each only when sent |
 | `DELETE /api/tasks/{id}` | deletes a task, for its owner, or for an owner or an admin of its group |
 | `POST /api/tasks/{id}/share` | shares a task with a contact: `userId`, for its owner |
 | `DELETE /api/tasks/{id}/share/{userId}` | ends the sharing with a member, for the owner or that member |
 | `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |
-| `GET /api/activity` | the caller's feed, newest first; `?limit=N` |
+| `GET /api/activity` | the caller's feed, newest first; `?limit=N`; every entry says whether it was `read` |
+| `POST /api/activity/read` | marks every entry of the caller's feed read (no body) and answers `{"unread":0}`; what is recorded after is unread |
 | `GET /api/stats` | the latest sample of the task list and the recent history |
 
 Every route but those a stranger needs — signing up, the links, signing

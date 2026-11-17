@@ -385,7 +385,7 @@ async function activityPage() {
     const what = hasWord(key)
       ? t(key, { title: e.title })
       : e.title + " — " + e.kind;
-    const line = el("span", "grow");
+    const line = el("span", e.read ? "grow" : "grow unread");
     if (e.taskId && e.kind !== "deleted" && hasWord(key)) {
       const [before, after] = what.split(e.title);
       line.append(
@@ -396,11 +396,22 @@ async function activityPage() {
     } else {
       line.textContent = what;
     }
-    return [el("span", "meta", when(e.at)), line];
+    const state = e.read ? [] : [el("span", "sr-only", t("activity.unread"))];
+    return [...state, el("span", "meta", when(e.at)), line];
   });
+  const markAll = feed.entries.some((e) => !e.read)
+    ? actions(
+        button(t("activity.markRead"), async () => {
+          const res = await call("POST", "/api/activity/read");
+          unread = res.unread || 0;
+          await render();
+        }),
+      )
+    : null;
   return [
     section(
       t("activity.title"),
+      ...(markAll ? [markAll] : []),
       items.length ? rows(items) : empty(t("activity.empty")),
     ),
     section(t("stats.title"), statsView(stats)),

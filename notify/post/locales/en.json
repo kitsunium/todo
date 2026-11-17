@@ -67,5 +67,42 @@
   "due_soon.headline": "Due soon",
   "due_soon.body": "Your task “{title}” is due {date}.",
   "due_soon.action": "Open Todo",
-  "due_soon.reason": "You received this email because this task is yours. You get one reminder per due date."
+  "due_soon.reason": "You received this email because this task is yours. You get one reminder per due date.",
+
+  "contact_request.subject": "{actor} wants to add you as a contact",
+  "contact_request.preheader": "Contacts share tasks and invite each other to groups.",
+  "contact_request.headline": "{actor} wants to add you as a contact",
+  "contact_request.body": "Contacts can share tasks with each other and invite each other to their groups. Accept the request to start working together.",
+  "contact_request.action": "Review the request",
+  "contact_request.reason": "You received this email because {actor} sent you a contact request on Todo.",
+
+  "contact_accepted.subject": "{actor} accepted your contact request",
+  "contact_accepted.preheader": "You can now share tasks with {actor}.",
+  "contact_accepted.headline": "You and {actor} are now contacts",
+  "contact_accepted.body": "You can now share tasks with {actor} and invite them to your groups.",
+  "contact_accepted.action": "Open your contacts",
+  "contact_accepted.reason": "You received this email because {actor} accepted your contact request on Todo.",
+
+  "group_invitation.subject": "{actor} invited you to join {group}",
+  "group_invitation.preheader": "Members of a group share one task list.",
+  "group_invitation.headline": "Join {group} on Todo",
+  "group_invitation.body": "{actor} invited you to join a group. Its members share a task list and see each other’s progress.",
+  "group_invitation.action": "View the invitation",
+  "group_invitation.reason": "You received this email because {actor} invited you to a group on Todo.",
+
+  "task_shared.subject": "{actor} shared “{title}” with you",
+  "task_shared.preheader": "You can now see, edit and complete it.",
+  "task_shared.headline": "{actor} shared a task with you",
+  "task_shared.body": "You can now see, edit and complete this task. It is in your Shared with me list.",
+  "task_shared.action": "Open the task",
+  "task_shared.reason": "You received this email because {actor} shared a task with you on Todo.",
+
+  "task_assigned.subject": "{actor} assigned you “{title}”",
+  "task_assigned.preheader": "It is in your Assigned to me list.",
+  "task_assigned.headline": "{actor} assigned you a task",
+  "task_assigned.body": "This task is now yours to do. It is in your Assigned to me list.",
+  "task_assigned.action": "Open the task",
+  "task_assigned.reason": "You received this email because {actor} assigned you a task on Todo.",
+
+  "mail.quoted": "“{title}”"
 }

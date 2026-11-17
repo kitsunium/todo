@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package taskstore — The tasks in the framework's store, the archiving of
 // what was done long ago, their events on a topic, the directory asked of the
@@ -56,6 +56,12 @@ type Event struct {
 	Audience []string  `json:"audience" app:"public"`
 	Title    string    `json:"title" app:"public"`
 	At       time.Time `json:"at" app:"public"`
+	// ActorID is the member who did it, for an event that is about one member more
+	// than the task: shared and assigned. Empty otherwise.
+	ActorID string `json:"actorId,omitempty" app:"public"`
+	// UserID is the member the task was shared with or assigned to. Empty
+	// otherwise.
+	UserID string `json:"userId,omitempty" app:"public"`
 }
 
 // Announcer is Journal@v1 on the topic "events".
@@ -68,14 +74,19 @@ func NewAnnouncer() *Announcer {
 	return newAnnouncer()
 }
 
+// Involve is tasks/port/Journal@v1's.
+func (a *Announcer) Involve(ctx context.Context, kind string, t task.Task, actor string, user string) error {
+	return a.involve(ctx, kind, t, actor, user)
+}
+
 // Record is tasks/port/Journal@v1's.
 func (a *Announcer) Record(ctx context.Context, kind string, t task.Task) error {
 	return a.record(ctx, kind, t)
 }
 
 // Tell is tasks/port/Journal@v1's.
-func (a *Announcer) Tell(ctx context.Context, kind string, t task.Task, to string) error {
-	return a.tell(ctx, kind, t, to)
+func (a *Announcer) Tell(ctx context.Context, kind string, t task.Task, actor string, to string) error {
+	return a.tell(ctx, kind, t, actor, to)
 }
 
 var _ planner.JournalV1 = (*Announcer)(nil)

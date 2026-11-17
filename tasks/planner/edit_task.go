@@ -124,7 +124,7 @@ func (h *EditTaskHandler) execute(ctx context.Context, in *EditTaskInput) (EditT
 		return EditTaskOutput{}, err
 	}
 	if t.AssigneeID != "" && t.AssigneeID != before && t.AssigneeID != in.User {
-		if err := h.journal.Tell(ctx, kindAssigned, t, t.AssigneeID); err != nil {
+		if err := h.journal.Tell(ctx, kindAssigned, t, in.User, t.AssigneeID); err != nil {
 			return EditTaskOutput{}, err
 		}
 	}

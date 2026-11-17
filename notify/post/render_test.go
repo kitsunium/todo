@@ -26,6 +26,11 @@ func letters(locale string) []Letter {
 		with(KindExists, "/forgot", nil),
 		with(KindInvite, "/", map[string]string{"actor": "Grace Hopper"}),
 		with(KindDueSoon, "/", map[string]string{"title": "Ship the release", "due": "2026-11-16T14:30:00Z"}),
+		with(KindContactRequest, "/contacts", map[string]string{"actor": "Grace Hopper"}),
+		with(KindContactAccepted, "/contacts", map[string]string{"actor": "Grace Hopper"}),
+		with(KindGroupInvitation, "/groups", map[string]string{"actor": "Grace Hopper", "group": "Compilers"}),
+		with(KindTaskShared, "/task/task_a", map[string]string{"actor": "Grace Hopper", "title": "Ship the release"}),
+		with(KindTaskAssigned, "/task/task_a", map[string]string{"actor": "Grace Hopper", "title": "Ship the release"}),
 	}
 }
 
@@ -75,7 +80,7 @@ func TestEveryMailIsWrittenInBothLanguages(t *testing.T) {
 				t.Fatalf("%s %s: %v", locale, l.Kind, err)
 			}
 			for _, part := range []string{m.Subject, text, html} {
-				if regexp.MustCompile(`\{[a-z]+\}|\b(mail|verify|reset|exists|invite|due_soon|date)\.[a-z_0-9]+`).MatchString(strings.ReplaceAll(part, home, "")) {
+				if regexp.MustCompile(`\{[a-z]+\}|\b(mail|verify|reset|exists|invite|due_soon|date|contact_request|contact_accepted|group_invitation|task_shared|task_assigned)\.[a-z_0-9]+`).MatchString(strings.ReplaceAll(part, home, "")) {
 					t.Errorf("%s %s: a placeholder or a key is left in %q", locale, l.Kind, part)
 				}
 			}
@@ -101,17 +106,29 @@ func TestEveryMailIsWrittenInBothLanguages(t *testing.T) {
 // Each language speaks its own words, French first.
 func TestEachMailSpeaksItsLanguage(t *testing.T) {
 	subjects := map[string][2]string{
-		KindVerify:  {"Confirmez votre adresse", "Confirm your email address"},
-		KindReset:   {"Choisissez un nouveau mot de passe", "Reset your Todo password"},
-		KindExists:  {"Vous avez déjà un compte", "You already have a Todo account"},
-		KindInvite:  {"Grace Hopper vous invite à créer un compte", "Grace Hopper invited you to Todo"},
-		KindDueSoon: {"Bientôt à échéance : Ship the release", "Due soon: Ship the release"},
+		KindVerify:          {"Confirmez votre adresse", "Confirm your email address"},
+		KindReset:           {"Choisissez un nouveau mot de passe", "Reset your Todo password"},
+		KindExists:          {"Vous avez déjà un compte", "You already have a Todo account"},
+		KindInvite:          {"Grace Hopper vous invite à créer un compte", "Grace Hopper invited you to Todo"},
+		KindDueSoon:         {"Bientôt à échéance : Ship the release", "Due soon: Ship the release"},
+		KindContactRequest:  {"Grace Hopper souhaite vous ajouter à ses contacts", "Grace Hopper wants to add you as a contact"},
+		KindContactAccepted: {"Grace Hopper a accepté votre demande de contact", "Grace Hopper accepted your contact request"},
+		KindGroupInvitation: {"Grace Hopper vous invite à rejoindre Compilers", "Grace Hopper invited you to join Compilers"},
+		KindTaskShared:      {"Grace Hopper a partagé « Ship the release » avec vous", "Grace Hopper shared “Ship the release” with you"},
+		KindTaskAssigned:    {"Grace Hopper vous a attribué « Ship the release »", "Grace Hopper assigned you “Ship the release”"},
 	}
 	for i, locale := range []string{"fr", "en"} {
 		for _, l := range letters(locale) {
 			if m, _, _, err := write(l, home); err != nil || m.Subject != subjects[l.Kind][i] {
 				t.Errorf("%s %s: subject %q (%v), want %q", locale, l.Kind, m.Subject, err, subjects[l.Kind][i])
 			}
+		}
+	}
+	// A mail about what someone did, by a member with no name, says "a member".
+	for _, kind := range []string{KindContactRequest, KindTaskAssigned} {
+		l := Letter{To: "ada@example.com", Locale: "en", Kind: kind, Params: map[string]string{"title": "x"}}
+		if m, _, _, err := write(l, home); err != nil || !strings.HasPrefix(m.Subject, "A member ") {
+			t.Errorf("%s by nobody: %q (%v), want it by a member", kind, m.Subject, err)
 		}
 	}
 	// A language nobody speaks, or none, is French.

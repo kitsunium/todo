@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package feed — The feed, written from the events of the tasks, of the
 // contacts and of the groups, and its HTTP read.
@@ -45,6 +45,13 @@ type Entry struct {
 	// or the name of the group a group entry is about.
 	Title string    `json:"title" app:"personal"`
 	At    time.Time `json:"at" app:"public"`
+	// Read is whether the member has marked the entry read; an entry is written
+	// unread.
+	Read bool `json:"read" app:"public"`
+}
+
+// NoInput — A request that says nothing.
+type NoInput struct {
 }
 
 // Page — The latest entries, newest first.
@@ -55,6 +62,16 @@ type Page struct {
 // PageRequest — How many entries to read.
 type PageRequest struct {
 	Limit int `query:"limit"`
+}
+
+// Unread — How many entries of a member's feed are not read.
+type Unread struct {
+	Unread int `json:"unread" app:"public"`
+}
+
+// Whose — The member whose feed is asked.
+type Whose struct {
+	UserID string `json:"userId" app:"public"`
 }
 
 // Service is feed's framework service: what it declares, drawn and run.
@@ -71,6 +88,22 @@ var _ = Service.Endpoint("GET /api/activity", Recent, app.Auth())
 // Recent serves GET /api/activity: its body is the hand-written recent.
 func Recent(ctx context.Context, in PageRequest) (Page, error) {
 	return recent(ctx, in)
+}
+
+var _ = Service.Endpoint("POST /api/activity/read", MarkRead, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// MarkRead serves POST /api/activity/read: its body is the hand-written markRead.
+func MarkRead(ctx context.Context, in NoInput) (Unread, error) {
+	return markRead(ctx, in)
+}
+
+// UnreadQuery — How many entries of a member's feed are not read, for the
+// components that show it.
+var UnreadQuery = Service.Query("unread", CountUnread)
+
+// CountUnread handles the query "unread": its body is the hand-written countUnread.
+func CountUnread(ctx context.Context, in Whose) (Unread, error) {
+	return countUnread(ctx, in)
 }
 
 var _ = Service.Subscribe("tasks", taskstore.EventsTopic, Record)

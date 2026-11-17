@@ -135,6 +135,7 @@ func (c fixedClock) Now(context.Context) (time.Time, error) { return time.Time(c
 type memJournal struct {
 	kinds []string
 	told  []string // what one member alone was told, "kind to member"
+	acts  []string // who did it, "kind by actor to member", for what names an actor
 }
 
 func (j *memJournal) Record(_ context.Context, kind string, _ task.Task) error {
@@ -142,8 +143,15 @@ func (j *memJournal) Record(_ context.Context, kind string, _ task.Task) error {
 	return nil
 }
 
-func (j *memJournal) Tell(_ context.Context, kind string, _ task.Task, to string) error {
+func (j *memJournal) Tell(_ context.Context, kind string, _ task.Task, actor, to string) error {
 	j.told = append(j.told, kind+" to "+to)
+	j.acts = append(j.acts, kind+" by "+actor+" to "+to)
+	return nil
+}
+
+func (j *memJournal) Involve(_ context.Context, kind string, _ task.Task, actor, user string) error {
+	j.kinds = append(j.kinds, kind)
+	j.acts = append(j.acts, kind+" by "+actor+" to "+user)
 	return nil
 }
 

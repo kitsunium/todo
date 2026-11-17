@@ -64,6 +64,12 @@ func write(l Letter, base string) (m message, html, text string, err error) {
 			act.Label = w.say(key)
 		}
 	}
+	someone := func(actor string) string { // whoever did it, by name; a member with none is "a member"
+		if actor = line(actor); actor != "" {
+			return actor
+		}
+		return w.say("mail.someone")
+	}
 	switch l.Kind {
 	case KindVerify:
 		label("verify.action")
@@ -84,10 +90,7 @@ func write(l Letter, base string) (m message, html, text string, err error) {
 			Body: []string{w.say("exists.body"), w.say("exists.body_forgot")}, Notes: []string{w.say("exists.note_ignore")}, Reason: w.say("exists.reason"),
 		}
 	case KindInvite:
-		who := line(l.Params["actor"])
-		if who == "" {
-			who = w.say("mail.someone")
-		}
+		who := someone(l.Params["actor"])
 		label("invite.action")
 		m = message{
 			Subject: w.say("invite.subject", "actor", clip(who, nameInSubject)), Preheader: w.say("invite.preheader"), Headline: w.say("invite.headline", "actor", who),
@@ -104,6 +107,37 @@ func write(l Letter, base string) (m message, html, text string, err error) {
 		m = message{
 			Subject: w.say("due_soon.subject", "title", clip(title, titleInSubject)), Preheader: w.say("due_soon.preheader"), Headline: w.say("due_soon.headline"),
 			Body: []string{w.say("due_soon.body", "title", title, "date", w.date(due))}, Reason: w.say("due_soon.reason"),
+		}
+	case KindContactRequest, KindContactAccepted:
+		key := "contact_request"
+		if l.Kind == KindContactAccepted {
+			key = "contact_accepted"
+		}
+		who := someone(l.Params["actor"])
+		label(key + ".action")
+		m = message{
+			Subject: w.say(key+".subject", "actor", clip(who, nameInSubject)), Preheader: w.say(key+".preheader", "actor", who), Headline: w.say(key+".headline", "actor", who),
+			Body: []string{w.say(key+".body", "actor", who)}, Reason: w.say(key+".reason", "actor", who),
+		}
+	case KindGroupInvitation:
+		who, group := someone(l.Params["actor"]), line(l.Params["group"])
+		label("group_invitation.action")
+		m = message{
+			Subject: w.say("group_invitation.subject", "actor", clip(who, nameInSubject), "group", clip(group, titleInSubject)), Preheader: w.say("group_invitation.preheader"),
+			Headline: w.say("group_invitation.headline", "group", group), Body: []string{w.say("group_invitation.body", "actor", who), group},
+			Reason: w.say("group_invitation.reason", "actor", who),
+		}
+	case KindTaskShared, KindTaskAssigned:
+		key := "task_shared"
+		if l.Kind == KindTaskAssigned {
+			key = "task_assigned"
+		}
+		who, title := someone(l.Params["actor"]), line(l.Params["title"])
+		label(key + ".action")
+		m = message{
+			Subject: w.say(key+".subject", "actor", clip(who, nameInSubject), "title", clip(title, titleInSubject)), Preheader: w.say(key + ".preheader"),
+			Headline: w.say(key+".headline", "actor", who), Body: []string{w.say("mail.quoted", "title", title), w.say(key + ".body")},
+			Reason: w.say(key+".reason", "actor", who),
 		}
 	default:
 		return message{}, "", "", fmt.Errorf("post: no mail of kind %q", l.Kind)

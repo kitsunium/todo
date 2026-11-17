@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package api — The HTTP API of a member's tasks, and the census the rest of
 // the product asks.
@@ -103,11 +103,14 @@ type UnshareRequest struct {
 
 // ViewCounts — What a member's sidebar counts.
 type ViewCounts struct {
-	Inbox             int            `json:"inbox" app:"public"`
-	Today             int            `json:"today" app:"public"`
-	Upcoming          int            `json:"upcoming" app:"public"`
-	Shared            int            `json:"shared" app:"public"`
-	Assigned          int            `json:"assigned" app:"public"`
+	Inbox    int `json:"inbox" app:"public"`
+	Today    int `json:"today" app:"public"`
+	Upcoming int `json:"upcoming" app:"public"`
+	Shared   int `json:"shared" app:"public"`
+	Assigned int `json:"assigned" app:"public"`
+	// Unread is how many entries of the member's activity feed are not read yet,
+	// asked of the feed.
+	Unread            int            `json:"unread" app:"public"`
 	Overdue           int            `json:"overdue" app:"public"`
 	CompletedThisWeek int            `json:"completedThisWeek" app:"public"`
 	Groups            map[string]int `json:"groups" app:"public"`

@@ -35,11 +35,26 @@ func (a *Announcer) record(ctx context.Context, kind string, t task.Task) (err e
 	})
 }
 
-// tell is Announcer.Tell's body: what happened to the task is published for
-// one member alone.
-func (a *Announcer) tell(ctx context.Context, kind string, t task.Task, to string) (err error) {
+// tell is Announcer.Tell's body: what the actor did to the task is published
+// for one member alone, who is also the event's member.
+func (a *Announcer) tell(ctx context.Context, kind string, t task.Task, actor string, to string) (err error) {
 	return EventsTopic.Publish(ctx, Event{
 		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Audience: []string{to}, Title: t.Title, At: t.UpdatedAt,
+		ActorID: actor, UserID: to,
+	})
+}
+
+// involve is Announcer.Involve's body: what the actor did to bring a member
+// into the task is published for everyone who sees it, the actor and the
+// member brought in named in the event.
+func (a *Announcer) involve(ctx context.Context, kind string, t task.Task, actor string, user string) (err error) {
+	audience, err := audienceOf(ctx, t)
+	if err != nil {
+		return err
+	}
+	return EventsTopic.Publish(ctx, Event{
+		ID: app.NewID("event"), Kind: kind, TaskID: t.ID, OwnerID: t.OwnerID, Audience: audience, Title: t.Title, At: t.UpdatedAt,
+		ActorID: actor, UserID: user,
 	})
 }
 

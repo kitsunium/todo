@@ -7,6 +7,7 @@ package feed
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"sync"
 
@@ -38,6 +39,49 @@ func recent(ctx context.Context, in PageRequest) (out Page, err error) {
 	for _, e := range all {
 		if e.UserID == string(uid) && len(out.Entries) < limit {
 			out.Entries = append(out.Entries, e)
+		}
+	}
+	return out, nil
+}
+
+// markRead is POST /api/activity/read's body: every entry the caller has is
+// marked read, each changed where it is kept, so an entry written meanwhile
+// is neither lost nor marked. It answers how many are unread after it.
+func markRead(ctx context.Context, in NoInput) (out Unread, err error) {
+	uid, ok := app.UserID(ctx)
+	if !ok {
+		return Unread{}, app.Unauthenticated("sign in first")
+	}
+	all, err := newestFirst(ctx)
+	if err != nil {
+		return Unread{}, err
+	}
+	for _, e := range all {
+		if e.UserID != string(uid) || e.Read {
+			continue
+		}
+		_, err := EntriesStore.Update(ctx, e.ID, func(r *Entry) error {
+			r.Read = true
+			return nil
+		})
+		var refused *app.Error
+		if err != nil && !(errors.As(err, &refused) && refused.Code == app.WireNotFound) { // one deleted meanwhile is gone
+			return Unread{}, err
+		}
+	}
+	return countUnread(ctx, Whose{UserID: string(uid)})
+}
+
+// countUnread is the query "unread"'s body: how many entries of the member's
+// feed are not read.
+func countUnread(ctx context.Context, in Whose) (out Unread, err error) {
+	all, err := newestFirst(ctx)
+	if err != nil {
+		return Unread{}, err
+	}
+	for _, e := range all {
+		if e.UserID == in.UserID && !e.Read {
+			out.Unread++
 		}
 	}
 	return out, nil

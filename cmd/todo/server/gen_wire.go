@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -124,6 +124,8 @@ func Wire(ctx context.Context, build Build) {
 	members := outbox.NewMembers()
 	carrier := post.NewCarrier()
 	remindDue := reminders.NewRemindDue(dueSoon, ledger, members, carrier)
+	register := outbox.NewRegister()
+	mailAction := reminders.NewMailAction(register, members, carrier)
 	vault.Wire()
 	authapi.Wire(signUp, authapi.VerifyAddressesSetting, verifyEmail, resendVerification, forgotPassword, resetPassword, changePassword, signIn, signOut, listSessions, revokeSession, updateProfile, authenticate)
 	linkstore.Wire()
@@ -135,7 +137,7 @@ func Wire(ctx context.Context, build Build) {
 	feed.Wire()
 	post.Wire()
 	outbox.Wire()
-	watch.Wire(remindDue, watch.RemindWithinSetting)
+	watch.Wire(remindDue, watch.RemindWithinSetting, mailAction)
 	census.Wire()
 	site.Wire()
 }

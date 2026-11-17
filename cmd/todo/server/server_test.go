@@ -506,7 +506,7 @@ func TestTheServerServesTheWebApp(t *testing.T) {
 	}
 	for _, name := range []string{
 		"/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/auth/password", "/api/auth/sessions", "/api/auth/verify",
-		"/api/contacts", "/api/contacts/invites", "/api/groups", "/api/invitations", "/api/tasks", "/api/tasks/counts", "/api/activity", "/api/stats",
+		"/api/contacts", "/api/contacts/invites", "/api/groups", "/api/invitations", "/api/tasks", "/api/tasks/counts", "/api/activity", "/api/activity/read", "/api/stats",
 		"share", "archive", "restore", "complete", "reopen", "accept", "decline", "cancel", "members",
 	} {
 		if !strings.Contains(scripts.String(), name) {
@@ -1019,8 +1019,8 @@ type groupTask struct {
 
 // viewCounts is what GET /api/tasks/counts answers.
 type viewCounts struct {
-	Inbox, Today, Upcoming, Shared, Assigned, Overdue, CompletedThisWeek int
-	Groups                                                               map[string]int
+	Inbox, Today, Upcoming, Shared, Assigned, Unread, Overdue, CompletedThisWeek int
+	Groups                                                                       map[string]int
 }
 
 // A group shares a list: a task added to it is seen, edited and moved by
@@ -1924,5 +1924,148 @@ func TestTheAnswersNameThePeopleOfTheirTasks(t *testing.T) {
 	cy.call(http.StatusOK, "GET", "/api/tasks?view=today", nil, &raw)
 	if err := json.Unmarshal(raw, &empty); err != nil || empty.People == nil || !strings.Contains(string(raw), `"people":[`) {
 		t.Errorf("a list with no task: %s (%v), want a people member all the same", raw, err)
+	}
+}
+
+// What others do is mailed to the member it concerns, in their own language:
+// a contact request received and accepted, a group invitation, a task shared
+// and a task assigned, each with an HTML part and its link, and never what a
+// member does to themselves.
+func TestOthersActionsAreMailed(t *testing.T) {
+	p := start(t)
+	ada, _, _ := p.signUpIn("", map[string]any{"email": "ada@example.com", "name": "Ada", "password": passphrase, "locale": "en"}, "Confirm your email address")
+	bob, _, _ := p.signUpIn("", map[string]any{"email": "bob@example.com", "name": "Bob", "password": passphrase, "locale": "fr"}, "Confirmez votre adresse")
+	// mailed waits for the one mail to addr whose subject holds subject, and
+	// checks it is a page in lang whose text and HTML lead to path.
+	// (p.mails reads white space as one space, a no-break one included.)
+	mailed := func(addr, subject, lang, path string) {
+		t.Helper()
+		p.settle("the mail "+subject, 50*time.Millisecond, func() bool { return len(p.mails(addr, subject)) > 0 })
+		got := p.mails(addr, subject)
+		if len(got) != 1 {
+			t.Fatalf("%d mail(s) to %s with %q, want one", len(got), addr, subject)
+		}
+		mailPair{got[0]}.page(t, lang)
+		want := "http://localhost:4000" + path
+		if !strings.Contains(got[0].Text, want) || !strings.Contains(got[0].HTML, want) {
+			t.Errorf("%q: the link %s is not in both parts: %q", subject, want, got[0].Text)
+		}
+	}
+
+	// Bob asks Ada, in English; Ada accepts, and Bob hears of it in French.
+	l := bob.request("ada@example.com")
+	mailed("ada@example.com", "Bob wants to add you as a contact", "en", "/contacts")
+	ada.call(http.StatusOK, "POST", "/api/contacts/"+l.ID+"/accept", nil, nil)
+	mailed("bob@example.com", "Ada a accepté votre demande de contact", "fr", "/contacts")
+
+	// A group invitation names the group, a task shared and a task assigned
+	// lead to the task.
+	var g groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Core"}, &g)
+	ada.call(http.StatusOK, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{"userId": bob.id}, nil)
+	mailed("bob@example.com", "Ada vous invite à rejoindre Core", "fr", "/groups")
+	var tk taskView
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Ship the release"}, &tk)
+	ada.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/share", map[string]any{"userId": bob.id}, nil)
+	mailed("bob@example.com", "Ada a partagé « Ship the release » avec vous", "fr", "/task/"+tk.ID)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+tk.ID, map[string]any{"assigneeId": bob.id}, nil)
+	mailed("bob@example.com", "Ada vous a attribué « Ship the release »", "fr", "/task/"+tk.ID)
+
+	// Ada assigns a task to herself: nobody is mailed, though the feed, which
+	// hears of the same events, is written.
+	var mine taskView
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Tidy the backlog", "assigneeId": ada.id}, &mine)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+mine.ID, map[string]any{"title": "Tidy the backlog now"}, nil)
+	var feed struct {
+		Entries []struct{ Kind string } `json:"entries"`
+	}
+	p.settle("the feed of Ada's own task", 50*time.Millisecond, func() bool {
+		ada.call(http.StatusOK, "GET", "/api/activity", nil, &feed)
+		return len(feed.Entries) >= 6
+	})
+	p.clk.Advance(time.Minute)
+	time.Sleep(50 * time.Millisecond)
+	if got := p.mails("ada@example.com", "assigned you"); len(got) != 0 {
+		t.Errorf("Ada was mailed of a task she gave herself: %+v", got)
+	}
+	// Each event was mailed once: three mails to Bob besides the two he got first.
+	for _, subject := range []string{"Ada vous invite", "Ada a partagé", "Ada vous a attribué", "Ada a accepté"} {
+		if got := p.mails("bob@example.com", subject); len(got) != 1 {
+			t.Errorf("%d mail(s) to Bob with %q, want one", len(got), subject)
+		}
+	}
+}
+
+// The feed knows what was read: every entry says it, the counts say how many
+// are not, reading marks the caller's entries and nobody else's, and an entry
+// written afterwards is unread.
+func TestTheFeedKnowsWhatWasRead(t *testing.T) {
+	p := start(t)
+	ada, bob := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com")
+	type entries struct {
+		Entries []struct {
+			Kind  string `json:"kind"`
+			Title string `json:"title"`
+			Read  *bool  `json:"read"`
+		} `json:"entries"`
+	}
+	unread := func(m *member) int {
+		t.Helper()
+		var c viewCounts
+		m.call(http.StatusOK, "GET", "/api/tasks/counts", nil, &c)
+		return c.Unread
+	}
+	// waitFor is the feed of m, once it holds n entries.
+	waitFor := func(m *member, n int) entries {
+		t.Helper()
+		var got entries
+		p.settle("entries in the feed", 50*time.Millisecond, func() bool {
+			m.call(http.StatusOK, "GET", "/api/activity", nil, &got)
+			return len(got.Entries) >= n
+		})
+		return got
+	}
+	p.stranger().call(http.StatusUnauthorized, "POST", "/api/activity/read", nil, nil)
+
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "one"}, nil)
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "two"}, nil)
+	bob.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "his"}, nil)
+	got := waitFor(ada, 2)
+	waitFor(bob, 1)
+	for _, e := range got.Entries {
+		if e.Read == nil || *e.Read {
+			t.Errorf("an entry before anything was read: %+v", e)
+		}
+	}
+	if n := unread(ada); n != 2 {
+		t.Errorf("Ada's counts say %d unread, want 2", n)
+	}
+
+	var out map[string]int
+	ada.call(http.StatusOK, "POST", "/api/activity/read", nil, &out)
+	if v, ok := out["unread"]; !ok || v != 0 || len(out) != 1 {
+		t.Errorf("reading answered %v, want {\"unread\":0}", out)
+	}
+	got = waitFor(ada, 2)
+	for _, e := range got.Entries {
+		if e.Read == nil || !*e.Read {
+			t.Errorf("an entry after reading: %+v", e)
+		}
+	}
+	if a, b := unread(ada), unread(bob); a != 0 || b != 1 {
+		t.Errorf("after Ada read: her counts say %d, Bob's say %d, want 0 and 1", a, b)
+	}
+	ada.call(http.StatusOK, "POST", "/api/activity/read", nil, &out) // again: nothing to change
+	if out["unread"] != 0 {
+		t.Errorf("reading twice: %v", out)
+	}
+
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "three"}, nil)
+	got = waitFor(ada, 3)
+	if n := unread(ada); n != 1 || got.Entries[0].Title != "three" || got.Entries[0].Read == nil || *got.Entries[0].Read || !*got.Entries[1].Read {
+		t.Errorf("a new entry: %d unread, %+v, want the newest alone unread", n, got.Entries)
+	}
+	if n := unread(bob); n != 1 {
+		t.Errorf("Bob's counts say %d unread, want 1", n)
 	}
 }

@@ -6,6 +6,8 @@ package post
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/kitsunium/todo/notify/reminders"
@@ -27,5 +29,29 @@ func (a *Carrier) send(ctx context.Context, m reminders.Mail) (err error) {
 		To: m.To.Address, Name: m.To.Name, Locale: m.To.Locale, TimeZone: m.To.TimeZone, Kind: KindDueSoon, Path: "/",
 		Params: map[string]string{"title": m.Title, "due": m.Due.UTC().Format(time.RFC3339)},
 	})
+	return err
+}
+
+// notify is Carrier.Notify's body: what a member did is written to the member
+// it concerns, in their language and their zone, through the same outbox. A
+// contact request leads to the contacts' page, an invitation to the groups',
+// a task to itself.
+func (a *Carrier) notify(ctx context.Context, n reminders.Notice) (err error) {
+	l := Letter{To: n.To.Address, Name: n.To.Name, Locale: n.To.Locale, TimeZone: n.To.TimeZone, Params: map[string]string{"actor": n.Actor}}
+	switch n.Kind {
+	case reminders.OnContactRequested:
+		l.Kind, l.Path = KindContactRequest, "/contacts"
+	case reminders.OnContactAccepted:
+		l.Kind, l.Path = KindContactAccepted, "/contacts"
+	case reminders.OnGroupInvited:
+		l.Kind, l.Path, l.Params["group"] = KindGroupInvitation, "/groups", n.Subject
+	case reminders.OnShared:
+		l.Kind, l.Path, l.Params["title"] = KindTaskShared, "/task/"+url.PathEscape(n.SubjectID), n.Subject
+	case reminders.OnAssigned:
+		l.Kind, l.Path, l.Params["title"] = KindTaskAssigned, "/task/"+url.PathEscape(n.SubjectID), n.Subject
+	default:
+		return fmt.Errorf("post: no mail for what a member did, kind %q", n.Kind)
+	}
+	_, err = post(ctx, l)
 	return err
 }

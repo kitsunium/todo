@@ -9,6 +9,7 @@ const zeroTime = "0001-01-01T00:00:00Z";
 const publicPages = ["/verify", "/forgot", "/reset"];
 
 let me = null; // the signed-in member's profile, null at the door
+let unread = 0; // how many entries of the member's feed are not read
 let known = false; // whether the session has been asked about
 let pref = String(navigator.language || "fr")
   .toLowerCase()
@@ -124,7 +125,19 @@ function toInstant(local, tz) {
   const wall = Date.UTC(y, mo - 1, d, h, mi);
   let ts = wall;
   try {
-    for (let i = 0; i < 2; i++) ts = wall - zoneOffset(ts, tz);
+    // The zone's offset the day before and the day after: they differ only
+    // across a change of hour. A wall time is the instant that reads back as
+    // it under one of them, the earlier when an hour repeats. An hour the
+    // zone skips (02:30 on the night clocks go forward) reads back under
+    // neither: it moves forward by the hour skipped, as a browser and the
+    // server's own clock do, never back.
+    const day = 86400000;
+    const before = zoneOffset(wall - day, tz);
+    const after = zoneOffset(wall + day, tz);
+    const fits = [wall - before, wall - after]
+      .filter((at) => at + zoneOffset(at, tz) === wall)
+      .sort((x, y) => x - y);
+    ts = fits.length ? fits[0] : wall - before;
   } catch {
     ts = wall;
   }
@@ -451,6 +464,8 @@ function chrome() {
   $("nav").replaceChildren(
     ...items.map(([href, key]) => {
       const a = link(t(key), href);
+      if (href === "/activity" && unread > 0)
+        a.append(" ", badge(String(unread)), el("span", "sr-only", " " + t("nav.unread")));
       if (href === here) a.setAttribute("aria-current", "page");
       return a;
     }),
@@ -461,6 +476,17 @@ function chrome() {
   $("logout").textContent = t("nav.logout");
   $("lang").textContent = t("lang.switch");
   $("lang").hidden = Boolean(me);
+}
+
+// countUnread asks how many entries of the feed are not read, for the nav; a
+// member who cannot be told keeps the number as it was.
+async function countUnread() {
+  try {
+    const counts = await call("GET", "/api/tasks/counts?tz=" + encodeURIComponent(zone()));
+    unread = counts.unread || 0;
+  } catch {
+    // the page itself says what went wrong
+  }
 }
 
 async function ensureMe() {
@@ -488,6 +514,10 @@ async function draw() {
     nodes = me ? await signedIn(path) : [door()];
   }
   if (mine !== epoch) return;
+  if (me) {
+    await countUnread();
+    if (mine !== epoch) return;
+  }
   chrome();
   const kept = drafts();
   $("view").replaceChildren(...nodes);

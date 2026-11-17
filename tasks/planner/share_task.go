@@ -52,7 +52,7 @@ func (h *ShareTaskHandler) execute(ctx context.Context, in *ShareTaskInput) (Sha
 	if err != nil || !added {
 		return ShareTaskOutput{Task: t}, err
 	}
-	if err := h.journal.Record(ctx, kindShared, t); err != nil {
+	if err := h.journal.Involve(ctx, kindShared, t, in.User, in.With); err != nil {
 		return ShareTaskOutput{}, err
 	}
 	return ShareTaskOutput{Task: t}, nil

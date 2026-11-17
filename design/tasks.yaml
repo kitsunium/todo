@@ -132,7 +132,8 @@ domains:
             description: JournalV1 is told what happened to a task, for whoever keeps a feed of it.
             methods:
               - {name: Record, params: [{name: kind, type: string}, {name: t, type: task.Task}]}
-              - {name: Tell, description: "Tell says what happened to a task to one member alone.", params: [{name: kind, type: string}, {name: t, type: task.Task}, {name: to, type: string}]}
+              - {name: Tell, description: "Tell says what a member did to a task to one member alone: the actor and the member told are in the event.", params: [{name: kind, type: string}, {name: t, type: task.Task}, {name: actor, type: string}, {name: to, type: string}]}
+              - {name: Involve, description: "Involve says to everyone who sees a task that a member brought another one into it; the actor and the member brought in are in the event.", params: [{name: kind, type: string}, {name: t, type: task.Task}, {name: actor, type: string}, {name: user, type: string}]}
         usecases:
           - name: AddTask
             description: AddTask adds an open task to its owner's list, or to the list of a group the owner belongs to, assigned or not.
@@ -289,7 +290,7 @@ domains:
             output:
               - {name: Task, type: task.Task}
             errors: [task.ErrNotFound, task.ErrNotOwner, task.ErrNotContact]
-            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Record]
+            calls: [tasks/port/TaskStore@v1.Get, tasks/port/Groups@v1.RoleOf, tasks/port/Circle@v1.AreContacts, tasks/port/Clock@v1.Now, tasks/port/TaskStore@v1.Change, tasks/port/Journal@v1.Involve]
             scenarios:
               - {name: shares with a contact, kind: success}
               - {name: refuses who is no contact, kind: refusal, error: task.ErrNotContact}
@@ -431,6 +432,8 @@ domains:
               - {name: Audience, type: "[]string", tag: 'json:"audience" app:"public"', description: "Audience are the members the event is told to: the task's owner, those it is shared with, its assignee and the members of its group."}
               - {name: Title, type: string, tag: 'json:"title" app:"public"'}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+              - {name: ActorID, type: string, tag: 'json:"actorId,omitempty" app:"public"', description: "ActorID is the member who did it, for an event that is about one member more than the task: shared and assigned. Empty otherwise."}
+              - {name: UserID, type: string, tag: 'json:"userId,omitempty" app:"public"', description: "UserID is the member the task was shared with or assigned to. Empty otherwise."}
         topics:
           - {name: events, message: Event, description: "What happened to the tasks: one message a task added or moved, delivered at least once."}
         stores:
@@ -477,7 +480,7 @@ domains:
       - name: api
         role: presentation
         code: 64.1.4
-        uses: [planner, task]
+        uses: [planner, task, feed]
         description: The HTTP API of a member's tasks, and the census the rest of the product asks.
         values:
           - name: AddRequest
@@ -532,6 +535,7 @@ domains:
               - {name: Upcoming, type: int, tag: 'json:"upcoming" app:"public"'}
               - {name: Shared, type: int, tag: 'json:"shared" app:"public"'}
               - {name: Assigned, type: int, tag: 'json:"assigned" app:"public"'}
+              - {name: Unread, type: int, tag: 'json:"unread" app:"public"', description: "Unread is how many entries of the member's activity feed are not read yet, asked of the feed."}
               - {name: Overdue, type: int, tag: 'json:"overdue" app:"public"'}
               - {name: CompletedThisWeek, type: int, tag: 'json:"completedThisWeek" app:"public"'}
               - {name: Groups, type: "map[string]int", tag: 'json:"groups" app:"public"'}

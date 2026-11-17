@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 package planner
 
@@ -617,14 +617,19 @@ type recordedplannerJournalV1 struct {
 	calls *[]string
 }
 
+func (x recordedplannerJournalV1) Involve(ctx context.Context, kind string, t task.Task, actor string, user string) error {
+	*x.calls = append(*x.calls, "tasks/port/Journal@v1.Involve")
+	return x.next.Involve(ctx, kind, t, actor, user)
+}
+
 func (x recordedplannerJournalV1) Record(ctx context.Context, kind string, t task.Task) error {
 	*x.calls = append(*x.calls, "tasks/port/Journal@v1.Record")
 	return x.next.Record(ctx, kind, t)
 }
 
-func (x recordedplannerJournalV1) Tell(ctx context.Context, kind string, t task.Task, to string) error {
+func (x recordedplannerJournalV1) Tell(ctx context.Context, kind string, t task.Task, actor string, to string) error {
 	*x.calls = append(*x.calls, "tasks/port/Journal@v1.Tell")
-	return x.next.Tell(ctx, kind, t, to)
+	return x.next.Tell(ctx, kind, t, actor, to)
 }
 
 // RecordPlannerTaskStoreV1 records the calls to next, then makes them.

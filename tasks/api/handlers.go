@@ -10,6 +10,7 @@ import (
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
+	"github.com/kitsunium/todo/activity/feed"
 	"github.com/kitsunium/todo/tasks/planner"
 	"github.com/kitsunium/todo/tasks/task"
 )
@@ -57,8 +58,12 @@ func counts(ctx context.Context, in CountsRequest) (out ViewCounts, err error) {
 	if err != nil {
 		return ViewCounts{}, refusal(err)
 	}
+	unread, err := feed.UnreadQuery.Ask(ctx, feed.Whose{UserID: me})
+	if err != nil {
+		return ViewCounts{}, err
+	}
 	return ViewCounts{
-		Inbox: res.Inbox, Today: res.Today, Upcoming: res.Upcoming, Shared: res.Shared, Assigned: res.Assigned,
+		Inbox: res.Inbox, Today: res.Today, Upcoming: res.Upcoming, Shared: res.Shared, Assigned: res.Assigned, Unread: unread.Unread,
 		Overdue: res.Overdue, CompletedThisWeek: res.CompletedThisWeek, Groups: res.Groups,
 	}, nil
 }

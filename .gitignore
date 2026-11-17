@@ -13,3 +13,6 @@ node_modules/
 
 # Local agent config, never tracked
 .claude/
+
+# Build caches of a working session.
+build/

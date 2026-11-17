@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -44,9 +44,13 @@ type GroupsV1 interface {
 
 // JournalV1 is told what happened to a task, for whoever keeps a feed of it.
 type JournalV1 interface {
+	// Involve says to everyone who sees a task that a member brought another one
+	// into it; the actor and the member brought in are in the event.
+	Involve(ctx context.Context, kind string, t task.Task, actor string, user string) error
 	Record(ctx context.Context, kind string, t task.Task) error
-	// Tell says what happened to a task to one member alone.
-	Tell(ctx context.Context, kind string, t task.Task, to string) error
+	// Tell says what a member did to a task to one member alone: the actor and the
+	// member told are in the event.
+	Tell(ctx context.Context, kind string, t task.Task, actor string, to string) error
 }
 
 // PeopleV1 is the directory of the members, asked for a name alone.

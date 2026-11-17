@@ -21,11 +21,22 @@ domains:
               - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
               - {name: Title, type: string, tag: 'json:"title" app:"personal"', description: "Title is the task's title, the name of the member a contact entry is about, or the name of the group a group entry is about."}
               - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+              - {name: Read, type: bool, tag: 'json:"read" app:"public"', description: "Read is whether the member has marked the entry read; an entry is written unread."}
         values:
           - name: Page
             description: The latest entries, newest first.
             fields:
               - {name: Entries, type: "[]Entry", tag: 'json:"entries"'}
+          - name: NoInput
+            description: A request that says nothing.
+          - name: Unread
+            description: How many entries of a member's feed are not read.
+            fields:
+              - {name: Unread, type: int, tag: 'json:"unread" app:"public"'}
+          - name: Whose
+            description: The member whose feed is asked.
+            fields:
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
           - name: PageRequest
             description: How many entries to read.
             fields:
@@ -42,8 +53,11 @@ domains:
           - {name: tasks, topic: tasks/topic/events, handler: Record}
           - {name: contacts, topic: contacts/topic/events, handler: RecordContact}
           - {name: groups, topic: groups/topic/events, handler: RecordGroup}
+        queries:
+          - {name: unread, input: Whose, output: Unread, handler: CountUnread, description: "How many entries of a member's feed are not read, for the components that show it."}
         endpoints:
           - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent, auth: required}
+          - {route: "POST /api/activity/read", request: NoInput, response: Unread, handler: MarkRead, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required}
         internals:
           functions:
             - name: newestFirst

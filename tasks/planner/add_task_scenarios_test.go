@@ -113,6 +113,9 @@ func givenAddTaskTellsItsAssigneeOfATaskAssigned(t *testing.T) (AddTask, AddTask
 		if len(journal.told) != 1 || journal.told[0] != "assigned to "+bob {
 			t.Errorf("who was told: %q, want Bob alone", journal.told)
 		}
+		if want := "assigned by " + cy + " to " + bob; journal.acts[0] != want {
+			t.Errorf("who did it: %q, want %q", journal.acts[0], want)
+		}
 		mine, err := uc.Execute(t.Context(), AddTaskInput{Owner: cy, Title: "mine to do", GroupID: core, AssigneeID: cy})
 		if err != nil || mine.Task.AssigneeID != cy || len(journal.told) != 1 {
 			t.Errorf("a task one assigns to oneself: %+v (%v), told %q: want nobody told", mine.Task, err, journal.told)

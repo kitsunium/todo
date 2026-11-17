@@ -67,5 +67,42 @@
   "due_soon.headline": "Bientôt à échéance",
   "due_soon.body": "Votre tâche « {title} » arrive à échéance le {date}.",
   "due_soon.action": "Ouvrir Todo",
-  "due_soon.reason": "Vous recevez ce message car cette tâche est à vous. Vous n’avez qu’un rappel par échéance."
+  "due_soon.reason": "Vous recevez ce message car cette tâche est à vous. Vous n’avez qu’un rappel par échéance.",
+
+  "contact_request.subject": "{actor} souhaite vous ajouter à ses contacts",
+  "contact_request.preheader": "Vos contacts peuvent partager des tâches avec vous et vous inviter dans leurs groupes.",
+  "contact_request.headline": "{actor} souhaite vous ajouter à ses contacts",
+  "contact_request.body": "Entre contacts, vous pouvez vous partager des tâches et vous inviter mutuellement dans vos groupes. Acceptez la demande pour commencer à travailler ensemble.",
+  "contact_request.action": "Voir la demande",
+  "contact_request.reason": "Vous recevez cet e-mail car {actor} vous a envoyé une demande de contact sur Todo.",
+
+  "contact_accepted.subject": "{actor} a accepté votre demande de contact",
+  "contact_accepted.preheader": "Vous pouvez désormais partager des tâches avec {actor}.",
+  "contact_accepted.headline": "{actor} et vous êtes désormais en contact",
+  "contact_accepted.body": "Vous pouvez maintenant partager des tâches avec {actor} et l’inviter dans vos groupes.",
+  "contact_accepted.action": "Voir mes contacts",
+  "contact_accepted.reason": "Vous recevez cet e-mail car {actor} a accepté votre demande de contact sur Todo.",
+
+  "group_invitation.subject": "{actor} vous invite à rejoindre {group}",
+  "group_invitation.preheader": "Les membres d’un groupe partagent une même liste de tâches.",
+  "group_invitation.headline": "Rejoignez {group} sur Todo",
+  "group_invitation.body": "{actor} vous invite à rejoindre un groupe. Ses membres partagent une liste de tâches et suivent l’avancement de chacun.",
+  "group_invitation.action": "Voir l’invitation",
+  "group_invitation.reason": "Vous recevez cet e-mail car {actor} vous invite à rejoindre un groupe sur Todo.",
+
+  "task_shared.subject": "{actor} a partagé « {title} » avec vous",
+  "task_shared.preheader": "Vous pouvez désormais la consulter, la modifier et la terminer.",
+  "task_shared.headline": "{actor} a partagé une tâche avec vous",
+  "task_shared.body": "Vous pouvez désormais consulter, modifier et terminer cette tâche. Vous la retrouverez parmi les tâches partagées avec vous.",
+  "task_shared.action": "Ouvrir la tâche",
+  "task_shared.reason": "Vous recevez cet e-mail car {actor} a partagé une tâche avec vous sur Todo.",
+
+  "task_assigned.subject": "{actor} vous a attribué « {title} »",
+  "task_assigned.preheader": "Vous la retrouverez parmi les tâches qui vous sont attribuées.",
+  "task_assigned.headline": "{actor} vous a attribué une tâche",
+  "task_assigned.body": "Cette tâche vous revient désormais. Vous la retrouverez parmi les tâches qui vous sont attribuées.",
+  "task_assigned.action": "Ouvrir la tâche",
+  "task_assigned.reason": "Vous recevez cet e-mail car {actor} vous a attribué une tâche sur Todo.",
+
+  "mail.quoted": "« {title} »"
 }

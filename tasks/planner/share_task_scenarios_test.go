@@ -22,6 +22,9 @@ func givenShareTaskSharesWithAContact(t *testing.T) (ShareTask, ShareTaskInput, 
 			t.Errorf("the task shared: %+v", out.Task)
 		}
 		again, err := uc.Execute(t.Context(), in)
+		if want := "shared by " + ada + " to " + bob; len(journal.acts) != 1 || journal.acts[0] != want {
+			t.Errorf("who did it: %q, want %q once", journal.acts, want)
+		}
 		if err != nil || !slices.Equal(again.Task.SharedWith, []string{bob}) || len(journal.kinds) != 1 || journal.kinds[0] != "shared" {
 			t.Errorf("shared twice: %+v (%v), the journal told %q: want Bob once", again.Task.SharedWith, err, journal.kinds)
 		}

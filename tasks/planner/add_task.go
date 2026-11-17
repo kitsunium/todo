@@ -68,7 +68,7 @@ func (h *AddTaskHandler) execute(ctx context.Context, in *AddTaskInput) (AddTask
 		return AddTaskOutput{}, err
 	}
 	if t.AssigneeID != "" && t.AssigneeID != in.Owner {
-		if err := h.journal.Tell(ctx, kindAssigned, t, t.AssigneeID); err != nil {
+		if err := h.journal.Tell(ctx, kindAssigned, t, in.Owner, t.AssigneeID); err != nil {
 			return AddTaskOutput{}, err
 		}
 	}

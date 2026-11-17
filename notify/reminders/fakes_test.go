@@ -48,8 +48,22 @@ func (d directory) Recipient(_ context.Context, userID string) (Recipient, bool,
 	return to, ok, nil
 }
 
-// everyone is the directory of the tests: Ada, who reads English in Paris, and nobody else.
-var everyone = directory{"user_ada": {Address: "ada@example.com", Name: "Ada", Locale: "en", TimeZone: "Europe/Paris"}}
+// everyone is the directory of the tests: Ada, who reads English in Paris,
+// Bob, who reads French, and nobody else.
+var everyone = directory{
+	"user_ada": {Address: "ada@example.com", Name: "Ada", Locale: "en", TimeZone: "Europe/Paris"},
+	"user_bob": {Address: "bob@example.com", Name: "Bob", Locale: "fr", TimeZone: "Europe/Paris"},
+}
+
+// memNotifier is NotifierV1 that keeps what it was given.
+type memNotifier struct {
+	sent []Notice
+}
+
+func (m *memNotifier) Notify(_ context.Context, n Notice) error {
+	m.sent = append(m.sent, n)
+	return nil
+}
 
 // dueTask is an open task of owner due in an hour.
 func dueTask(id, owner string) task.Task {

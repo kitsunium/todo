@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
 // Package post — The product's mailer, its durable outbox and its transport,
 // and the command every component that writes to a member sends through.
@@ -21,17 +21,32 @@ import (
 var errNotImplemented = errs.New(errs.Pack(64, 3, 4, 255), "NOT_IMPLEMENTED", "not implemented yet", "post: a hand-written body is still a skeleton")
 
 const (
+	// KindContactAccepted is the mail to the requester of an accepted contact
+	// request; its params are actor, the name of who accepted.
+	KindContactAccepted string = "contact-accepted"
+	// KindContactRequest is the mail to the addressee of a contact request; its
+	// params are actor, the requester's name.
+	KindContactRequest string = "contact-request"
 	// KindDueSoon is the reminder of a task due soon; its params are title and
 	// due, the due date in RFC 3339.
 	KindDueSoon string = "due-soon"
 	// KindExists is the mail that tells an address it already has an account.
 	KindExists string = "exists"
+	// KindGroupInvitation is the mail to a member invited into a group; its params
+	// are actor, the inviter's name, and group.
+	KindGroupInvitation string = "group-invitation"
 	// KindInvite is the mail that invites an address nobody has; its params are
 	// actor, the inviter's name.
 	KindInvite string = "invite"
 	// KindReset is the mail whose link chooses a new password: its path carries
 	// the link's secret.
 	KindReset string = "reset"
+	// KindTaskAssigned is the mail to a member a task was assigned to; its params
+	// are actor and title.
+	KindTaskAssigned string = "task-assigned"
+	// KindTaskShared is the mail to a member a task was shared with; its params
+	// are actor and title.
+	KindTaskShared string = "task-shared"
 	// KindVerify is the mail whose link proves an address: its path carries the
 	// link's secret.
 	KindVerify string = "verify"
@@ -62,7 +77,7 @@ type Posted struct {
 	ID string `json:"id" app:"public"`
 }
 
-// Carrier is Mailer@v1 on the mailer "mail".
+// Carrier is Mailer@v1 and Notifier@v1 on the mailer "mail".
 type Carrier struct {
 	carrier // its own state, hand-written
 }
@@ -78,6 +93,13 @@ func (a *Carrier) Send(ctx context.Context, m reminders.Mail) error {
 }
 
 var _ reminders.MailerV1 = (*Carrier)(nil)
+
+// Notify is notify/port/Notifier@v1's.
+func (a *Carrier) Notify(ctx context.Context, n reminders.Notice) error {
+	return a.notify(ctx, n)
+}
+
+var _ reminders.NotifierV1 = (*Carrier)(nil)
 
 // Service is post's framework service: what it declares, drawn and run.
 var Service = app.NewService("post", "The product's mailer, its durable outbox and its transport, and the command every component that writes to a member sends through.")

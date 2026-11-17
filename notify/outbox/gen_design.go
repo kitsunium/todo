@@ -1,7 +1,8 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
+// design:digest sha256:390717aeedfce4c9881bfea93cf567e5dfb6e0f4b99777661b165bb23d396f17
 
-// Package outbox — The log of the reminders, and the directory they ask.
+// Package outbox — The logs of the reminders and of the mails about what
+// others did, and the directory they ask.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -19,6 +20,13 @@ import (
 // errNotImplemented is what a skeleton answers until its body is written:
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 3, 2, 255), "NOT_IMPLEMENTED", "not implemented yet", "outbox: a hand-written body is still a skeleton")
+
+// Acted — An event mailed to a member, by its key.
+type Acted struct {
+	// Key is the event's id and the member it was mailed to.
+	Key string    `json:"key" app:"public"`
+	At  time.Time `json:"at" app:"public"`
+}
 
 // Reminded — A task its owner was reminded of.
 type Reminded struct {
@@ -65,11 +73,39 @@ func (a *Members) Recipient(ctx context.Context, userID string) (reminders.Recip
 
 var _ reminders.DirectoryV1 = (*Members)(nil)
 
+// Register is ActionLog@v1 on the store "acted".
+type Register struct {
+	register // its own state, hand-written
+}
+
+// NewRegister builds Register: its body is the hand-written newRegister.
+func NewRegister() *Register {
+	return newRegister()
+}
+
+// Mark is notify/port/ActionLog@v1's.
+func (a *Register) Mark(ctx context.Context, key string) error {
+	return a.mark(ctx, key)
+}
+
+// Seen is notify/port/ActionLog@v1's.
+func (a *Register) Seen(ctx context.Context, key string) (bool, error) {
+	return a.seen(ctx, key)
+}
+
+var _ reminders.ActionLogV1 = (*Register)(nil)
+
 // Service is outbox's framework service: what it declares, drawn and run.
-var Service = app.NewService("outbox", "The log of the reminders, and the directory they ask.")
+var Service = app.NewService("outbox", "The logs of the reminders and of the mails about what others did, and the directory they ask.")
 
 // RemindedStore — The tasks already reminded of.
 var RemindedStore = Service.Store("reminded", func(e Reminded) string { return e.TaskID })
+
+// ActedStore — The events already mailed, each to its member; a key is
+// deleted ninety days after it was written.
+var ActedStore = Service.Store("acted", func(e Acted) string { return e.Key },
+	app.DeleteAfter[Acted](time.Duration(7776000000000000) /* 2160h */, func(e Acted) (time.Time, bool) { return e.At, !e.At.IsZero() }),
+)
 
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
