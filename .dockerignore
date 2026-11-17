@@ -1,0 +1,7 @@
+.git
+.app
+.kit
+legacy
+go.work
+go.work.sum
+*.md
