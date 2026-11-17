@@ -9,7 +9,7 @@ domains:
         role: domain
         code: 64.1.1
         description: The task, its priority and its lifecycle.
-        evidence: [legacy-product]
+        evidence: [former-product]
         entities:
           - name: Task
             description: Something to do, for someone, by a date.

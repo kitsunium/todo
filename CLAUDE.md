@@ -9,10 +9,6 @@ One Go module, `github.com/kitsunium/todo`, go 1.27.3, on
 published, no `replace`. `go list -m all` names the todo and the SDK's
 modules, nothing else. The standard library is free.
 
-`legacy/` is the former product, written on the framework by hand: a Go
-module of its own (`github.com/kitsunium/todo/legacy`), with its own
-`CLAUDE.md`. Nothing here imports it, and a change here never needs one there.
-
 ## Layout
 
 | Path | Component (role) | Holds |

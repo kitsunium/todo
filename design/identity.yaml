@@ -8,7 +8,7 @@ domains:
         role: domain
         code: 64.6.1
         description: The account, its lock after wrong passwords, and the session.
-        evidence: [legacy-product]
+        evidence: [former-product]
         entities:
           - name: Account
             description: A member of the team, who signs in with an address and a password.

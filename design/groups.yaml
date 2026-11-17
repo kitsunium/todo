@@ -8,7 +8,7 @@ domains:
         role: domain
         code: 64.9.1
         description: A group, its members and their roles, and the invitation that brings a member in.
-        evidence: [legacy-product]
+        evidence: [former-product]
         entities:
           - name: Group
             description: A team, its members and the role each one has in it.

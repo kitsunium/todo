@@ -8,7 +8,7 @@ domains:
         role: domain
         code: 64.8.1
         description: The link between two members, and the request that makes it.
-        evidence: [legacy-product]
+        evidence: [former-product]
         entities:
           - name: Link
             description: A contact request between two members, and the contact it becomes once accepted.

@@ -8,6 +8,6 @@ domains:
         role: presentation
         code: 64.7.1
         description: The web app, a few static files that talk to the HTTP API with the session cookie.
-        evidence: [legacy-product]
+        evidence: [former-product]
         statics:
           - {name: app, prefix: /, dir: page, description: "The web app: one page, its style and its script, written by hand, with no build step."}

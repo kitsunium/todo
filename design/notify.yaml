@@ -9,7 +9,7 @@ domains:
         code: 64.3.1
         uses: [planner, task]
         description: Who is reminded of what, and what that needs.
-        evidence: [legacy-product]
+        evidence: [former-product]
         constants:
           - {name: OnContactRequested, type: string, value: '"contact-requested"', description: "OnContactRequested is the kind of the event of a contact request received: the addressee is written to."}
           - {name: OnContactAccepted, type: string, value: '"contact-accepted"', description: "OnContactAccepted is the kind of the event of a contact request accepted: the requester is written to."}

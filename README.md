@@ -38,9 +38,9 @@ in French or English, that does everything the API does: the account and its set
 contacts and their requests, groups with their members and invitations, the tasks with their views, counts,
 sharing and assignment, the feed and the vital signs.
 
-The former todo, written on the framework by hand, is kept whole in
-[`legacy/`](legacy/), a Go module of its own, as a reference: its richer web
-app no longer does anything this one does not.
+The todo was first written on the framework by hand. Everything that product
+did is here, said by the design; it is gone from the tree and stays in the
+repository's history.
 
 ## The design
 

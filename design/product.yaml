@@ -34,11 +34,10 @@ evidence:
   - name: owner-2026-11-16
     kind: decision
     date: 2026-11-16
-    note: The todo is reopened as a product written design first, on the SDK's current framework; the former framework-style product is kept beside it, in legacy/, a module of its own.
-  - name: legacy-product
+    note: The todo is reopened as a product written design first, on the SDK's current framework; the former framework-style product stayed beside it until this one did all it did, then left the tree.
+  - name: former-product
     kind: observed
-    path: legacy/README.md
-    note: The former todo, whose task lifecycle, reminders, activity feed and vital signs this design keeps.
+    note: "The former todo, written on the framework by hand, whose functions this design keeps; it is in the repository's history, last at the commit before the one that removed the directory legacy."
 binaries:
   - name: todo
     description: The todo, as one executable, its server and the load it can drive against one.

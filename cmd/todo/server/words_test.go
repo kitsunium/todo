@@ -28,9 +28,6 @@ func TestThePageHasWordsForEveryRefusalOfTheAPI(t *testing.T) {
 	field := regexp.MustCompile(`invalid\("([A-Za-z]+)", "([a-z_]+)"`)
 	keys := map[string]string{}
 	for _, file := range handlers {
-		if strings.Contains(file, "legacy") {
-			continue
-		}
 		src, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)

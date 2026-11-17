@@ -1,7 +1,7 @@
 .git
 .app
 .kit
-legacy
+build
 go.work
 go.work.sum
 *.md

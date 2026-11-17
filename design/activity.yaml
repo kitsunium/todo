@@ -9,7 +9,7 @@ domains:
         code: 64.2.1
         uses: [taskstore, linkstore, groupstore]
         description: The feed, written from the events of the tasks, of the contacts and of the groups, and its HTTP read.
-        evidence: [legacy-product]
+        evidence: [former-product]
         entities:
           - name: Entry
             description: One thing that happened to a task.

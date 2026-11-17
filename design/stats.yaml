@@ -9,7 +9,7 @@ domains:
         code: 64.4.1
         uses: [api]
         description: The job that samples the task list, and the HTTP read of its samples.
-        evidence: [legacy-product]
+        evidence: [former-product]
         entities:
           - name: Snapshot
             description: The task list at one instant.
