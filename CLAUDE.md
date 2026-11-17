@@ -40,7 +40,7 @@ module of its own (`github.com/kitsunium/todo/legacy`), with its own
 | `notify/outbox` | outbox (adapter) | the store `reminded`, `Members` (the reminders' `Directory`, which asks the identity's query) and `Ledger` |
 | `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within` |
 | `stats/census` | census (presentation) | the store `snapshots`, the job `sample`, `GET /api/stats` |
-| `web/site` | site (presentation) | the web app: `page/index.html`, `app.css`, `app.js`, embedded and served at `/` |
+| `web/site` | site (presentation) | the web app, French and English: `page/index.html`, `app.css`, `lang.js` (words), `tasks.js`, `circle.js`, `app.js`, embedded and served at `/` |
 | `load/driver` | driver (application) | `Drive`, the port `API` |
 | `load/httpapi` | httpapi (adapter) | `Client`, the API over HTTP, the setting `target` |
 | `load/loadcli` | loadcli (presentation) | the command `run` |

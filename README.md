@@ -26,12 +26,14 @@ after seven days. A member shares a task with a
 contact, who then sees it, edits it and moves it, and may leave it. A task added to a group's
 list is seen, edited and moved by every member of the group; a task is assigned to a member, who then sees
 it. When a member leaves a group or is removed from it, the tasks they were assigned in it are theirs no more, and
-the tasks of a group deleted go back to their owners' lists. The server serves a small web app at `/`,
-in French: sign up, sign in, add tasks, move them, read the feed.
+the tasks of a group deleted go back to their owners' lists. The server serves a web app at `/`,
+in French or English, that does everything the API does: the account and its settings and sessions,
+contacts and their requests, groups with their members and invitations, the tasks with their views, counts,
+sharing and assignment, the feed and the vital signs.
 
-The former todo, written on the framework by hand, is where the rest still
-lives — its richer web app — until the design can say it. It is kept whole in [`legacy/`](legacy/), a Go
-module of its own.
+The former todo, written on the framework by hand, is kept whole in
+[`legacy/`](legacy/), a Go module of its own, as a reference: its richer web
+app no longer does anything this one does not.
 
 ## The design
 
@@ -147,11 +149,14 @@ from.
 
 ## The web app
 
-`web/site/page` holds three files written by hand — `index.html`, `app.css`,
-`app.js` — with no build step and no dependency; the binary embeds them. The
-page talks to the API above with the session cookie. The server answers the
-page for any path that names no file, and its content policy allows scripts
-and styles of its own origin only: nothing inline.
+`web/site/page` holds the files of the web app, written by hand — `index.html`,
+`app.css` and a few plain scripts (`lang.js`, the words of each language;
+`tasks.js`; `circle.js`, contacts and groups; `app.js`, the router and the
+account) — with no build step and no dependency; the binary embeds them. The
+page speaks French or English, by the account's language, and writes dates in
+its time zone. It talks to the API above with the session cookie. The server
+answers the page for any path that names no file, and its content policy allows
+scripts and styles of its own origin only: nothing inline.
 
 ## Drive a load
 

@@ -483,6 +483,51 @@ func TestTheServerServesTheWebApp(t *testing.T) {
 	if code, kind, _ := get("/app.css"); code != http.StatusOK || !strings.HasPrefix(kind, "text/css") {
 		t.Errorf("GET /app.css: %d %s, want the style", code, kind)
 	}
+
+	// Every script and stylesheet the page names is served, and together the
+	// scripts name every family of the API.
+	_, _, page := get("/")
+	var scripts strings.Builder
+	srcs := regexp.MustCompile(`<script[^>]*\ssrc="([^"]+)"`).FindAllStringSubmatch(page, -1)
+	if len(srcs) < 2 {
+		t.Errorf("the page names %d scripts, want its several files", len(srcs))
+	}
+	for _, m := range srcs {
+		code, kind, body := get(m[1])
+		if code != http.StatusOK || !strings.Contains(kind, "javascript") {
+			t.Errorf("GET %s: %d %s, want a script", m[1], code, kind)
+		}
+		scripts.WriteString(body)
+	}
+	for _, m := range regexp.MustCompile(`<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"`).FindAllStringSubmatch(page, -1) {
+		if code, kind, _ := get(m[1]); code != http.StatusOK || !strings.HasPrefix(kind, "text/css") {
+			t.Errorf("GET %s: %d %s, want a style", m[1], code, kind)
+		}
+	}
+	for _, name := range []string{
+		"/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/auth/password", "/api/auth/sessions", "/api/auth/verify",
+		"/api/contacts", "/api/groups", "/api/invitations", "/api/tasks", "/api/tasks/counts", "/api/activity", "/api/stats",
+		"share", "archive", "restore", "complete", "reopen", "accept", "decline", "cancel", "members",
+	} {
+		if !strings.Contains(scripts.String(), name) {
+			t.Errorf("the scripts never name %q", name)
+		}
+	}
+
+	// A strict content policy: no inline script, no style attribute, no handler.
+	if inline := regexp.MustCompile(`(?s)<script(?:\s[^>]*)?>(.*?)</script>`).FindAllStringSubmatch(page, -1); len(inline) > 0 {
+		for _, m := range inline {
+			if strings.TrimSpace(m[1]) != "" {
+				t.Errorf("the page has an inline script: %q", m[1])
+			}
+		}
+	}
+	if regexp.MustCompile(`(?i)\sstyle\s*=`).MatchString(page) {
+		t.Error("the page has a style attribute")
+	}
+	if regexp.MustCompile(`(?i)<[^>]+\son[a-z]+\s*=`).MatchString(page) {
+		t.Error("the page has an event handler attribute")
+	}
 	if code, kind, _ := get("/api/tasks"); code != http.StatusUnauthorized || !strings.Contains(kind, "json") {
 		t.Errorf("GET /api/tasks: %d %s, want the API's 401", code, kind)
 	}
