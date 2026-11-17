@@ -506,7 +506,7 @@ func TestTheServerServesTheWebApp(t *testing.T) {
 	}
 	for _, name := range []string{
 		"/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/auth/password", "/api/auth/sessions", "/api/auth/verify",
-		"/api/contacts", "/api/groups", "/api/invitations", "/api/tasks", "/api/tasks/counts", "/api/activity", "/api/stats",
+		"/api/contacts", "/api/contacts/invites", "/api/groups", "/api/invitations", "/api/tasks", "/api/tasks/counts", "/api/activity", "/api/stats",
 		"share", "archive", "restore", "complete", "reopen", "accept", "decline", "cancel", "members",
 	} {
 		if !strings.Contains(scripts.String(), name) {
@@ -1493,22 +1493,22 @@ func TestAStrangerIsInvitedAndJoins(t *testing.T) {
 
 	bob.invite("zoe@example.com")
 	gone := cy.invite("zoe@example.com")
-	bob.call(http.StatusNotFound, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, nil) // not his to cancel
-	var cancelled struct {
-		Kind   string
-		Invite invitation
+	bob.call(http.StatusNotFound, "DELETE", "/api/contacts/invites/"+gone.ID, nil, nil)      // not his to withdraw
+	bob.call(http.StatusNotFound, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, nil)      // /cancel is for a request: an invitation's id is nobody's there
+	cy.call(http.StatusNotFound, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, nil)       // not even its member's
+	cy.call(http.StatusNotFound, "DELETE", "/api/contacts/invites/invite_unknown", nil, nil) // an unknown id
+	var withdrawn invitation
+	cy.call(http.StatusOK, "DELETE", "/api/contacts/invites/"+gone.ID, nil, &withdrawn)
+	if withdrawn != gone {
+		t.Errorf("the withdrawal answered %+v, want the invitation %+v", withdrawn, gone)
 	}
-	cy.call(http.StatusOK, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, &cancelled)
-	if cancelled.Kind != "invite" || cancelled.Invite.ID != gone.ID {
-		t.Errorf("the cancellation answered %+v, want the invitation", cancelled)
-	}
-	cy.call(http.StatusNotFound, "POST", "/api/contacts/"+gone.ID+"/cancel", nil, nil) // once only
+	cy.call(http.StatusNotFound, "DELETE", "/api/contacts/invites/"+gone.ID, nil, nil) // once only
 	cy.call(http.StatusOK, "GET", "/api/contacts", nil, &mine)
 	if len(mine.Invites) != 0 {
 		t.Errorf("Cy still has %+v after withdrawing the invitation", mine.Invites)
 	}
 	cy.invite("zoe@example.com") // and may invite again, then withdraw again
-	cy.call(http.StatusOK, "POST", "/api/contacts/"+cy.firstInvite(t)+"/cancel", nil, nil)
+	cy.call(http.StatusOK, "DELETE", "/api/contacts/invites/"+cy.firstInvite(t), nil, nil)
 
 	zoe := p.signUp("Zoe", "zoe@example.com")
 	var hers listing
@@ -1546,7 +1546,12 @@ func TestAStrangerIsInvitedAndJoins(t *testing.T) {
 
 	// Her address is a member's now: asking it is a request, and a request waiting is a conflict.
 	zoe.call(http.StatusConflict, "POST", "/api/contacts", map[string]any{"email": "ada@example.com"}, nil)
-	cy.request("zoe@example.com")
+	asked := cy.request("zoe@example.com")
+	var answered requestLink
+	cy.call(http.StatusOK, "POST", "/api/contacts/"+asked.ID+"/cancel", nil, &answered) // /cancel is a request's: the answer is the request
+	if answered.ID != asked.ID || answered.State != "cancelled" {
+		t.Errorf("the cancellation answered %+v, want the request %s cancelled", answered, asked.ID)
+	}
 }
 
 // firstInvite is the id of the member's only invitation.
@@ -1718,5 +1723,206 @@ func TestMailsFollowTheMembersLanguage(t *testing.T) {
 	reminder.page(t, "en")
 	if reminder.Subject != "Due soon: Ship <b>the</b> release" || !strings.Contains(strings.Join(strings.Fields(reminder.Text), " "), "is due Monday, November 16 at 10:00 EST.") || strings.Contains(reminder.HTML, "<b>the</b>") {
 		t.Errorf("the reminder: %q, %q", reminder.Subject, reminder.Text)
+	}
+}
+
+// pending is an invitation a group is waiting on, as its managers read it.
+type pending struct {
+	ID        string
+	User      struct{ ID, Name string }
+	Inviter   struct{ ID, Name string }
+	CreatedAt string
+}
+
+// A group's owner and admins see the invitations the group is waiting on,
+// the newest first and without any address, and withdraw one: the invitee
+// no longer sees it and cannot answer it. A plain member is refused, a
+// stranger to the group finds no group, and an invitation of another group,
+// one already answered or one nobody made is not found.
+func TestAGroupShowsAndWithdrawsItsInvitations(t *testing.T) {
+	p := start(t)
+	ada, bob, cy, dee, eve := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com"), p.signUp("Dee", "dee@example.com"), p.signUp("Eve", "eve@example.com")
+	var core, other groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Core"}, &core)
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Other"}, &other)
+	for _, who := range []struct {
+		m    *member
+		addr string
+	}{{bob, "bob@example.com"}, {cy, "cy@example.com"}, {dee, "dee@example.com"}} {
+		ada.befriend(who.m, who.addr)
+	}
+	invite := func(g groupView, who *member) pending {
+		var inv struct{ ID string }
+		ada.call(http.StatusOK, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{"userId": who.id}, &inv)
+		p.clk.Advance(time.Second)
+		return pending{ID: inv.ID}
+	}
+	toBob, toCy := invite(core, bob), invite(core, cy)
+	elsewhere := invite(other, dee)
+	cy.call(http.StatusOK, "POST", "/api/invitations/"+toCy.ID+"/accept", nil, nil)
+	toDee := invite(core, dee)
+
+	list := func(m *member, status int) (out struct{ Invitations []pending }) {
+		raw := json.RawMessage{}
+		m.call(status, "GET", "/api/groups/"+core.ID+"/invitations", nil, &raw)
+		if status == http.StatusOK {
+			if strings.Contains(string(raw), "@") || strings.Contains(strings.ToLower(string(raw)), "email") {
+				t.Errorf("the invitations of the group %s name an address", raw)
+			}
+			if err := json.Unmarshal(raw, &out); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return out
+	}
+	got := list(ada, http.StatusOK)
+	if len(got.Invitations) != 2 || got.Invitations[0].ID != toDee.ID || got.Invitations[1].ID != toBob.ID {
+		t.Fatalf("the invitations of Core: %+v, want Dee's then Bob's (Cy's was answered, the other group's is not Core's)", got.Invitations)
+	}
+	if v := got.Invitations[0]; v.User.ID != dee.id || v.User.Name != "Dee" || v.Inviter.ID != ada.id || v.Inviter.Name != "Ada" || v.CreatedAt == "" {
+		t.Errorf("an invitation: %+v", v)
+	}
+	list(cy, http.StatusForbidden) // a plain member
+	list(eve, http.StatusNotFound) // a stranger to the group, as GET /api/groups/{id}
+	eve.call(http.StatusNotFound, "GET", "/api/groups/"+core.ID, nil, nil)
+	cy.call(http.StatusForbidden, "DELETE", "/api/groups/"+core.ID+"/invitations/"+toBob.ID, nil, nil)
+	eve.call(http.StatusNotFound, "DELETE", "/api/groups/"+core.ID+"/invitations/"+toBob.ID, nil, nil)
+
+	ada.call(http.StatusNotFound, "DELETE", "/api/groups/"+core.ID+"/invitations/"+elsewhere.ID, nil, nil) // another group's
+	ada.call(http.StatusNotFound, "DELETE", "/api/groups/"+core.ID+"/invitations/"+toCy.ID, nil, nil)      // already answered
+	ada.call(http.StatusNotFound, "DELETE", "/api/groups/"+core.ID+"/invitations/invitation_none", nil, nil)
+	var theirs struct{ Invitations []struct{ ID string } }
+	dee.call(http.StatusOK, "GET", "/api/invitations", nil, &theirs)
+	if len(theirs.Invitations) != 2 {
+		t.Fatalf("Dee's invitations: %+v, want the two still waiting", theirs.Invitations)
+	}
+
+	ada.call(http.StatusOK, "DELETE", "/api/groups/"+core.ID+"/invitations/"+toDee.ID, nil, nil)
+	ada.call(http.StatusNotFound, "DELETE", "/api/groups/"+core.ID+"/invitations/"+toDee.ID, nil, nil) // once only
+	dee.call(http.StatusConflict, "POST", "/api/invitations/"+toDee.ID+"/accept", nil, nil)            // withdrawn: not waiting any more
+	dee.call(http.StatusOK, "GET", "/api/invitations", nil, &theirs)
+	if len(theirs.Invitations) != 1 || theirs.Invitations[0].ID != elsewhere.ID {
+		t.Errorf("Dee's invitations after the withdrawal: %+v, want the other group's alone", theirs.Invitations)
+	}
+	if left := list(ada, http.StatusOK); len(left.Invitations) != 1 || left.Invitations[0].ID != toBob.ID {
+		t.Errorf("the invitations of Core after the withdrawal: %+v, want Bob's alone", left.Invitations)
+	}
+	ada.call(http.StatusOK, "POST", "/api/groups/"+core.ID+"/invitations", map[string]any{"userId": dee.id}, nil) // may be invited again
+}
+
+// A withdrawal and an acceptance of the same invitation, at the same instant,
+// leave one winner: the withdrawal is answered 200 and the acceptance 409 (the
+// invitation is no longer waiting), or the acceptance 200 and the withdrawal
+// 404 (there is no invitation waiting to withdraw). The invitee is in the
+// group only when the acceptance won.
+func TestAWithdrawalAndAnAcceptanceAtTheSameInstantLeaveOneWinner(t *testing.T) {
+	p := start(t)
+	ada := p.signUp("Ada", "ada@example.com")
+	var g groupView
+	ada.call(http.StatusOK, "POST", "/api/groups", map[string]any{"name": "Core"}, &g)
+	for _, name := range []string{"bob", "cy", "dee", "eve"} {
+		who := p.signUp(name, name+"@example.com")
+		ada.befriend(who, name+"@example.com")
+		for round := range 2 { // a withdrawal frees the invitee to be invited again
+			var inv struct{ ID string }
+			ada.call(http.StatusOK, "POST", "/api/groups/"+g.ID+"/invitations", map[string]any{"userId": who.id}, &inv)
+			got := together(
+				func() int { return ada.status("DELETE", "/api/groups/"+g.ID+"/invitations/"+inv.ID, nil) },
+				func() int { return who.status("POST", "/api/invitations/"+inv.ID+"/accept", nil) },
+			)
+			withdrawn, accepted := got[0] == http.StatusOK && got[1] == http.StatusConflict, got[0] == http.StatusNotFound && got[1] == http.StatusOK
+			if withdrawn == accepted {
+				t.Fatalf("%s, round %d: withdrawal %d and acceptance %d, want exactly one winner", name, round, got[0], got[1])
+			}
+			ada.call(http.StatusOK, "GET", "/api/groups/"+g.ID, nil, &g)
+			if _, member := g.roles()[name]; member != accepted {
+				t.Fatalf("%s, round %d: member %v, acceptance won %v", name, round, member, accepted)
+			}
+			if accepted {
+				break
+			}
+			p.clk.Advance(time.Second)
+		}
+	}
+}
+
+// namedTask is a task as the API answers it, with its people.
+type namedTask struct {
+	ID, OwnerID, AssigneeID string
+	SharedWith              []string
+	People                  []struct{ ID, Name string }
+}
+
+// names are the people of an answer, by id.
+func (n namedTask) names() map[string]string {
+	out := map[string]string{}
+	for _, p := range n.People {
+		out[p.ID] = p.Name
+	}
+	return out
+}
+
+// Every answer that carries tasks names their people: the owner, the assignee
+// and the members a task is shared with, each once, by name and never by
+// address, even those the caller has no contact with and no group in common.
+func TestTheAnswersNameThePeopleOfTheirTasks(t *testing.T) {
+	p := start(t)
+	ada, bob, cy := p.signUp("Ada", "ada@example.com"), p.signUp("Bob", "bob@example.com"), p.signUp("Cy", "cy@example.com")
+	ada.befriend(bob, "bob@example.com")
+	ada.befriend(cy, "cy@example.com") // Bob and Cy are no contact of each other
+
+	var tk namedTask
+	ada.call(http.StatusOK, "POST", "/api/tasks", map[string]any{"title": "Plan the launch"}, &tk)
+	if want := map[string]string{ada.id: "Ada"}; !maps.Equal(tk.names(), want) || len(tk.People) != 1 {
+		t.Errorf("the task added: %+v, want Ada alone", tk.People)
+	}
+	ada.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/share", map[string]any{"userId": bob.id}, &tk)
+	ada.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/share", map[string]any{"userId": cy.id}, &tk)
+	ada.call(http.StatusOK, "PATCH", "/api/tasks/"+tk.ID, map[string]any{"assigneeId": cy.id}, &tk)
+	want := map[string]string{ada.id: "Ada", bob.id: "Bob", cy.id: "Cy"}
+	if !maps.Equal(tk.names(), want) || len(tk.People) != 3 || tk.AssigneeID != cy.id {
+		t.Errorf("the task edited: %+v, want Ada, Cy and Bob, each once", tk.People)
+	}
+
+	// Bob names Cy, who is neither his contact nor in a group with him.
+	var raw json.RawMessage
+	var one namedTask
+	bob.call(http.StatusOK, "GET", "/api/tasks/"+tk.ID, nil, &raw)
+	if strings.Contains(string(raw), "@") {
+		t.Errorf("the task names an address: %s", raw)
+	}
+	if err := json.Unmarshal(raw, &one); err != nil || !maps.Equal(one.names(), want) || len(one.People) != 3 {
+		t.Errorf("Bob reads the task: %+v (%v), want the three named", one.People, err)
+	}
+	var list struct {
+		Tasks  []namedTask
+		People []struct{ ID, Name string }
+	}
+	raw = nil
+	bob.call(http.StatusOK, "GET", "/api/tasks", nil, &raw)
+	if strings.Contains(string(raw), "@") {
+		t.Errorf("the list names an address: %s", raw)
+	}
+	if err := json.Unmarshal(raw, &list); err != nil || len(list.Tasks) != 1 || len(list.People) != 3 || list.Tasks[0].People != nil {
+		t.Fatalf("Bob's list: %+v (%v), want the people at the top, beside the tasks", list, err)
+	}
+	for _, person := range list.People {
+		if want[person.ID] != person.Name {
+			t.Errorf("the list names %+v, want %v", person, want)
+		}
+	}
+	bob.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/complete", nil, &one)
+	if !maps.Equal(one.names(), want) {
+		t.Errorf("the task completed: %+v", one.People)
+	}
+	bob.call(http.StatusOK, "POST", "/api/tasks/"+tk.ID+"/reopen", nil, &one)
+	if !maps.Equal(one.names(), want) {
+		t.Errorf("the task reopened: %+v", one.People)
+	}
+	var empty struct{ People []struct{ ID, Name string } }
+	raw = nil
+	cy.call(http.StatusOK, "GET", "/api/tasks?view=today", nil, &raw)
+	if err := json.Unmarshal(raw, &empty); err != nil || empty.People == nil || !strings.Contains(string(raw), `"people":[`) {
+		t.Errorf("a list with no task: %s (%v), want a people member all the same", raw, err)
 	}
 }

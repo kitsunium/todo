@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 package roster
 
@@ -237,6 +237,34 @@ func TestInviteRefusesAnInvitationAlreadyWaiting(t *testing.T) {
 	}
 }
 
+// TestListGroupInvitationsListsThePendingInvitationsOfAGroupNewestFirst is ListGroupInvitations's scenario "lists the pending invitations of a group newest first" (success).
+func TestListGroupInvitationsListsThePendingInvitationsOfAGroupNewestFirst(t *testing.T) {
+	uc, in, then := givenListGroupInvitationsListsThePendingInvitationsOfAGroupNewestFirst(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("ListGroupInvitations: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestListGroupInvitationsRefusesTheGroupOfOthers is ListGroupInvitations's scenario "refuses the group of others" (refusal).
+func TestListGroupInvitationsRefusesTheGroupOfOthers(t *testing.T) {
+	uc, in := givenListGroupInvitationsRefusesTheGroupOfOthers(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNotFound) {
+		t.Fatalf("ListGroupInvitations: %v, want team.ErrNotFound", err)
+	}
+}
+
+// TestListGroupInvitationsRefusesAPlainMember is ListGroupInvitations's scenario "refuses a plain member" (refusal).
+func TestListGroupInvitationsRefusesAPlainMember(t *testing.T) {
+	uc, in := givenListGroupInvitationsRefusesAPlainMember(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNotManager) {
+		t.Fatalf("ListGroupInvitations: %v, want team.ErrNotManager", err)
+	}
+}
+
 // TestListGroupsListsTheGroupsOfAMemberByName is ListGroups's scenario "lists the groups of a member by name" (success).
 func TestListGroupsListsTheGroupsOfAMemberByName(t *testing.T) {
 	uc, in, then := givenListGroupsListsTheGroupsOfAMemberByName(t)
@@ -413,6 +441,61 @@ func TestSetRoleRefusesToChangeTheOwner(t *testing.T) {
 	_, err := uc.Execute(t.Context(), in)
 	if !errors.Is(err, team.ErrOwnerRole) {
 		t.Fatalf("SetRole: %v, want team.ErrOwnerRole", err)
+	}
+}
+
+// TestWithdrawInvitationWithdrawsAnInvitation is WithdrawInvitation's scenario "withdraws an invitation" (success).
+func TestWithdrawInvitationWithdrawsAnInvitation(t *testing.T) {
+	uc, in, then := givenWithdrawInvitationWithdrawsAnInvitation(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("WithdrawInvitation: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestWithdrawInvitationRefusesTheGroupOfOthers is WithdrawInvitation's scenario "refuses the group of others" (refusal).
+func TestWithdrawInvitationRefusesTheGroupOfOthers(t *testing.T) {
+	uc, in := givenWithdrawInvitationRefusesTheGroupOfOthers(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNotFound) {
+		t.Fatalf("WithdrawInvitation: %v, want team.ErrNotFound", err)
+	}
+}
+
+// TestWithdrawInvitationRefusesAPlainMemberWhoWithdraws is WithdrawInvitation's scenario "refuses a plain member who withdraws" (refusal).
+func TestWithdrawInvitationRefusesAPlainMemberWhoWithdraws(t *testing.T) {
+	uc, in := givenWithdrawInvitationRefusesAPlainMemberWhoWithdraws(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNotManager) {
+		t.Fatalf("WithdrawInvitation: %v, want team.ErrNotManager", err)
+	}
+}
+
+// TestWithdrawInvitationRefusesAnInvitationOfAnotherGroup is WithdrawInvitation's scenario "refuses an invitation of another group" (refusal).
+func TestWithdrawInvitationRefusesAnInvitationOfAnotherGroup(t *testing.T) {
+	uc, in := givenWithdrawInvitationRefusesAnInvitationOfAnotherGroup(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNoInvitation) {
+		t.Fatalf("WithdrawInvitation: %v, want team.ErrNoInvitation", err)
+	}
+}
+
+// TestWithdrawInvitationRefusesAnInvitationAlreadyAnswered is WithdrawInvitation's scenario "refuses an invitation already answered" (refusal).
+func TestWithdrawInvitationRefusesAnInvitationAlreadyAnswered(t *testing.T) {
+	uc, in := givenWithdrawInvitationRefusesAnInvitationAlreadyAnswered(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNoInvitation) {
+		t.Fatalf("WithdrawInvitation: %v, want team.ErrNoInvitation", err)
+	}
+}
+
+// TestWithdrawInvitationRefusesAnUnknownInvitation is WithdrawInvitation's scenario "refuses an unknown invitation" (refusal).
+func TestWithdrawInvitationRefusesAnUnknownInvitation(t *testing.T) {
+	uc, in := givenWithdrawInvitationRefusesAnUnknownInvitation(t)
+	_, err := uc.Execute(t.Context(), in)
+	if !errors.Is(err, team.ErrNoInvitation) {
+		t.Fatalf("WithdrawInvitation: %v, want team.ErrNoInvitation", err)
 	}
 }
 

@@ -1,8 +1,9 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package taskstore — The tasks in the framework's store, the archiving of
-// what was done long ago, their events on a topic, and the framework's clock.
+// what was done long ago, their events on a topic, the directory asked of the
+// identity, and the framework's clock.
 //
 // Its structure is generated from design/ (ADR 0010); its bodies are the
 // hand-written twins beside this file.
@@ -95,6 +96,23 @@ func (a *AppClock) Now(ctx context.Context) (time.Time, error) {
 }
 
 var _ planner.ClockV1 = (*AppClock)(nil)
+
+// Directory is People@v1 on the identity's query "member".
+type Directory struct {
+	directory // its own state, hand-written
+}
+
+// NewDirectory builds Directory: its body is the hand-written newDirectory.
+func NewDirectory() *Directory {
+	return newDirectory()
+}
+
+// ByID is tasks/port/People@v1's.
+func (a *Directory) ByID(ctx context.Context, id string) (planner.Person, bool, error) {
+	return a.byID(ctx, id)
+}
+
+var _ planner.PeopleV1 = (*Directory)(nil)
 
 // Friends is Circle@v1 on the contacts' query "are-contacts".
 type Friends struct {
@@ -204,7 +222,7 @@ var ShelfWorkflow = Service.Workflow("shelf", TasksStore, func(e *Record) *Shelf
 	OnTransition(onShelfTransition)
 
 // Service is taskstore's framework service: what it declares, drawn and run.
-var Service = app.NewService("taskstore", "The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, and the framework's clock.")
+var Service = app.NewService("taskstore", "The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, the directory asked of the identity, and the framework's clock.")
 
 // ArchiveAfterSetting — How long a done task stays listed before it is
 // archived.

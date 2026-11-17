@@ -15,19 +15,19 @@ import (
 )
 
 // add is POST /api/tasks's body; what it uses is in wired.
-func add(ctx context.Context, in AddRequest) (out task.Task, err error) {
+func add(ctx context.Context, in AddRequest) (out TaskView, err error) {
 	owner, err := caller(ctx)
 	if err != nil {
-		return task.Task{}, err
+		return TaskView{}, err
 	}
 	res, err := wired.addTask.Execute(ctx, planner.AddTaskInput{
 		Owner: owner, Title: in.Title, Notes: in.Notes, Priority: in.Priority, GroupID: in.GroupID, AssigneeID: in.AssigneeID, Due: in.Due,
 	})
 	if err != nil {
-		return task.Task{}, refusal(err)
+		return TaskView{}, refusal(err)
 	}
 	logger.Info(ctx, app.Log(ctx), "task added", logger.String("task", res.Task.ID), logger.String("user", owner), logger.String("priority", string(res.Task.Priority)))
-	return res.Task, nil
+	return viewOf(ctx, res.Task)
 }
 
 // list is GET /api/tasks's body; what it uses is in wired.
@@ -40,7 +40,11 @@ func list(ctx context.Context, in ListRequest) (out TaskList, err error) {
 	if err != nil {
 		return TaskList{}, refusal(err)
 	}
-	return TaskList{Tasks: res.Tasks}, nil
+	people, err := wired.namePeople.Execute(ctx, planner.NamePeopleInput{Tasks: res.Tasks})
+	if err != nil {
+		return TaskList{}, err
+	}
+	return TaskList{Tasks: res.Tasks, People: people.People}, nil
 }
 
 // counts is GET /api/tasks/counts's body; what it uses is in wired.
@@ -60,51 +64,51 @@ func counts(ctx context.Context, in CountsRequest) (out ViewCounts, err error) {
 }
 
 // complete is POST /api/tasks/{id}/complete's body; what it uses is in wired.
-func complete(ctx context.Context, in ByID) (out task.Task, err error) {
+func complete(ctx context.Context, in ByID) (out TaskView, err error) {
 	return move(ctx, in.ID, task.LifecycleOnComplete)
 }
 
 // reopen is POST /api/tasks/{id}/reopen's body; what it uses is in wired.
-func reopen(ctx context.Context, in ByID) (out task.Task, err error) {
+func reopen(ctx context.Context, in ByID) (out TaskView, err error) {
 	return move(ctx, in.ID, task.LifecycleOnReopen)
 }
 
 // archive is POST /api/tasks/{id}/archive's body; what it uses is in wired.
-func archive(ctx context.Context, in ByID) (out task.Task, err error) {
+func archive(ctx context.Context, in ByID) (out TaskView, err error) {
 	return move(ctx, in.ID, task.LifecycleOnArchive)
 }
 
 // restore is POST /api/tasks/{id}/restore's body; what it uses is in wired.
-func restore(ctx context.Context, in ByID) (out task.Task, err error) {
+func restore(ctx context.Context, in ByID) (out TaskView, err error) {
 	return move(ctx, in.ID, task.LifecycleOnRestore)
 }
 
 // get is GET /api/tasks/{id}'s body; what it uses is in wired.
-func get(ctx context.Context, in ByID) (out task.Task, err error) {
+func get(ctx context.Context, in ByID) (out TaskView, err error) {
 	me, err := caller(ctx)
 	if err != nil {
-		return task.Task{}, err
+		return TaskView{}, err
 	}
 	res, err := wired.getTask.Execute(ctx, planner.GetTaskInput{User: me, ID: in.ID})
 	if err != nil {
-		return task.Task{}, refusal(err)
+		return TaskView{}, refusal(err)
 	}
-	return res.Task, nil
+	return viewOf(ctx, res.Task)
 }
 
 // edit is PATCH /api/tasks/{id}'s body; what it uses is in wired.
-func edit(ctx context.Context, in EditRequest) (out task.Task, err error) {
+func edit(ctx context.Context, in EditRequest) (out TaskView, err error) {
 	me, err := caller(ctx)
 	if err != nil {
-		return task.Task{}, err
+		return TaskView{}, err
 	}
 	res, err := wired.editTask.Execute(ctx, planner.EditTaskInput{
 		User: me, ID: in.ID, Title: in.Title, Notes: in.Notes, Priority: in.Priority, AssigneeID: in.AssigneeID, GroupID: in.GroupID, Due: in.Due,
 	})
 	if err != nil {
-		return task.Task{}, refusal(err)
+		return TaskView{}, refusal(err)
 	}
-	return res.Task, nil
+	return viewOf(ctx, res.Task)
 }
 
 // deleteBody is DELETE /api/tasks/{id}'s body; what it uses is in wired.
@@ -120,29 +124,39 @@ func deleteBody(ctx context.Context, in ByID) (out NoInput, err error) {
 }
 
 // share is POST /api/tasks/{id}/share's body; what it uses is in wired.
-func share(ctx context.Context, in ShareRequest) (out task.Task, err error) {
+func share(ctx context.Context, in ShareRequest) (out TaskView, err error) {
 	me, err := caller(ctx)
 	if err != nil {
-		return task.Task{}, err
+		return TaskView{}, err
 	}
 	res, err := wired.shareTask.Execute(ctx, planner.ShareTaskInput{User: me, ID: in.ID, With: in.UserID})
 	if err != nil {
-		return task.Task{}, refusal(err)
+		return TaskView{}, refusal(err)
 	}
-	return res.Task, nil
+	return viewOf(ctx, res.Task)
 }
 
 // unshare is DELETE /api/tasks/{id}/share/{userId}'s body; what it uses is in wired.
-func unshare(ctx context.Context, in UnshareRequest) (out task.Task, err error) {
+func unshare(ctx context.Context, in UnshareRequest) (out TaskView, err error) {
 	me, err := caller(ctx)
 	if err != nil {
-		return task.Task{}, err
+		return TaskView{}, err
 	}
 	res, err := wired.unshareTask.Execute(ctx, planner.UnshareTaskInput{User: me, ID: in.ID, With: in.UserID})
 	if err != nil {
-		return task.Task{}, refusal(err)
+		return TaskView{}, refusal(err)
 	}
-	return res.Task, nil
+	return viewOf(ctx, res.Task)
+}
+
+// viewOf is a task as it is answered: with the names of its people, asked of
+// the directory once for each.
+func viewOf(ctx context.Context, t task.Task) (TaskView, error) {
+	named, err := wired.namePeople.Execute(ctx, planner.NamePeopleInput{Tasks: []task.Task{t}})
+	if err != nil {
+		return TaskView{}, err
+	}
+	return TaskView{Task: t, People: named.People}, nil
 }
 
 // count is the query "census"'s body: every member's tasks counted, through
@@ -156,16 +170,16 @@ func count(ctx context.Context, in NoInput) (out Census, err error) {
 }
 
 // move runs MoveTask for one of the four routes that move a task.
-func move(ctx context.Context, id string, event task.LifecycleEvent) (task.Task, error) {
+func move(ctx context.Context, id string, event task.LifecycleEvent) (TaskView, error) {
 	owner, err := caller(ctx)
 	if err != nil {
-		return task.Task{}, err
+		return TaskView{}, err
 	}
 	res, err := wired.moveTask.Execute(ctx, planner.MoveTaskInput{Owner: owner, ID: id, Event: string(event)})
 	if err != nil {
-		return task.Task{}, refusal(err)
+		return TaskView{}, refusal(err)
 	}
-	return res.Task, nil
+	return viewOf(ctx, res.Task)
 }
 
 // caller is the member the request comes from. Every route that calls it

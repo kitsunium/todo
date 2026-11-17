@@ -39,6 +39,14 @@ function t(key, vars) {
     : text;
 }
 
+// said is a refusal of the API in the page's language: the API words it in
+// English, and the dictionaries hold every sentence it can say, by that
+// sentence, and every broken rule of a field, by the field and the rule. One
+// they do not hold is shown as the API said it.
+function said(key, otherwise) {
+  return hasWord(key) ? t(key) : otherwise;
+}
+
 function browserZone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -156,11 +164,13 @@ async function call(method, path, body) {
   const data = await res.json().catch(() => ({}));
   if (res.ok) return data;
   const fault = data.error || {};
-  const err = new Error(fault.message || res.statusText);
+  const err = new Error(said("api." + fault.message, fault.message || res.statusText));
   err.status = res.status;
   err.code = fault.code || "";
   if (fault.violations && fault.violations.length) {
-    err.message = fault.violations.map((v) => v.message).join(", ");
+    err.message = fault.violations
+      .map((v) => said("api.field." + v.path + "." + v.rule, v.message))
+      .join(" ");
   }
   if (res.status === 429) err.message = t("err.wait");
   throw err;

@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 package planner
 
@@ -478,6 +478,36 @@ func TestMoveTaskRefusesToArchiveAnOpenTask(t *testing.T) {
 	if !errors.Is(err, task.ErrNotAllowed) {
 		t.Fatalf("MoveTask: %v, want task.ErrNotAllowed", err)
 	}
+}
+
+// TestNamePeopleNamesEachPersonOnce is NamePeople's scenario "names each person once" (success).
+func TestNamePeopleNamesEachPersonOnce(t *testing.T) {
+	uc, in, then := givenNamePeopleNamesEachPersonOnce(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("NamePeople: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestNamePeopleLeavesOutAMemberTheDirectoryDoesNotKnow is NamePeople's scenario "leaves out a member the directory does not know" (success).
+func TestNamePeopleLeavesOutAMemberTheDirectoryDoesNotKnow(t *testing.T) {
+	uc, in, then := givenNamePeopleLeavesOutAMemberTheDirectoryDoesNotKnow(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("NamePeople: %v, want a success", err)
+	}
+	then(t, out)
+}
+
+// TestNamePeopleNamesNobodyForNoTask is NamePeople's scenario "names nobody for no task" (success).
+func TestNamePeopleNamesNobodyForNoTask(t *testing.T) {
+	uc, in, then := givenNamePeopleNamesNobodyForNoTask(t)
+	out, err := uc.Execute(t.Context(), in)
+	if err != nil {
+		t.Fatalf("NamePeople: %v, want a success", err)
+	}
+	then(t, out)
 }
 
 // TestShareTaskSharesWithAContact is ShareTask's scenario "shares with a contact" (success).

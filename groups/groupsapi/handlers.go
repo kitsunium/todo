@@ -229,3 +229,31 @@ func refusal(err error) error {
 	}
 	return err
 }
+
+// groupInvitations is GET /api/groups/{id}/invitations's body; what it uses
+// is in wired. A non-member is answered as for GET /api/groups/{id}, a plain
+// member as for the invite route.
+func groupInvitations(ctx context.Context, in ByGroup) (out PendingList, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return PendingList{}, err
+	}
+	res, err := wired.listGroupInvitations.Execute(ctx, roster.ListGroupInvitationsInput{User: me, ID: in.ID})
+	if err != nil {
+		return PendingList{}, refusal(err)
+	}
+	return PendingList{Invitations: res.Invitations}, nil
+}
+
+// withdraw is DELETE /api/groups/{id}/invitations/{invitationId}'s body; what
+// it uses is in wired.
+func withdraw(ctx context.Context, in ByGroupInvitation) (out NoInput, err error) {
+	me, err := caller(ctx)
+	if err != nil {
+		return NoInput{}, err
+	}
+	if _, err := wired.withdrawInvitation.Execute(ctx, roster.WithdrawInvitationInput{User: me, ID: in.ID, InvitationID: in.InvitationID}); err != nil {
+		return NoInput{}, refusal(err)
+	}
+	return NoInput{}, nil
+}

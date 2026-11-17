@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package server — Serves the HTTP API, keeps the stores, archives what was
 // done long ago, samples the vital signs and sends the reminders.
@@ -92,6 +92,8 @@ func Wire(ctx context.Context, build Build) {
 	deleteGroup := roster.NewDeleteGroup(groups, groupstoreInvitations, groupstoreDirectory, groupstoreAnnouncer)
 	friends := groupstore.NewFriends()
 	invite := roster.NewInvite(groups, friends, groupstoreInvitations, groupstoreWallClock, groupstoreDirectory, groupstoreAnnouncer)
+	listGroupInvitations := roster.NewListGroupInvitations(groups, groupstoreInvitations, groupstoreDirectory)
+	withdrawInvitation := roster.NewWithdrawInvitation(groups, groupstoreInvitations)
 	listInvitations := roster.NewListInvitations(groupstoreInvitations, groups, groupstoreDirectory)
 	answerInvitation := roster.NewAnswerInvitation(groupstoreWallClock, groupstoreInvitations, groups, groupstoreDirectory, groupstoreAnnouncer)
 	removeMember := roster.NewRemoveMember(groupstoreWallClock, groups, groupstoreDirectory, groupstoreAnnouncer)
@@ -105,6 +107,8 @@ func Wire(ctx context.Context, build Build) {
 	followGroup := planner.NewFollowGroup(tasks, taskstoreGroups, appClock)
 	taskstoreAnnouncer := taskstore.NewAnnouncer()
 	addTask := planner.NewAddTask(appClock, taskstoreGroups, tasks, taskstoreAnnouncer)
+	taskstoreDirectory := taskstore.NewDirectory()
+	namePeople := planner.NewNamePeople(taskstoreDirectory)
 	listTasks := planner.NewListTasks(taskstoreGroups, appClock, tasks)
 	countViews := planner.NewCountViews(taskstoreGroups, appClock, tasks)
 	getTask := planner.NewGetTask(tasks, taskstoreGroups)
@@ -125,9 +129,9 @@ func Wire(ctx context.Context, build Build) {
 	linkstore.Wire()
 	contactsapi.Wire(listContacts, requestContact, answerRequest, cancelInvite, removeContact, claimInvites, areContacts)
 	groupstore.Wire()
-	groupsapi.Wire(listGroups, createGroup, getGroup, editGroup, deleteGroup, invite, listInvitations, answerInvitation, removeMember, setRole, roleOf, memberships, membersOf)
+	groupsapi.Wire(listGroups, createGroup, getGroup, editGroup, deleteGroup, invite, listGroupInvitations, withdrawInvitation, listInvitations, answerInvitation, removeMember, setRole, roleOf, memberships, membersOf)
 	taskstore.Wire(followGroup)
-	api.Wire(addTask, listTasks, countViews, getTask, editTask, deleteTask, shareTask, unshareTask, moveTask, countTasks)
+	api.Wire(addTask, namePeople, listTasks, countViews, getTask, editTask, deleteTask, shareTask, unshareTask, moveTask, countTasks)
 	feed.Wire()
 	post.Wire()
 	outbox.Wire()

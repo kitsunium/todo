@@ -386,7 +386,7 @@ domains:
             fields:
               - {name: Yes, type: bool, tag: 'json:"yes" app:"public"'}
           - name: Outcome
-            description: What a route that asks or cancels did, a request or an invitation.
+            description: What a route that asks did, a request or an invitation.
             fields:
               - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is request or invite."}
               - {name: Request, type: "*link.Link", tag: 'json:"request,omitempty"'}
@@ -405,7 +405,8 @@ domains:
           - {route: "POST /api/contacts", request: AddRequest, response: Outcome, handler: Add, rateLimit: {perSecond: 2, burst: 5, per: client}, auth: required, uses: [contacts/usecase/RequestContact], calls: [contacts/usecase/RequestContact]}
           - {route: "POST /api/contacts/{id}/accept", request: ByID, response: link.Link, handler: Accept, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
           - {route: "POST /api/contacts/{id}/decline", request: ByID, response: link.Link, handler: Decline, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
-          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: Outcome, handler: Cancel, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest, contacts/usecase/CancelInvite], calls: [contacts/usecase/AnswerRequest, contacts/usecase/CancelInvite]}
+          - {route: "POST /api/contacts/{id}/cancel", request: ByID, response: link.Link, handler: Cancel, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/AnswerRequest], calls: [contacts/usecase/AnswerRequest]}
+          - {route: "DELETE /api/contacts/invites/{id}", request: ByID, response: circle.Invitation, handler: Withdraw, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/CancelInvite], calls: [contacts/usecase/CancelInvite]}
           - {route: "DELETE /api/contacts/{id}", request: ByID, response: NoInput, handler: Remove, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [contacts/usecase/RemoveContact], calls: [contacts/usecase/RemoveContact]}
         subscriptions:
           - {name: accounts, topic: identity/topic/accounts, handler: Claim, description: "An address proven: the invitations waiting for it become requests.", uses: [contacts/usecase/ClaimInvites], calls: [contacts/usecase/ClaimInvites]}
@@ -423,10 +424,6 @@ domains:
               description: "refusal is a use case's error as the API answers it: 404 for a link that is not the caller's or an address nobody has, 409 for a pair already linked, an address already invited or a request that cannot be answered this way, 400 for oneself or an address that is none."
               params: [{name: err, type: "error"}]
               results: [{type: "error"}]
-            - name: isNotFound
-              description: "isNotFound says whether a refusal answers 404."
-              params: [{name: err, type: "error"}]
-              results: [{type: "bool"}]
     sequences:
       - name: request-contact
         description: A member asks another to be a contact; the other is told.

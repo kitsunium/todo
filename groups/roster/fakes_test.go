@@ -217,6 +217,12 @@ func (w *world) answer() AnswerInvitation {
 func (w *world) invitationsList() ListInvitations {
 	return NewListInvitations(w.invitationsPort(), w.groupsPort(), w)
 }
+func (w *world) groupInvitations() ListGroupInvitations {
+	return NewListGroupInvitations(w.groupsPort(), w.invitationsPort(), w)
+}
+func (w *world) withdraw() WithdrawInvitation {
+	return NewWithdrawInvitation(w.groupsPort(), w.invitationsPort())
+}
 func (w *world) leave() RemoveMember { return NewRemoveMember(w, w.groupsPort(), w, w) }
 func (w *world) setRole() SetRole    { return NewSetRole(w, w.groupsPort(), w, w) }
 func (w *world) roleOf() RoleOf      { return NewRoleOf(w.groupsPort()) }

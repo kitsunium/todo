@@ -33,15 +33,21 @@ function pathOf(view, state, group) {
   return s ? "/?" + s : "/";
 }
 
-// peopleOf is every member's name the page knows, by id: the member, the
-// contacts and the members of the groups.
-function peopleOf(contacts, groups) {
+// peopleOf is every member's name the page knows, by id: first the people the
+// answer names (every owner, assignee and member a task is shared with, which
+// no contact or group list may hold), then the member, the contacts and the
+// members of the groups.
+function peopleOf(answered, contacts, groups) {
   const names = new Map();
+  for (const p of answered || []) names.set(p.id, p.name);
+  const know = (id, name) => {
+    if (!names.has(id)) names.set(id, name);
+  };
   for (const g of groups)
-    for (const m of g.members || []) names.set(m.user.id, m.user.name);
+    for (const m of g.members || []) know(m.user.id, m.user.name);
   for (const c of (contacts && contacts.contacts) || [])
-    names.set(c.user.id, c.user.name);
-  names.set(me.id, me.name);
+    know(c.user.id, c.user.name);
+  know(me.id, me.name);
   return names;
 }
 
@@ -79,7 +85,7 @@ async function tasksPage(q) {
     call("GET", "/api/contacts"),
   ]);
   const groups = mine.groups;
-  const names = peopleOf(contacts, groups);
+  const names = peopleOf(list.people, contacts, groups);
 
   const here = view === "group" ? "group:" + group : view;
   const entry = (label, href, key, count) => {
@@ -235,7 +241,7 @@ async function taskPage(id) {
     call("GET", "/api/contacts"),
   ]);
   const groups = mine.groups;
-  const names = peopleOf(contacts, groups);
+  const names = peopleOf(task.people, contacts, groups);
   const owner = task.ownerId === me.id;
   const shared = task.sharedWith || [];
   const was = toLocal(task.due, zone());

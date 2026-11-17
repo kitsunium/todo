@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package roster — Creating and running a group, inviting a contact into it,
 // answering an invitation, and what the other components ask of one's groups.
@@ -62,6 +62,16 @@ type MemberView struct {
 	User     Person    `json:"user"`
 	Role     team.Role `json:"role" app:"public"`
 	JoinedAt time.Time `json:"joinedAt" app:"public"`
+}
+
+// PendingInvitation — An invitation a group is waiting on, as its owner and
+// admins read it, without any address.
+type PendingInvitation struct {
+	ID string `json:"id" app:"public"`
+	// User is who is invited.
+	User      Person    `json:"user"`
+	Inviter   Person    `json:"inviter"`
+	CreatedAt time.Time `json:"createdAt" app:"public"`
 }
 
 // Person — A member as a group shows them.
@@ -343,6 +353,42 @@ func (h *InviteHandler) Execute(ctx context.Context, in InviteInput) (InviteOutp
 
 var _ Invite = (*InviteHandler)(nil)
 
+// ListGroupInvitations lists the invitations a group is waiting on, the newest
+// first; its owner and admins may ask, as they may invite.
+type ListGroupInvitations interface {
+	Execute(ctx context.Context, in ListGroupInvitationsInput) (ListGroupInvitationsOutput, error)
+}
+
+// ListGroupInvitationsInput is ListGroupInvitations's input: a field added breaks no caller.
+type ListGroupInvitationsInput struct {
+	User string
+	ID   string
+}
+
+// ListGroupInvitationsOutput is ListGroupInvitations's output.
+type ListGroupInvitationsOutput struct {
+	Invitations []PendingInvitation
+}
+
+// ListGroupInvitationsHandler runs ListGroupInvitations: its body is the hand-written execute.
+type ListGroupInvitationsHandler struct {
+	groups      GroupsV1
+	invitations InvitationsV1
+	people      PeopleV1
+}
+
+// NewListGroupInvitations builds ListGroupInvitations on what it calls.
+func NewListGroupInvitations(groups GroupsV1, invitations InvitationsV1, people PeopleV1) *ListGroupInvitationsHandler {
+	return &ListGroupInvitationsHandler{groups: groups, invitations: invitations, people: people}
+}
+
+// Execute runs ListGroupInvitations.
+func (h *ListGroupInvitationsHandler) Execute(ctx context.Context, in ListGroupInvitationsInput) (ListGroupInvitationsOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ ListGroupInvitations = (*ListGroupInvitationsHandler)(nil)
+
 // ListGroups lists a member's groups by name.
 type ListGroups interface {
 	Execute(ctx context.Context, in ListGroupsInput) (ListGroupsOutput, error)
@@ -586,3 +632,40 @@ func (h *SetRoleHandler) Execute(ctx context.Context, in SetRoleInput) (SetRoleO
 }
 
 var _ SetRole = (*SetRoleHandler)(nil)
+
+// WithdrawInvitation takes back an invitation a group is waiting on; its owner
+// and admins may. The invitation is answered once, whoever the invitee or the
+// manager is, so a withdrawal and an acceptance at the same instant leave one
+// winner.
+type WithdrawInvitation interface {
+	Execute(ctx context.Context, in WithdrawInvitationInput) (WithdrawInvitationOutput, error)
+}
+
+// WithdrawInvitationInput is WithdrawInvitation's input: a field added breaks no caller.
+type WithdrawInvitationInput struct {
+	User         string
+	ID           string
+	InvitationID string
+}
+
+// WithdrawInvitationOutput is WithdrawInvitation's output.
+type WithdrawInvitationOutput struct {
+}
+
+// WithdrawInvitationHandler runs WithdrawInvitation: its body is the hand-written execute.
+type WithdrawInvitationHandler struct {
+	groups      GroupsV1
+	invitations InvitationsV1
+}
+
+// NewWithdrawInvitation builds WithdrawInvitation on what it calls.
+func NewWithdrawInvitation(groups GroupsV1, invitations InvitationsV1) *WithdrawInvitationHandler {
+	return &WithdrawInvitationHandler{groups: groups, invitations: invitations}
+}
+
+// Execute runs WithdrawInvitation.
+func (h *WithdrawInvitationHandler) Execute(ctx context.Context, in WithdrawInvitationInput) (WithdrawInvitationOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ WithdrawInvitation = (*WithdrawInvitationHandler)(nil)

@@ -157,3 +157,20 @@ func done(id string, at time.Time) task.Task {
 	t.State, t.DoneAt, t.UpdatedAt = task.LifecycleDone, at, at
 	return t
 }
+
+// memPeople is PeopleV1 in memory, which counts what it is asked.
+type memPeople struct {
+	names map[string]string
+	asked []string
+}
+
+func (m *memPeople) ByID(_ context.Context, id string) (Person, bool, error) {
+	m.asked = append(m.asked, id)
+	name, ok := m.names[id]
+	return Person{ID: id, Name: name}, ok, nil
+}
+
+// directory names ada, bob and cy, and nobody else.
+func directory() *memPeople {
+	return &memPeople{names: map[string]string{ada: "Ada", bob: "Bob", cy: "Cy"}}
+}

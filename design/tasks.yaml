@@ -83,6 +83,12 @@ domains:
         code: 64.1.2
         uses: [task]
         description: What the team does with tasks, and what that needs.
+        values:
+          - name: Person
+            description: A member as a task names them, for a page that has no other way to.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
         ports:
           - name: TaskStore
             direction: out
@@ -108,6 +114,12 @@ domains:
             methods:
               - {name: RoleOf, params: [{name: group, type: string}, {name: user, type: string}], results: [{type: string}]}
               - {name: Memberships, params: [{name: user, type: string}], results: [{type: "map[string]string"}]}
+          - name: People
+            direction: out
+            version: 1
+            description: PeopleV1 is the directory of the members, asked for a name alone.
+            methods:
+              - {name: ByID, params: [{name: id, type: string}], results: [{type: Person}, {type: bool}]}
           - name: Clock
             direction: out
             version: 1
@@ -184,6 +196,17 @@ domains:
               - {name: refuses the group view without a group, kind: refusal, error: task.ErrGroupNeeded}
               - {name: refuses an unknown time zone, kind: refusal, error: task.ErrBadZone}
               - {name: refuses a group the member is not in, kind: refusal, error: task.ErrNoGroup}
+          - name: NamePeople
+            description: NamePeople names the people of the tasks it is given, every owner, assignee and member a task is shared with, each once, in the order they first appear; the directory is asked once for each, and one it does not know is left out.
+            input:
+              - {name: Tasks, type: "[]task.Task"}
+            output:
+              - {name: People, type: "[]Person"}
+            calls: [tasks/port/People@v1.ByID]
+            scenarios:
+              - {name: names each person once, kind: success}
+              - {name: leaves out a member the directory does not know, kind: success}
+              - {name: names nobody for no task, kind: success}
           - name: CountViews
             description: CountViews counts what a member's sidebar shows, the tasks left to do in each view, the overdue ones, those finished this week, and the open ones of each of their groups.
             input:
@@ -365,8 +388,8 @@ domains:
       - name: taskstore
         role: adapter
         code: 64.1.3
-        uses: [planner, task, contactsapi, groupsapi, groupstore]
-        description: The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, and the framework's clock.
+        uses: [planner, task, contactsapi, groupsapi, groupstore, vault]
+        description: The tasks in the framework's store, the archiving of what was done long ago, their events on a topic, the directory asked of the identity, and the framework's clock.
         entities:
           - name: Record
             description: A task as the store keeps it, field for field.
@@ -426,6 +449,9 @@ domains:
           - name: Groups
             description: Groups is Groups@v1 on the groups' queries "role" and "memberships".
             implements: [tasks/port/Groups@v1]
+          - name: Directory
+            description: Directory is People@v1 on the identity's query "member".
+            implements: [tasks/port/People@v1]
           - name: Announcer
             description: Announcer is Journal@v1 on the topic "events".
             implements: [tasks/port/Journal@v1]
@@ -517,31 +543,37 @@ domains:
               - {name: Overdue, type: int, tag: 'json:"overdue" app:"public"'}
           - name: NoInput
             description: A question that needs no word.
+          - name: TaskView
+            description: A task as it is answered, with the names of its people.
+            fields:
+              - {embedded: true, type: task.Task}
+              - {name: People, type: "[]planner.Person", tag: 'json:"people"', description: "People names the owner, the assignee and the members the task is shared with, each once."}
           - name: TaskList
-            description: The tasks asked for.
+            description: The tasks asked for, with the names of their people.
             fields:
               - {name: Tasks, type: "[]task.Task", tag: 'json:"tasks"'}
+              - {name: People, type: "[]planner.Person", tag: 'json:"people"', description: "People names every owner, assignee and member any of the tasks is shared with, each once."}
         queries:
           - {name: census, input: NoInput, output: Census, handler: Count, description: "The census: how many tasks there are per state, for the components that watch the list.", uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
         endpoints:
-          - {route: "POST /api/tasks", request: AddRequest, response: task.Task, handler: Add, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/AddTask], calls: [tasks/usecase/AddTask]}
-          - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks], calls: [tasks/usecase/ListTasks]}
+          - {route: "POST /api/tasks", request: AddRequest, response: TaskView, handler: Add, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/AddTask, tasks/usecase/NamePeople], calls: [tasks/usecase/AddTask, tasks/usecase/NamePeople]}
+          - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks, tasks/usecase/NamePeople], calls: [tasks/usecase/ListTasks, tasks/usecase/NamePeople]}
           - {route: "GET /api/tasks/counts", request: CountsRequest, response: ViewCounts, handler: Counts, auth: required, uses: [tasks/usecase/CountViews], calls: [tasks/usecase/CountViews]}
-          - {route: "GET /api/tasks/{id}", request: ByID, response: task.Task, handler: Get, auth: required, uses: [tasks/usecase/GetTask], calls: [tasks/usecase/GetTask]}
-          - {route: "PATCH /api/tasks/{id}", request: EditRequest, response: task.Task, handler: Edit, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/EditTask], calls: [tasks/usecase/EditTask]}
+          - {route: "GET /api/tasks/{id}", request: ByID, response: TaskView, handler: Get, auth: required, uses: [tasks/usecase/GetTask, tasks/usecase/NamePeople], calls: [tasks/usecase/GetTask, tasks/usecase/NamePeople]}
+          - {route: "PATCH /api/tasks/{id}", request: EditRequest, response: TaskView, handler: Edit, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/EditTask, tasks/usecase/NamePeople], calls: [tasks/usecase/EditTask, tasks/usecase/NamePeople]}
           - {route: "DELETE /api/tasks/{id}", request: ByID, response: NoInput, handler: Delete, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/DeleteTask], calls: [tasks/usecase/DeleteTask]}
-          - {route: "POST /api/tasks/{id}/share", request: ShareRequest, response: task.Task, handler: Share, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/ShareTask], calls: [tasks/usecase/ShareTask]}
-          - {route: "DELETE /api/tasks/{id}/share/{userId}", request: UnshareRequest, response: task.Task, handler: Unshare, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/UnshareTask], calls: [tasks/usecase/UnshareTask]}
-          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: task.Task, handler: Complete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: task.Task, handler: Reopen, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: task.Task, handler: Archive, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
-          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: task.Task, handler: Restore, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask], calls: [tasks/usecase/MoveTask]}
+          - {route: "POST /api/tasks/{id}/share", request: ShareRequest, response: TaskView, handler: Share, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/ShareTask, tasks/usecase/NamePeople], calls: [tasks/usecase/ShareTask, tasks/usecase/NamePeople]}
+          - {route: "DELETE /api/tasks/{id}/share/{userId}", request: UnshareRequest, response: TaskView, handler: Unshare, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/UnshareTask, tasks/usecase/NamePeople], calls: [tasks/usecase/UnshareTask, tasks/usecase/NamePeople]}
+          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: TaskView, handler: Complete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
+          - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: TaskView, handler: Reopen, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
+          - {route: "POST /api/tasks/{id}/archive", request: ByID, response: TaskView, handler: Archive, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
+          - {route: "POST /api/tasks/{id}/restore", request: ByID, response: TaskView, handler: Restore, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
         internals:
           functions:
             - name: move
-              description: "move runs MoveTask for one of the four routes that move a task."
+              description: "move runs MoveTask for one of the four routes that move a task, and answers the task with its people."
               params: [{name: ctx, type: "context.Context"}, {name: id, type: "string"}, {name: event, type: "task.LifecycleEvent"}]
-              results: [{type: "task.Task"}, {type: "error"}]
+              results: [{type: "TaskView"}, {type: "error"}]
             - name: caller
               description: "caller is the member the request comes from."
               params: [{name: ctx, type: "context.Context"}]
@@ -550,6 +582,10 @@ domains:
               description: "refusal is a use case's error as the API answers it: 404 for a task that does not exist, 409 for a move its state does not allow, 400 with the field at fault for a task that cannot be added; anything else is the framework's to answer."
               params: [{name: err, type: "error"}]
               results: [{type: "error"}]
+            - name: viewOf
+              description: "viewOf is a task as it is answered: with the names of its people, asked of the directory once for each."
+              params: [{name: ctx, type: "context.Context"}, {name: t, type: "task.Task"}]
+              results: [{type: "TaskView"}, {type: "error"}]
     sequences:
       - name: complete-task
         description: A member completes a task; the feed is told.

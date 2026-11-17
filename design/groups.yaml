@@ -99,12 +99,13 @@ domains:
         workflows:
           - name: Inviting
             entity: Invitation
-            description: An invitation is pending until its invitee accepts or declines it; one nobody answered for a week has expired.
-            states: [pending, accepted, declined, expired]
+            description: An invitation is pending until its invitee accepts or declines it, or a manager of the group withdraws it; one nobody answered for a week has expired.
+            states: [pending, accepted, declined, withdrawn, expired]
             initial: pending
             transitions:
               - {event: accept, from: [pending], to: accepted}
               - {event: decline, from: [pending], to: declined}
+              - {event: withdraw, from: [pending], to: withdrawn}
         internals:
           functions:
             - name: palette
@@ -151,6 +152,13 @@ domains:
               - {name: Inviter, type: Person, tag: 'json:"inviter"'}
               - {name: Invitee, type: Person, tag: 'json:"invitee,omitzero"', description: "Invitee is who is invited: the inviter's answer to an invitation holds it."}
               - {name: State, type: team.InvitingState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+          - name: PendingInvitation
+            description: An invitation a group is waiting on, as its owner and admins read it, without any address.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: User, type: Person, tag: 'json:"user"', description: "User is who is invited."}
+              - {name: Inviter, type: Person, tag: 'json:"inviter"'}
               - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
           - name: Belonging
             description: A group a member belongs to, and their role in it.
@@ -311,6 +319,34 @@ domains:
             calls: [groups/port/Invitations@v1.Of, groups/port/Groups@v1.Get, groups/port/People@v1.ByID]
             scenarios:
               - {name: lists the pending invitations newest first, kind: success}
+          - name: ListGroupInvitations
+            description: ListGroupInvitations lists the invitations a group is waiting on, the newest first; its owner and admins may ask, as they may invite.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            output:
+              - {name: Invitations, type: "[]PendingInvitation"}
+            errors: [team.ErrNotFound, team.ErrNotManager]
+            calls: [groups/port/Groups@v1.Get, groups/port/Invitations@v1.OfGroup, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: lists the pending invitations of a group newest first, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses a plain member, kind: refusal, error: team.ErrNotManager}
+          - name: WithdrawInvitation
+            description: WithdrawInvitation takes back an invitation a group is waiting on; its owner and admins may. The invitation is answered once, whoever the invitee or the manager is, so a withdrawal and an acceptance at the same instant leave one winner.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: InvitationID, type: string}
+            errors: [team.ErrNotFound, team.ErrNotManager, team.ErrNoInvitation]
+            calls: [groups/port/Groups@v1.Get, groups/port/Invitations@v1.Change]
+            scenarios:
+              - {name: withdraws an invitation, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses a plain member who withdraws, kind: refusal, error: team.ErrNotManager}
+              - {name: refuses an invitation of another group, kind: refusal, error: team.ErrNoInvitation}
+              - {name: refuses an invitation already answered, kind: refusal, error: team.ErrNoInvitation}
+              - {name: refuses an unknown invitation, kind: refusal, error: team.ErrNoInvitation}
           - name: RemoveMember
             description: RemoveMember takes a member out of a group. Anyone but the owner may leave; the owner removes anyone, an admin removes members.
             input:
@@ -435,7 +471,7 @@ domains:
             store: invitations
             field: State
             description: What time does to an invitation kept, one nobody answered expires after a week; its answers are the use cases', which write the state they decided.
-            states: [pending, accepted, declined, expired]
+            states: [pending, accepted, declined, withdrawn, expired]
             initial: pending
             transitions:
               - {event: expire, from: [pending], to: expired, delay: 168h}
@@ -524,6 +560,11 @@ domains:
             description: The invitation a route names.
             fields:
               - {name: ID, type: string, tag: 'path:"id"'}
+          - name: ByGroupInvitation
+            description: An invitation of a group, as a route names them.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: InvitationID, type: string, tag: 'path:"invitationId"'}
           - name: ByMember
             description: A member of a group a route names.
             fields:
@@ -543,6 +584,10 @@ domains:
             description: The invitations waiting for a member.
             fields:
               - {name: Invitations, type: "[]roster.InvitationView", tag: 'json:"invitations"'}
+          - name: PendingList
+            description: The invitations a group is waiting on.
+            fields:
+              - {name: Invitations, type: "[]roster.PendingInvitation", tag: 'json:"invitations"'}
           - name: RoleAsked
             description: A group and a member.
             fields:
@@ -579,6 +624,8 @@ domains:
           - {route: "PATCH /api/groups/{id}", request: EditRequest, response: roster.GroupView, handler: Edit, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/EditGroup], calls: [groups/usecase/EditGroup]}
           - {route: "DELETE /api/groups/{id}", request: ByGroup, response: NoInput, handler: Delete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/DeleteGroup], calls: [groups/usecase/DeleteGroup]}
           - {route: "POST /api/groups/{id}/invitations", request: InviteRequest, response: roster.InvitationView, handler: Invite, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/Invite], calls: [groups/usecase/Invite]}
+          - {route: "GET /api/groups/{id}/invitations", request: ByGroup, response: PendingList, handler: GroupInvitations, auth: required, uses: [groups/usecase/ListGroupInvitations], calls: [groups/usecase/ListGroupInvitations]}
+          - {route: "DELETE /api/groups/{id}/invitations/{invitationId}", request: ByGroupInvitation, response: NoInput, handler: Withdraw, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/WithdrawInvitation], calls: [groups/usecase/WithdrawInvitation]}
           - {route: "GET /api/invitations", request: NoInput, response: InvitationList, handler: Invitations, auth: required, uses: [groups/usecase/ListInvitations], calls: [groups/usecase/ListInvitations]}
           - {route: "POST /api/invitations/{id}/accept", request: ByInvitation, response: roster.GroupView, handler: Accept, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/AnswerInvitation], calls: [groups/usecase/AnswerInvitation]}
           - {route: "POST /api/invitations/{id}/decline", request: ByInvitation, response: NoInput, handler: Decline, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/AnswerInvitation], calls: [groups/usecase/AnswerInvitation]}

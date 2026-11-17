@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package team — A group, its members and their roles, and the invitation
 // that brings a member in.
@@ -140,10 +140,11 @@ type InvitingState string
 
 // The states of Inviting.
 const (
-	InvitingPending  InvitingState = "pending"
-	InvitingAccepted InvitingState = "accepted"
-	InvitingDeclined InvitingState = "declined"
-	InvitingExpired  InvitingState = "expired"
+	InvitingPending   InvitingState = "pending"
+	InvitingAccepted  InvitingState = "accepted"
+	InvitingDeclined  InvitingState = "declined"
+	InvitingWithdrawn InvitingState = "withdrawn"
+	InvitingExpired   InvitingState = "expired"
 )
 
 // InvitingInitial is the state a Invitation starts in.
@@ -154,8 +155,9 @@ type InvitingEvent string
 
 // The events of Inviting.
 const (
-	InvitingOnAccept  InvitingEvent = "accept"
-	InvitingOnDecline InvitingEvent = "decline"
+	InvitingOnAccept   InvitingEvent = "accept"
+	InvitingOnDecline  InvitingEvent = "decline"
+	InvitingOnWithdraw InvitingEvent = "withdraw"
 )
 
 var (
@@ -166,7 +168,8 @@ var (
 )
 
 // Inviting — An invitation is pending until its invitee accepts or declines
-// it; one nobody answered for a week has expired.
+// it, or a manager of the group withdraws it; one nobody answered for a week
+// has expired.
 type Inviting struct {
 	inviting // its own state, hand-written
 }
@@ -184,6 +187,8 @@ func (w *Inviting) Fire(ctx context.Context, e *Invitation, from InvitingState, 
 		return InvitingAccepted, nil
 	case from == InvitingPending && event == InvitingOnDecline:
 		return InvitingDeclined, nil
+	case from == InvitingPending && event == InvitingOnWithdraw:
+		return InvitingWithdrawn, nil
 	}
 	return from, ErrInvitingNoTransition
 }

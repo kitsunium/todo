@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package planner — What the team does with tasks, and what that needs.
 //
@@ -18,6 +18,13 @@ import (
 // errNotImplemented is what a skeleton answers until its body is written:
 // a twin that still returns it is a stub.
 var errNotImplemented = errs.New(errs.Pack(64, 1, 2, 255), "NOT_IMPLEMENTED", "not implemented yet", "planner: a hand-written body is still a skeleton")
+
+// Person — A member as a task names them, for a page that has no other way
+// to.
+type Person struct {
+	ID   string `json:"id" app:"public"`
+	Name string `json:"name" app:"personal"`
+}
 
 // CircleV1 says who is a contact of whom.
 type CircleV1 interface {
@@ -40,6 +47,11 @@ type JournalV1 interface {
 	Record(ctx context.Context, kind string, t task.Task) error
 	// Tell says what happened to a task to one member alone.
 	Tell(ctx context.Context, kind string, t task.Task, to string) error
+}
+
+// PeopleV1 is the directory of the members, asked for a name alone.
+type PeopleV1 interface {
+	ByID(ctx context.Context, id string) (Person, bool, error)
 }
 
 // TaskStoreV1 keeps the tasks.
@@ -440,6 +452,40 @@ func (h *MoveTaskHandler) Execute(ctx context.Context, in MoveTaskInput) (MoveTa
 }
 
 var _ MoveTask = (*MoveTaskHandler)(nil)
+
+// NamePeople names the people of the tasks it is given, every owner, assignee
+// and member a task is shared with, each once, in the order they first appear;
+// the directory is asked once for each, and one it does not know is left out.
+type NamePeople interface {
+	Execute(ctx context.Context, in NamePeopleInput) (NamePeopleOutput, error)
+}
+
+// NamePeopleInput is NamePeople's input: a field added breaks no caller.
+type NamePeopleInput struct {
+	Tasks []task.Task
+}
+
+// NamePeopleOutput is NamePeople's output.
+type NamePeopleOutput struct {
+	People []Person
+}
+
+// NamePeopleHandler runs NamePeople: its body is the hand-written execute.
+type NamePeopleHandler struct {
+	people PeopleV1
+}
+
+// NewNamePeople builds NamePeople on what it calls.
+func NewNamePeople(people PeopleV1) *NamePeopleHandler {
+	return &NamePeopleHandler{people: people}
+}
+
+// Execute runs NamePeople.
+func (h *NamePeopleHandler) Execute(ctx context.Context, in NamePeopleInput) (NamePeopleOutput, error) {
+	return h.execute(ctx, &in)
+}
+
+var _ NamePeople = (*NamePeopleHandler)(nil)
 
 // ShareTask shares a task with a contact of its owner, who then sees it.
 type ShareTask interface {

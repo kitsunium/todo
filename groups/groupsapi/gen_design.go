@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package groupsapi — The HTTP API of a member's groups and invitations, and
 // the questions the rest of the product asks of them.
@@ -29,6 +29,12 @@ type Belongings struct {
 // ByGroup — The group a route names.
 type ByGroup struct {
 	ID string `path:"id"`
+}
+
+// ByGroupInvitation — An invitation of a group, as a route names them.
+type ByGroupInvitation struct {
+	ID           string `path:"id"`
+	InvitationID string `path:"invitationId"`
 }
 
 // ByInvitation — The invitation a route names.
@@ -79,6 +85,11 @@ type Members struct {
 
 // NoInput — A request, or an answer, that says nothing.
 type NoInput struct {
+}
+
+// PendingList — The invitations a group is waiting on.
+type PendingList struct {
+	Invitations []roster.PendingInvitation `json:"invitations"`
 }
 
 // RoleAnswer — The role of a member in a group; empty when they are not in
@@ -155,6 +166,20 @@ func Invite(ctx context.Context, in InviteRequest) (roster.InvitationView, error
 	return invite(ctx, in)
 }
 
+var _ = Service.Endpoint("GET /api/groups/{id}/invitations", GroupInvitations, app.Auth())
+
+// GroupInvitations serves GET /api/groups/{id}/invitations: its body is the hand-written groupInvitations.
+func GroupInvitations(ctx context.Context, in ByGroup) (PendingList, error) {
+	return groupInvitations(ctx, in)
+}
+
+var _ = Service.Endpoint("DELETE /api/groups/{id}/invitations/{invitationId}", Withdraw, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Withdraw serves DELETE /api/groups/{id}/invitations/{invitationId}: its body is the hand-written withdraw.
+func Withdraw(ctx context.Context, in ByGroupInvitation) (NoInput, error) {
+	return withdraw(ctx, in)
+}
+
 var _ = Service.Endpoint("GET /api/invitations", Invitations, app.Auth())
 
 // Invitations serves GET /api/invitations: its body is the hand-written invitations.
@@ -220,30 +245,34 @@ func AskMembers(ctx context.Context, in WhichGroup) (Members, error) {
 // wired is what the handlers' twins reach, set by the role that mounts
 // the component (Wire).
 var wired struct {
-	listGroups       roster.ListGroups
-	createGroup      roster.CreateGroup
-	getGroup         roster.GetGroup
-	editGroup        roster.EditGroup
-	deleteGroup      roster.DeleteGroup
-	invite           roster.Invite
-	listInvitations  roster.ListInvitations
-	answerInvitation roster.AnswerInvitation
-	removeMember     roster.RemoveMember
-	setRole          roster.SetRole
-	roleOf           roster.RoleOf
-	memberships      roster.Memberships
-	membersOf        roster.MembersOf
+	listGroups           roster.ListGroups
+	createGroup          roster.CreateGroup
+	getGroup             roster.GetGroup
+	editGroup            roster.EditGroup
+	deleteGroup          roster.DeleteGroup
+	invite               roster.Invite
+	listGroupInvitations roster.ListGroupInvitations
+	withdrawInvitation   roster.WithdrawInvitation
+	listInvitations      roster.ListInvitations
+	answerInvitation     roster.AnswerInvitation
+	removeMember         roster.RemoveMember
+	setRole              roster.SetRole
+	roleOf               roster.RoleOf
+	memberships          roster.Memberships
+	membersOf            roster.MembersOf
 }
 
 // Wire gives the handlers what they use: the role that mounts groupsapi calls it
 // before its App runs.
-func Wire(listGroups roster.ListGroups, createGroup roster.CreateGroup, getGroup roster.GetGroup, editGroup roster.EditGroup, deleteGroup roster.DeleteGroup, invite roster.Invite, listInvitations roster.ListInvitations, answerInvitation roster.AnswerInvitation, removeMember roster.RemoveMember, setRole roster.SetRole, roleOf roster.RoleOf, memberships roster.Memberships, membersOf roster.MembersOf) {
+func Wire(listGroups roster.ListGroups, createGroup roster.CreateGroup, getGroup roster.GetGroup, editGroup roster.EditGroup, deleteGroup roster.DeleteGroup, invite roster.Invite, listGroupInvitations roster.ListGroupInvitations, withdrawInvitation roster.WithdrawInvitation, listInvitations roster.ListInvitations, answerInvitation roster.AnswerInvitation, removeMember roster.RemoveMember, setRole roster.SetRole, roleOf roster.RoleOf, memberships roster.Memberships, membersOf roster.MembersOf) {
 	wired.listGroups = listGroups
 	wired.createGroup = createGroup
 	wired.getGroup = getGroup
 	wired.editGroup = editGroup
 	wired.deleteGroup = deleteGroup
 	wired.invite = invite
+	wired.listGroupInvitations = listGroupInvitations
+	wired.withdrawInvitation = withdrawInvitation
 	wired.listInvitations = listInvitations
 	wired.answerInvitation = answerInvitation
 	wired.removeMember = removeMember

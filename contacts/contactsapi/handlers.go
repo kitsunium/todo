@@ -56,32 +56,24 @@ func decline(ctx context.Context, in ByID) (out link.Link, err error) {
 }
 
 // cancel is POST /api/contacts/{id}/cancel's body; what it uses is in wired.
-// The id is a request's, or an invitation's of the caller's: a request that
-// is not found is looked for among the invitations, and one found nowhere
-// is not found.
-func cancel(ctx context.Context, in ByID) (out Outcome, err error) {
-	l, err := answer(ctx, in.ID, link.RequestsOnCancel)
-	if err == nil {
-		return Outcome{Kind: circle.KindRequest, Request: &l}, nil
-	}
-	if !isNotFound(err) {
-		return Outcome{}, err
-	}
+// The id is a request's: an invitation's id is not found here, it is
+// withdrawn by DELETE /api/contacts/invites/{id}.
+func cancel(ctx context.Context, in ByID) (out link.Link, err error) {
+	return answer(ctx, in.ID, link.RequestsOnCancel)
+}
+
+// withdraw is DELETE /api/contacts/invites/{id}'s body; what it uses is in
+// wired. It answers the invitation withdrawn.
+func withdraw(ctx context.Context, in ByID) (out circle.Invitation, err error) {
 	me, err := caller(ctx)
 	if err != nil {
-		return Outcome{}, err
+		return circle.Invitation{}, err
 	}
 	res, err := wired.cancelInvite.Execute(ctx, circle.CancelInviteInput{User: me, ID: in.ID})
 	if err != nil {
-		return Outcome{}, refusal(err)
+		return circle.Invitation{}, refusal(err)
 	}
-	return Outcome{Kind: circle.KindInvite, Invite: &res.Invitation}, nil
-}
-
-// isNotFound says whether a refusal answers 404.
-func isNotFound(err error) bool {
-	var refused *app.Error
-	return errors.As(err, &refused) && refused.Code == app.WireNotFound
+	return res.Invitation, nil
 }
 
 // claim is the subscription "accounts"'s body: an address proven turns the

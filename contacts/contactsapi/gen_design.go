@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package contactsapi — The HTTP API of a member's contacts, and the
 // question the rest of the product asks of them.
@@ -45,8 +45,7 @@ type Listing struct {
 type NoInput struct {
 }
 
-// Outcome — What a route that asks or cancels did, a request or an
-// invitation.
+// Outcome — What a route that asks did, a request or an invitation.
 type Outcome struct {
 	// Kind is request or invite.
 	Kind    string             `json:"kind" app:"public"`
@@ -99,8 +98,15 @@ func Decline(ctx context.Context, in ByID) (link.Link, error) {
 var _ = Service.Endpoint("POST /api/contacts/{id}/cancel", Cancel, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Cancel serves POST /api/contacts/{id}/cancel: its body is the hand-written cancel.
-func Cancel(ctx context.Context, in ByID) (Outcome, error) {
+func Cancel(ctx context.Context, in ByID) (link.Link, error) {
 	return cancel(ctx, in)
+}
+
+var _ = Service.Endpoint("DELETE /api/contacts/invites/{id}", Withdraw, app.Auth(), app.RateLimitPerClient(10, 20))
+
+// Withdraw serves DELETE /api/contacts/invites/{id}: its body is the hand-written withdraw.
+func Withdraw(ctx context.Context, in ByID) (circle.Invitation, error) {
+	return withdraw(ctx, in)
 }
 
 var _ = Service.Endpoint("DELETE /api/contacts/{id}", Remove, app.Auth(), app.RateLimitPerClient(10, 20))

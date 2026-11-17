@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package api — The HTTP API of a member's tasks, and the census the rest of
 // the product asks.
@@ -79,9 +79,20 @@ type ShareRequest struct {
 	UserID string `json:"userId" app:"public"`
 }
 
-// TaskList — The tasks asked for.
+// TaskList — The tasks asked for, with the names of their people.
 type TaskList struct {
 	Tasks []task.Task `json:"tasks"`
+	// People names every owner, assignee and member any of the tasks is shared
+	// with, each once.
+	People []planner.Person `json:"people"`
+}
+
+// TaskView — A task as it is answered, with the names of its people.
+type TaskView struct {
+	task.Task
+	// People names the owner, the assignee and the members the task is shared
+	// with, each once.
+	People []planner.Person `json:"people"`
 }
 
 // UnshareRequest — The member a task is no longer shared with.
@@ -108,7 +119,7 @@ var Service = app.NewService("api", "The HTTP API of a member's tasks, and the c
 var _ = Service.Endpoint("POST /api/tasks", Add, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Add serves POST /api/tasks: its body is the hand-written add.
-func Add(ctx context.Context, in AddRequest) (task.Task, error) {
+func Add(ctx context.Context, in AddRequest) (TaskView, error) {
 	return add(ctx, in)
 }
 
@@ -129,14 +140,14 @@ func Counts(ctx context.Context, in CountsRequest) (ViewCounts, error) {
 var _ = Service.Endpoint("GET /api/tasks/{id}", Get, app.Auth())
 
 // Get serves GET /api/tasks/{id}: its body is the hand-written get.
-func Get(ctx context.Context, in ByID) (task.Task, error) {
+func Get(ctx context.Context, in ByID) (TaskView, error) {
 	return get(ctx, in)
 }
 
 var _ = Service.Endpoint("PATCH /api/tasks/{id}", Edit, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Edit serves PATCH /api/tasks/{id}: its body is the hand-written edit.
-func Edit(ctx context.Context, in EditRequest) (task.Task, error) {
+func Edit(ctx context.Context, in EditRequest) (TaskView, error) {
 	return edit(ctx, in)
 }
 
@@ -150,42 +161,42 @@ func Delete(ctx context.Context, in ByID) (NoInput, error) {
 var _ = Service.Endpoint("POST /api/tasks/{id}/share", Share, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Share serves POST /api/tasks/{id}/share: its body is the hand-written share.
-func Share(ctx context.Context, in ShareRequest) (task.Task, error) {
+func Share(ctx context.Context, in ShareRequest) (TaskView, error) {
 	return share(ctx, in)
 }
 
 var _ = Service.Endpoint("DELETE /api/tasks/{id}/share/{userId}", Unshare, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Unshare serves DELETE /api/tasks/{id}/share/{userId}: its body is the hand-written unshare.
-func Unshare(ctx context.Context, in UnshareRequest) (task.Task, error) {
+func Unshare(ctx context.Context, in UnshareRequest) (TaskView, error) {
 	return unshare(ctx, in)
 }
 
 var _ = Service.Endpoint("POST /api/tasks/{id}/complete", Complete, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Complete serves POST /api/tasks/{id}/complete: its body is the hand-written complete.
-func Complete(ctx context.Context, in ByID) (task.Task, error) {
+func Complete(ctx context.Context, in ByID) (TaskView, error) {
 	return complete(ctx, in)
 }
 
 var _ = Service.Endpoint("POST /api/tasks/{id}/reopen", Reopen, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Reopen serves POST /api/tasks/{id}/reopen: its body is the hand-written reopen.
-func Reopen(ctx context.Context, in ByID) (task.Task, error) {
+func Reopen(ctx context.Context, in ByID) (TaskView, error) {
 	return reopen(ctx, in)
 }
 
 var _ = Service.Endpoint("POST /api/tasks/{id}/archive", Archive, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Archive serves POST /api/tasks/{id}/archive: its body is the hand-written archive.
-func Archive(ctx context.Context, in ByID) (task.Task, error) {
+func Archive(ctx context.Context, in ByID) (TaskView, error) {
 	return archive(ctx, in)
 }
 
 var _ = Service.Endpoint("POST /api/tasks/{id}/restore", Restore, app.Auth(), app.RateLimitPerClient(10, 20))
 
 // Restore serves POST /api/tasks/{id}/restore: its body is the hand-written restore.
-func Restore(ctx context.Context, in ByID) (task.Task, error) {
+func Restore(ctx context.Context, in ByID) (TaskView, error) {
 	return restore(ctx, in)
 }
 
@@ -202,6 +213,7 @@ func Count(ctx context.Context, in NoInput) (Census, error) {
 // the component (Wire).
 var wired struct {
 	addTask     planner.AddTask
+	namePeople  planner.NamePeople
 	listTasks   planner.ListTasks
 	countViews  planner.CountViews
 	getTask     planner.GetTask
@@ -215,8 +227,9 @@ var wired struct {
 
 // Wire gives the handlers what they use: the role that mounts api calls it
 // before its App runs.
-func Wire(addTask planner.AddTask, listTasks planner.ListTasks, countViews planner.CountViews, getTask planner.GetTask, editTask planner.EditTask, deleteTask planner.DeleteTask, shareTask planner.ShareTask, unshareTask planner.UnshareTask, moveTask planner.MoveTask, countTasks planner.CountTasks) {
+func Wire(addTask planner.AddTask, namePeople planner.NamePeople, listTasks planner.ListTasks, countViews planner.CountViews, getTask planner.GetTask, editTask planner.EditTask, deleteTask planner.DeleteTask, shareTask planner.ShareTask, unshareTask planner.UnshareTask, moveTask planner.MoveTask, countTasks planner.CountTasks) {
 	wired.addTask = addTask
+	wired.namePeople = namePeople
 	wired.listTasks = listTasks
 	wired.countViews = countViews
 	wired.getTask = getTask

@@ -67,7 +67,19 @@ async function contactsPage() {
       el("span", "title", i.email),
       el("span", "meta", when(i.createdAt)),
     );
-    return [head, actions(answer(i.id, "cancel", "contacts.withdrawn"))];
+    return [
+      head,
+      actions(
+        button(t("common.cancel"), async () => {
+          await call(
+            "DELETE",
+            "/api/contacts/invites/" + encodeURIComponent(i.id),
+          );
+          await render();
+          word(t("contacts.withdrawn"));
+        }),
+      ),
+    ];
   });
   const contacts = list.contacts.map((c) => {
     const head = person(c.user);
@@ -285,6 +297,43 @@ async function groupPage(id) {
               },
             )
           : empty(t("groups.noContacts")),
+      ),
+    );
+  }
+
+  if (manager) {
+    const waiting = await call("GET", path + "/invitations");
+    const lines = waiting.invitations.map((i) => {
+      const head = el("span", "grow");
+      head.append(
+        el("span", "title", i.user.name),
+        el(
+          "span",
+          "meta",
+          t("groups.invitedBy", { name: i.inviter.name }) +
+            " · " +
+            when(i.createdAt),
+        ),
+      );
+      return [
+        head,
+        actions(
+          twoStep(t("groups.withdraw"), t("common.sure"), async () => {
+            await call(
+              "DELETE",
+              path + "/invitations/" + encodeURIComponent(i.id),
+            );
+            await render();
+            word(t("groups.withdrawn"));
+          }),
+        ),
+      ];
+    });
+    parts.push(
+      section(
+        t("groups.waiting"),
+        el("p", "soft", t("groups.waitingHint")),
+        lines.length ? rows(lines) : empty(t("groups.waitingEmpty")),
       ),
     );
   }

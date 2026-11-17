@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:32913ff1f1c2e4c8f3bc85573da565471d0c6a3bf2b70f14abb926ad227fee32
+// design:digest sha256:ad3708a6c0120e4ecb328f05fe017711e138b2d9494fff3cf0c4cd1c6596edae
 
 // Package groupstore — The groups and their invitations in the framework's
 // store, what happens in a group on a topic, the directory asked of the
@@ -225,10 +225,11 @@ type LapsingState string
 
 // The states of Lapsing.
 const (
-	LapsingPending  LapsingState = "pending"
-	LapsingAccepted LapsingState = "accepted"
-	LapsingDeclined LapsingState = "declined"
-	LapsingExpired  LapsingState = "expired"
+	LapsingPending   LapsingState = "pending"
+	LapsingAccepted  LapsingState = "accepted"
+	LapsingDeclined  LapsingState = "declined"
+	LapsingWithdrawn LapsingState = "withdrawn"
+	LapsingExpired   LapsingState = "expired"
 )
 
 // LapsingInitial is the state a InvitationRecord starts in.
