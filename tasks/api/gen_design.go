@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c09190927b7a702a68883efedfd3b487bc8023ea307d3b6eeda776c8d6820e96
+// design:digest sha256:4a7a0b8d96d46792f2d63823e44fbbe64f6e4094e6b613890cc9ef5bff2ece56
 
 // Package api — The HTTP API of a member's tasks, and the census the rest of
 // the product asks.
@@ -177,8 +177,12 @@ func Unshare(ctx context.Context, in UnshareRequest) (TaskView, error) {
 
 var _ = Service.Endpoint("POST /api/tasks/{id}/complete", Complete, app.Auth(), app.RateLimitPerClient(10, 20))
 
-// Complete serves POST /api/tasks/{id}/complete: its body is the hand-written complete.
+// Complete serves POST /api/tasks/{id}/complete: its control task_id_valide runs first, then the hand-written complete.
 func Complete(ctx context.Context, in ByID) (TaskView, error) {
+	if err := checkTaskID(ctx, in); err != nil {
+		var zero TaskView
+		return zero, err
+	}
 	return complete(ctx, in)
 }
 

@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/kitsunium/sdk/framework/app"
 	"github.com/kitsunium/sdk/pkg/v1/observe/logger"
@@ -71,6 +72,24 @@ func counts(ctx context.Context, in CountsRequest) (out ViewCounts, err error) {
 // complete is POST /api/tasks/{id}/complete's body; what it uses is in wired.
 func complete(ctx context.Context, in ByID) (out TaskView, err error) {
 	return move(ctx, in.ID, task.LifecycleOnComplete)
+}
+
+// checkTaskID is the control task_id_valide, which the design puts in front
+// of complete: the id the route names is shaped as a task's — "task_" then
+// lower-case letters and digits, sixty-four at most. A request whose id is
+// not is answered 400 before anything is read. It refuses nothing else and
+// writes nothing: the check holds it to that.
+func checkTaskID(ctx context.Context, in ByID) error {
+	rest, ok := strings.CutPrefix(in.ID, "task_")
+	if !ok || rest == "" || len(rest) > 64 {
+		return app.Invalid("the task's id is not a task's")
+	}
+	for _, r := range rest {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return app.Invalid("the task's id is not a task's")
+		}
+	}
+	return nil
 }
 
 // reopen is POST /api/tasks/{id}/reopen's body; what it uses is in wired.

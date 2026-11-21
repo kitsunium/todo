@@ -1,5 +1,5 @@
 // Code generated from design/v1; DO NOT EDIT.
-// design:digest sha256:c09190927b7a702a68883efedfd3b487bc8023ea307d3b6eeda776c8d6820e96
+// design:digest sha256:4a7a0b8d96d46792f2d63823e44fbbe64f6e4094e6b613890cc9ef5bff2ece56
 
 // Package team — A group, its members and their roles, and the invitation
 // that brings a member in.

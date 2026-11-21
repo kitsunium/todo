@@ -559,6 +559,8 @@ domains:
               - {name: People, type: "[]planner.Person", tag: 'json:"people"', description: "People names every owner, assignee and member any of the tasks is shared with, each once."}
         queries:
           - {name: census, input: NoInput, output: Census, handler: Count, description: "The census: how many tasks there are per state, for the components that watch the list.", uses: [tasks/usecase/CountTasks], calls: [tasks/usecase/CountTasks]}
+        controls:
+          - {name: task_id_valide, func: checkTaskID, role: validation, says: "L'identifiant de la tâche est bien formé.", refuses: [400]}
         endpoints:
           - {route: "POST /api/tasks", request: AddRequest, response: TaskView, handler: Add, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/AddTask, tasks/usecase/NamePeople], calls: [tasks/usecase/AddTask, tasks/usecase/NamePeople]}
           - {route: "GET /api/tasks", request: ListRequest, response: TaskList, handler: List, auth: required, uses: [tasks/usecase/ListTasks, tasks/usecase/NamePeople], calls: [tasks/usecase/ListTasks, tasks/usecase/NamePeople]}
@@ -568,7 +570,7 @@ domains:
           - {route: "DELETE /api/tasks/{id}", request: ByID, response: NoInput, handler: Delete, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/DeleteTask], calls: [tasks/usecase/DeleteTask]}
           - {route: "POST /api/tasks/{id}/share", request: ShareRequest, response: TaskView, handler: Share, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/ShareTask, tasks/usecase/NamePeople], calls: [tasks/usecase/ShareTask, tasks/usecase/NamePeople]}
           - {route: "DELETE /api/tasks/{id}/share/{userId}", request: UnshareRequest, response: TaskView, handler: Unshare, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [tasks/usecase/UnshareTask, tasks/usecase/NamePeople], calls: [tasks/usecase/UnshareTask, tasks/usecase/NamePeople]}
-          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: TaskView, handler: Complete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
+          - {route: "POST /api/tasks/{id}/complete", request: ByID, response: TaskView, handler: Complete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, controls: [auth, rate_limit_per_client, task_id_valide], uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
           - {route: "POST /api/tasks/{id}/reopen", request: ByID, response: TaskView, handler: Reopen, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
           - {route: "POST /api/tasks/{id}/archive", request: ByID, response: TaskView, handler: Archive, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}
           - {route: "POST /api/tasks/{id}/restore", request: ByID, response: TaskView, handler: Restore, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [tasks/usecase/MoveTask, tasks/usecase/NamePeople], calls: [tasks/usecase/MoveTask, tasks/usecase/NamePeople]}

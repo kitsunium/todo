@@ -229,6 +229,7 @@ func TestATaskGoesThroughItsLifecycle(t *testing.T) {
 	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "  "}, nil)
 	ada.call(http.StatusBadRequest, "POST", "/api/tasks", map[string]any{"title": "x", "priority": "urgent"}, nil)
 	ada.call(http.StatusNotFound, "POST", "/api/tasks/task_nobody/complete", nil, nil)
+	ada.call(http.StatusBadRequest, "POST", "/api/tasks/Not-A-Task/complete", nil, nil) // the control task_id_valide: no task's id
 	ada.call(http.StatusConflict, "POST", "/api/tasks/"+added.ID+"/archive", nil, nil)
 	bob.call(http.StatusNotFound, "POST", "/api/tasks/"+added.ID+"/complete", nil, nil) // not his: as if there were none
 
