@@ -1,0 +1,44 @@
+# The vital signs: the task list counted, every thirty seconds.
+apiVersion: design/v2
+domains:
+  - name: stats
+    description: The vital signs of the task list.
+    components:
+      - name: census
+        role: presentation
+        code: 64.4.1
+        uses: [api]
+        description: The job that samples the task list, and the HTTP read of its samples.
+        evidence: [former-product]
+        entities:
+          - name: Snapshot
+            description: The task list at one instant.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+              - {name: Counts, type: "map[string]int", tag: 'json:"counts" app:"public"', description: "Counts has every state of a task."}
+              - {name: Total, type: int, tag: 'json:"total" app:"public"'}
+              - {name: Overdue, type: int, tag: 'json:"overdue" app:"public"'}
+              - {name: CompletionRate, type: float64, tag: 'json:"completionRate" app:"public"', description: "CompletionRate is the share of tasks finished: done or archived."}
+        values:
+          - name: Report
+            description: The latest sample and the recent history, oldest first.
+            fields:
+              - {name: Latest, type: "*Snapshot", tag: 'json:"latest"'}
+              - {name: History, type: "[]Snapshot", tag: 'json:"history"'}
+          - name: NoInput
+            description: A request that says nothing.
+        constants:
+          - {name: Keep, type: int, value: "120", description: "Keep is how many samples are kept: an hour, at one every thirty seconds."}
+        stores:
+          - {name: snapshots, entity: Snapshot, key: ID, description: "The latest samples, keyed by a time-ordered id."}
+        jobs:
+          - {name: sample, every: 30s, handler: Sample, description: Counts the tasks and keeps the count.}
+        endpoints:
+          - {route: "GET /api/stats", request: NoInput, response: Report, handler: Current}
+        internals:
+          functions:
+            - name: oldestFirst
+              description: "oldestFirst is every sample kept, the oldest first."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "[]Snapshot"}, {type: "error"}]

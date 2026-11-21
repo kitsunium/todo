@@ -1,582 +1,203 @@
 # todo
 
-A task list for people who work together — and a product whose architecture
-is its own live diagram. It is written on the SDK's framework
+A task list for a team, served over HTTP by one process — and a product
+written design first: `design/` says its structure, a generator writes the
+shells from it, and the bodies beside them are written by hand. It runs on
+the SDK's framework
 ([`github.com/kitsunium/sdk/framework/app`](https://github.com/kitsunium/sdk))
 and imports the SDK alone.
 
-Sign up, confirm your address, and your tasks have priorities (urgent, high,
-medium, low), due dates, notes and views (Inbox, Today, Upcoming, Shared with
-me, Assigned to me, Completed). Add people as contacts, share tasks with them
-and assign them work; make groups with owners, admins and members who share a
-list. Everyone concerned hears about it — in their activity feed, and by mail,
-in their own language (French first, or English): a verification link, a
-password reset, contact requests, invitations, shared and assigned tasks, and
-a reminder fifteen minutes before a task is due.
+A member signs up with an address and a password, proves the address by
+the link they are mailed, signs in, and has a task
+list of their own. Every mail the product sends is written in the language of
+the member who reads it, French or English, as HTML with a plain text
+alternative, and a due date in it is written in that member's time zone. Ten kinds of mail go out: the five the
+account and the reminders need (the link that proves an address, the one that chooses a new
+password, an address that already has an account, an invitation to sign up, a
+reminder of a task due soon) and the five that tell a member what another did,
+a contact request received or accepted, a group invitation, a task shared with
+them or assigned to them, each in the language and the time zone of the member
+it is written to and naming who did it; a task a member assigns to themselves
+is mailed to nobody, and an event delivered twice is mailed once. One limit is known and kept: a mail leaves before its event is marked as mailed, so a process that dies between the two sends that mail a second time when the event is delivered again, as it does for a reminder; the other order would lose a mail instead. They add tasks with a priority, an assignee and a due date, to their own list or to a group's, and move
+them through their lifecycle: open, done, archived. Every move is published on a topic, and lands in their activity feed a
+moment later. A task done for a day is archived on its own, the owner of a task
+due within a day gets one reminder by mail, and the task list
+is counted every thirty seconds. Two members become contacts by a
+request one sends to the other's address and the other accepts; a request
+nobody answers expires after fourteen days. An address nobody has is
+invited by mail to sign up instead: the invitation waits, ninety days at most,
+and when the address is proven, whoever signs up with it finds a request from
+each member who invited it. Members form groups: a group has an owner, admins and members, its owner
+and admins invite their contacts and may withdraw an invitation still waiting, and an invitation nobody answers expires
+after seven days. A member shares a task with a
+contact, who then sees it, edits it and moves it, and may leave it. A task added to a group's
+list is seen, edited and moved by every member of the group; a task is assigned to a member, who then sees
+it. When a member leaves a group or is removed from it, the tasks they were assigned in it are theirs no more, and
+the tasks of a group deleted go back to their owners' lists. The server serves a web app at `/`,
+in French or English, that does everything the API does: the account and its settings and sessions,
+contacts and their requests, groups with their members and invitations, the tasks with their views, counts,
+sharing and assignment, the feed and the vital signs.
 
-| Today | A task |
-|---|---|
-| ![Today](docs/app.png) | ![A task](docs/app-task.png) |
+The todo was first written on the framework by hand. Everything that product
+did is here, said by the design; it is gone from the tree and stays in the
+repository's history.
 
-## Eight services, one binary
+## The design
 
-| Service | Owns | Its daemon |
+| File | Domain | Holds |
 |---|---|---|
-| **identity** | accounts and passwords (SDK PBKDF2), sessions, one-time links; the `session` auth handler every other API sits behind | the `accounts` and `tokens` workflows lock an account after five wrong passwords, unlock it fifteen minutes later, expire links; `session-reaper`, a loop written by hand (a ticker and a `select`), deletes expired sessions |
-| **contacts** | who works with whom: requests, and invitations by email for people without an account | `requests` expire after 14 days; `claim-invites` turns an invitation into a request once its address is verified |
-| **groups** | teams, roles, invitations | `invitations` expire after 7 days |
-| **tasks** | the list: priorities, due dates, sharing, assignment, views and counts | `lifecycle` marks a task overdue the moment its due date passes and archives a done task after a day; `group-changes` follows deleted groups and departures |
-| **notify** | every mail, in its recipient's language: one outbox, one light design, HTML and plain text, the words in `notify/locales/` | `task-mail`, `contact-mail`, `group-mail`; `reminders`, a loop the framework runs, sleeps until the next reminder is due and wakes early when a task changes |
-| **activity** | a feed per user | three subscriptions write it from the events of tasks, contacts and groups |
-| **stats** | the list's vital signs | a job samples the census every 30 seconds |
-| **web** | the single page application (`web/dist`, embedded) | — |
+| `design/product.yaml` | — | the product, its context (a member, an operator, the mail relay) and the binary `todo` with its two process roles, `server` and `load` |
+| `design/identity.yaml` | identity | the account and its lock, the session, four use cases and their five ports, the stores and the topic `accounts` behind them (which tells the id of the member whose address was proven, never the address), the HTTP API and the handler that says who calls a route, the sequence `sign-in` |
+| `design/contacts.yaml` | contacts | the link between two members and its request, seven use cases and their six ports, the stores (links and invitations) and the topic behind them, the subscription to the accounts' announcements, the HTTP API, the sequence `request-contact` |
+| `design/groups.yaml` | groups | the group, its roles and its invitations, the use cases and their ports (the invitations a group waits on are listed and withdrawn by its owner and admins), the stores and the topic behind them, the HTTP API, the queries the rest of the product asks |
+| `design/tasks.yaml` | tasks | the task and its lifecycle, its use cases and their ports (the directory among them, asked for a name alone), the store behind them, the HTTP API, the sequence `complete-task` |
+| `design/activity.yaml` | activity | the feed, written from what the use cases record, what was read of it, and the query that counts what was not |
+| `design/notify.yaml` | notify | the reminders and the mails about what others did (two use cases, their ports and the log that keeps each event mailed once), the mailer with its outbox and its SMTP connection, the command every mail goes through, the subscriptions to the tasks', contacts' and groups' topics, the sequence `remind-due` |
+| `design/stats.yaml` | stats | the vital signs, sampled by a job |
+| `design/web.yaml` | web | the web app's static files |
+| `design/load.yaml` | load | a load driven against a running server over its HTTP API |
 
-Services talk through commands, queries and topics, never through each
-other's stores — the diagram shows every call. A service asks another's
-queries and dispatches its commands in process; nobody exposes them, so no
-route leads to them. Identity's mails go through notify's `send` command,
-synchronously, so a one-time link never travels on a topic.
+Each component of the design is a Go package, `<domain>/<component>`, whose
+`gen_*.go` files are generated and never edited; `cmd/todo` is the binary.
 
-## The product, as its diagram
+## The API
 
-In dev, the Studio draws the product live, from what the product serves
-about itself at `/_app/` (only a dev build links that API; the product's
-tree holds none of it): its
-context, its containers, its services and their building blocks, the code of
-each, what every entry point does step by step, every request as a trace, the
-workflows and their populations, the daemon — its lifecycle, its loops, its
-HTTP server — and the mails it sent.
-
-| **Overview** — the process's own numbers, then its connectors' widgets | **Context** — who uses the product, what it talks to (C4 level 1) |
+| Route | Does |
 |---|---|
-| ![Overview](docs/studio-overview.png) | ![Context](docs/studio-context.png) |
-| **Infrastructure** — its services, their ports and flows (C4 level 2) | **Domains** — every bounded context as a peer, the flows between them (C4 level 3) |
-| ![Infrastructure](docs/studio-infrastructure.png) | ![Domains](docs/studio-domain.png) |
-| **A domain** — a request replayed through its components and its sequence | **Code** — what a node runs, what it touches (C4 level 4) |
-| ![A domain](docs/studio-domain-replay.png) | ![Code](docs/studio-code.png) |
-| **Sequence** — what an entry point does, step by step, from its code | **Requests** — every request as a waterfall, a sequence, its payloads |
-| ![Sequence](docs/studio-sequence.png) | ![Requests](docs/studio-requests.png) |
-| **States** — a workflow, its population and its instances | **The daemon** — its phases and its boot sequence |
-| ![States](docs/studio-states.png) | ![Daemon](docs/studio-daemon.png) |
-| **Runtime** — every loop, by who wrote it: a library, the framework, or the product | **The HTTP server** — net/http's accept loop and the middleware |
-| ![Runtime](docs/studio-runtime.png) | ![HTTP server](docs/studio-http.png) |
-| **Mail** — every mail the product sent, in dev | |
-| ![Mail](docs/studio-mail.png) | |
+| `POST /api/auth/signup` | creates an account: `email`, `name`, `password` (10 to 128 characters), and optionally `locale` (`fr` or `en`; when it is not sent, the language the `Accept-Language` header prefers, French by default) and `timeZone` (an IANA name like `Europe/Paris`; empty is UTC), and mails the link that proves the address, in that language; answers the same for an address that already has an account, whose member is told in their own language; 400 for a `locale` that is neither `fr` nor `en` or a `timeZone` that is not a zone of the database |
+| `POST /api/auth/verify` | proves an address with the `token` of the link, and signs its member in |
+| `POST /api/auth/verify/resend` | mails a new link to an `email` not verified yet |
+| `POST /api/auth/password/forgot` | mails an `email` the link that chooses a new password |
+| `POST /api/auth/password/reset` | chooses a new `password` with the `token` of that link, and ends every session |
+| `POST /api/auth/password` | changes the caller's password: `current`, `password`; ends their other sessions |
+| `POST /api/auth/login` | opens a session: `email`, `password`, and optionally `timeZone`, which becomes the account's; sets the `todo_session` cookie and answers the same secret as `token`; 400 for a `timeZone` that is not a zone of the database |
+| `POST /api/auth/logout` | ends the caller's session |
+| `GET /api/auth/me` | the caller: `id`, `email`, `name`, `locale`, `timeZone` |
+| `PATCH /api/auth/me` | changes `name`, `locale` and `timeZone`, each only when it is sent (an empty `timeZone` is UTC), and answers the caller; the next mail is in the new language; 400 for an empty `name`, a `locale` that is neither `fr` nor `en` or a `timeZone` that is not a zone of the database, and for any other member of the request |
+| `GET /api/auth/sessions` | the caller's open sessions, with the browser and the address each signed in from |
+| `DELETE /api/auth/sessions/{id}` | ends one of the caller's sessions |
+| `GET /api/contacts` | the caller's contacts, the requests they received and those they sent, and `invites`, their invitations still waiting for an account, the newest first |
+| `POST /api/contacts` | asks the member an `email` belongs to to be a contact and answers `{"kind":"request","request":{…}}`; an address nobody has is invited to sign up by mail and answers `{"kind":"invite","invite":{"id","email","createdAt"}}`; 400 for an address that is none, 409 for a pair already linked or an address already invited |
+| `POST /api/contacts/{id}/accept` `decline` | answers a request: its addressee accepts or declines |
+| `POST /api/contacts/{id}/cancel` | its requester cancels a request and the answer is the request; the id is a request's only: an invitation's id, anyone else's request and an unknown id are a 404, a request already answered is a 409 |
+| `DELETE /api/contacts/invites/{id}` | a member withdraws an invitation of their own that still waits for an account and the answer is the invitation `{"id","email","createdAt"}`; 404 for anyone else's, for one already joined and for an unknown id |
+| `DELETE /api/contacts/{id}` | ends a contact, for either member |
+| `GET /api/groups` `POST /api/groups` | the caller's groups; creates one: `name`, `color` |
+| `GET` `PATCH` `DELETE /api/groups/{id}` | reads a group, renames or recolours it (owner and admins), deletes it (owner) |
+| `POST /api/groups/{id}/invitations` | invites a contact: `userId`, for the owner and the admins |
+| `GET /api/groups/{id}/invitations` | the invitations the group is waiting on, newest first, `{"invitations":[{"id","user":{"id","name"},"inviter":{"id","name"},"createdAt"}]}`, never an address; for the owner and the admins as the invite route (403 for a plain member, 404 for who is not in the group, as `GET /api/groups/{id}`) |
+| `DELETE /api/groups/{id}/invitations/{invitationId}` | withdraws an invitation the group is waiting on, for the owner and the admins (403 for a plain member, 404 for who is not in the group); 404 for an invitation of another group, one already answered or one nobody made. The invitation moves once, under the store's `Change`: a withdrawal and an acceptance at the same instant leave one winner, the withdrawal is answered 200 and the acceptance 409 (no longer waiting), or the acceptance 200 and the withdrawal 404 |
+| `GET /api/invitations`, `POST /api/invitations/{id}/accept` `decline` | the invitations the caller received, and their answer |
+| `PATCH` `DELETE /api/groups/{id}/members/{userId}` | sets a member's role (owner), removes a member or leaves the group |
+| `POST /api/tasks` | adds a task: `title`, and `notes`, `priority` (`low`, `normal`, `high`), `groupId` (a group the caller is in), `assigneeId` (its owner, or a member of the group for a group's task), `due` (RFC 3339) |
+| `GET /api/tasks` | lists the tasks the caller sees, theirs, shared with them, assigned to them and on their groups' lists, not archived, the most urgent first, and answers `{"tasks":[…],"people":[{"id","name"}]}`, the `people` being every owner, assignee and member a task is shared with, each once, by name and never by address (a member the directory does not know is left out); `?state=open\|done\|archived` lists one state; `?view=inbox\|today\|upcoming\|shared\|assigned\|completed\|group` lists a view (a view ignores `state`), `?group=<id>` narrows to a group (the `group` view needs it, a group the caller is not in is a 404), `?tz=<IANA zone>` says when the day ends (UTC by default) |
+| `GET /api/tasks/counts` | what the sidebar counts for the caller: `inbox`, `today`, `upcoming`, `shared`, `assigned`, `unread` (the entries of their feed not read yet), `overdue`, `completedThisWeek` and the open tasks of each of their `groups`; `?tz=<IANA zone>` |
+| `GET /api/tasks/{id}` | one task the caller sees, with `people`: `[{"id","name"}]`, its owner, assignee and the members it is shared with, each once (every route that answers one task, adding, editing, sharing, moving, answers it the same) |
+| `PATCH /api/tasks/{id}` | changes a task: any of `title`, `notes`, `priority`, `assigneeId` (its owner, a member it is shared with or a member of its group; empty clears it), `groupId` (its owner moves it to another of their groups, or to none), `due`, each only when sent |
+| `DELETE /api/tasks/{id}` | deletes a task, for its owner, or for an owner or an admin of its group |
+| `POST /api/tasks/{id}/share` | shares a task with a contact: `userId`, for its owner |
+| `DELETE /api/tasks/{id}/share/{userId}` | ends the sharing with a member, for the owner or that member |
+| `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` | moves a task through its lifecycle |
+| `GET /api/activity` | the caller's feed, newest first; `?limit=N`; every entry says whether it was `read` |
+| `POST /api/activity/read` | marks every entry of the caller's feed read (no body) and answers `{"unread":0}`; what is recorded after is unread |
+| `GET /api/stats` | the latest sample of the task list and the recent history |
 
-Generated: the product's own `graph -format mermaid`, given the static
-analysis of its source, and kept current by `TestTheReadmeDiagramIsCurrent`.
-Solid arrows exist by construction; dashed ones were found in the code by
-the static analysis, which the product does not link — `go run . graph
--format mermaid` draws the solid ones alone. In the Studio, arrows also
-carry what the running product observed.
+Every route but those a stranger needs — signing up, the links, signing
+in — and `/api/stats` asks for a member: the
+session cookie, or `Authorization: Bearer <token>`; without one it answers
+401. A member sees a task when they own it, it is shared with them, it is assigned to
+them, or it is on the list of a group they are in, and they see their feed;
+a task they do not see is answered as if it did not exist, and what only
+its owner does (sharing it) is a 403 for the others, as deleting it is for a member of its group
+who is neither its owner nor an owner or an admin of the group.
 
-```mermaid
-flowchart LR
-  n0(("Clients"))
-  subgraph n1["activity"]
-    n2["GET /api/activity · auth"]
-    n3["POST /api/activity/read · auth"]
-    n4{"unread"}
-    n5[("entries")]
-    n6[/"contacts"/]
-    n7[/"groups"/]
-    n8[/"tasks"/]
-  end
-  subgraph n9["contacts"]
-    n10["POST /api/contacts/{id}/accept · auth"]
-    n11["POST /api/contacts · auth"]
-    n12["POST /api/contacts/{id}/cancel · auth"]
-    n13["POST /api/contacts/{id}/decline · auth"]
-    n14["GET /api/contacts · auth"]
-    n15["DELETE /api/contacts/{id} · auth"]
-    n16{"are-contacts"}
-    n17[("invites")]
-    n18[("links")]
-    n19[/"claim-invites"/]
-    n20>"events"]
-    n21{{"requests"}}
-  end
-  subgraph n22["groups"]
-    n23["POST /api/invitations/{id}/accept · auth"]
-    n24["POST /api/groups · auth"]
-    n25["POST /api/invitations/{id}/decline · auth"]
-    n26["DELETE /api/groups/{id} · auth"]
-    n27["GET /api/groups/{id} · auth"]
-    n28["POST /api/groups/{id}/invitations · auth"]
-    n29["GET /api/groups · auth"]
-    n30["GET /api/invitations · auth"]
-    n31["DELETE /api/groups/{id}/members/{userId} · auth"]
-    n32["PATCH /api/groups/{id}/members/{userId} · auth"]
-    n33["PATCH /api/groups/{id} · auth"]
-    n34{"members"}
-    n35{"memberships"}
-    n36{"refs"}
-    n37{"role"}
-    n38[("groups")]
-    n39[("invitations")]
-    n40>"events"]
-    n41{{"invitations"}}
-  end
-  subgraph n42["identity"]
-    n43[/"session"\]
-    n44["POST /api/auth/password · auth"]
-    n45["POST /api/auth/password/forgot"]
-    n46["GET /api/auth/sessions · auth"]
-    n47["POST /api/auth/login"]
-    n48["POST /api/auth/logout · auth"]
-    n49["GET /api/auth/me · auth"]
-    n50["POST /api/auth/verify/resend"]
-    n51["POST /api/auth/password/reset"]
-    n52["DELETE /api/auth/sessions/{id} · auth"]
-    n53["POST /api/auth/signup"]
-    n54["PATCH /api/auth/me · auth"]
-    n55["POST /api/auth/verify"]
-    n56((("session-reaper")))
-    n57{"email-owner"}
-    n58{"users"}
-    n59[("accounts")]
-    n60[("sessions")]
-    n61[("tokens")]
-    n62>"accounts"]
-    n63{{"accounts"}}
-    n64{{"tokens"}}
-  end
-  subgraph n65["notify"]
-    n66[\"send"\]
-    n67(("reminders"))
-    n68[["mail"]]
-    n69[("reminders")]
-    n70[/"contact-mail"/]
-    n71[/"group-mail"/]
-    n72[/"task-mail"/]
-    n73[/"track-due"/]
-  end
-  subgraph n74["stats"]
-    n75["GET /api/stats"]
-    n76(["sample"])
-    n77[("snapshots")]
-  end
-  subgraph n78["tasks"]
-    n79["POST /api/tasks/{id}/archive · auth"]
-    n80["POST /api/tasks/{id}/complete · auth"]
-    n81["GET /api/tasks/counts · auth"]
-    n82["POST /api/tasks · auth"]
-    n83["DELETE /api/tasks/{id} · auth"]
-    n84["GET /api/tasks/{id} · auth"]
-    n85["GET /api/tasks · auth"]
-    n86["POST /api/tasks/{id}/reopen · auth"]
-    n87["POST /api/tasks/{id}/restore · auth"]
-    n88["POST /api/tasks/{id}/share · auth"]
-    n89["DELETE /api/tasks/{id}/share/{userId} · auth"]
-    n90["PATCH /api/tasks/{id} · auth"]
-    n91{"audience"}
-    n92{"census"}
-    n93{"open-by-group"}
-    n94[("tasks")]
-    n95[/"group-changes"/]
-    n96>"events"]
-    n97{{"lifecycle"}}
-  end
-  subgraph n98["web"]
-    n99["app"]
-  end
-  n2 -.->|reads| n5
-  n3 -.->|reads| n5
-  n3 -.->|writes| n5
-  n4 -.->|reads| n5
-  n6 -.->|asks| n58
-  n6 -.->|reads| n5
-  n6 -.->|writes| n5
-  n7 -.->|asks| n58
-  n7 -.->|reads| n5
-  n7 -.->|writes| n5
-  n8 -.->|asks| n36
-  n8 -.->|asks| n58
-  n8 -.->|reads| n5
-  n8 -.->|writes| n5
-  n10 -.->|asks| n58
-  n10 -.->|reads| n18
-  n10 -.->|transitions accept| n21
-  n11 -.->|asks| n57
-  n11 -.->|publishes| n20
-  n11 -.->|reads| n17
-  n11 -.->|reads| n18
-  n11 -.->|transitions create| n21
-  n11 -.->|writes| n17
-  n11 -.->|writes| n18
-  n12 -.->|reads| n17
-  n12 -.->|reads| n18
-  n12 -.->|transitions cancel| n21
-  n12 -.->|writes| n17
-  n13 -.->|reads| n18
-  n13 -.->|transitions decline| n21
-  n14 -.->|asks| n58
-  n14 -.->|reads| n17
-  n14 -.->|reads| n18
-  n15 -.->|reads| n17
-  n15 -.->|reads| n18
-  n15 -.->|writes| n17
-  n15 -.->|writes| n18
-  n16 -.->|reads| n18
-  n19 -.->|reads| n17
-  n19 -.->|reads| n18
-  n19 -.->|transitions create| n21
-  n19 -.->|writes| n17
-  n19 -.->|writes| n18
-  n20 -->|delivers| n6
-  n20 -->|delivers| n70
-  n21 -->|persists| n18
-  n21 -.->|publishes| n20
-  n0 -->|calls| n99
-  n23 -.->|asks| n58
-  n23 -.->|asks| n93
-  n23 -.->|reads| n38
-  n23 -.->|reads| n39
-  n23 -.->|transitions accept| n41
-  n24 -.->|asks| n58
-  n24 -.->|asks| n93
-  n24 -.->|writes| n38
-  n25 -.->|reads| n39
-  n25 -.->|transitions decline| n41
-  n26 -.->|publishes| n40
-  n26 -.->|reads| n38
-  n26 -.->|reads| n39
-  n26 -.->|transitions revoke| n41
-  n26 -.->|writes| n38
-  n27 -.->|asks| n58
-  n27 -.->|asks| n93
-  n27 -.->|reads| n38
-  n28 -.->|asks| n16
-  n28 -.->|asks| n58
-  n28 -.->|reads| n38
-  n28 -.->|reads| n39
-  n28 -.->|transitions create| n41
-  n30 -.->|asks| n58
-  n30 -.->|reads| n38
-  n30 -.->|reads| n39
-  n29 -.->|asks| n58
-  n29 -.->|asks| n93
-  n29 -.->|reads| n38
-  n31 -.->|publishes| n40
-  n31 -.->|reads| n38
-  n31 -.->|writes| n38
-  n32 -.->|asks| n58
-  n32 -.->|asks| n93
-  n32 -.->|reads| n38
-  n32 -.->|writes| n38
-  n33 -.->|asks| n58
-  n33 -.->|asks| n93
-  n33 -.->|reads| n38
-  n33 -.->|writes| n38
-  n35 -.->|reads| n38
-  n34 -.->|reads| n38
-  n36 -.->|reads| n38
-  n37 -.->|reads| n38
-  n40 -->|delivers| n7
-  n40 -->|delivers| n71
-  n40 -->|delivers| n95
-  n41 -->|persists| n39
-  n41 -.->|publishes| n40
-  n41 -.->|reads| n38
-  n41 -.->|writes| n38
-  n43 -.->|reads| n60
-  n43 -.->|writes| n60
-  n44 -.->|publishes| n62
-  n44 -.->|reads| n59
-  n44 -.->|reads| n60
-  n44 -.->|writes| n59
-  n44 -.->|writes| n60
-  n45 -.->|dispatches| n66
-  n45 -.->|reads| n59
-  n45 -.->|transitions create| n64
-  n46 -.->|reads| n60
-  n47 -.->|reads| n59
-  n47 -.->|writes| n59
-  n47 -.->|writes| n60
-  n48 -.->|writes| n60
-  n49 -.->|reads| n59
-  n50 -.->|dispatches| n66
-  n50 -.->|reads| n59
-  n50 -.->|transitions create| n64
-  n51 -.->|publishes| n62
-  n51 -.->|reads| n60
-  n51 -.->|reads| n61
-  n51 -.->|transitions reset| n63
-  n51 -.->|transitions use| n64
-  n51 -.->|writes| n59
-  n51 -.->|writes| n60
-  n52 -.->|reads| n60
-  n52 -.->|writes| n60
-  n53 -.->|dispatches| n66
-  n53 -.->|reads| n59
-  n53 -.->|transitions create| n63
-  n53 -.->|transitions create| n64
-  n54 -.->|reads| n59
-  n54 -.->|writes| n59
-  n55 -.->|reads| n61
-  n55 -.->|transitions verify| n63
-  n55 -.->|transitions use| n64
-  n55 -.->|writes| n60
-  n56 -.->|reads| n60
-  n56 -.->|reads| n61
-  n56 -.->|writes| n60
-  n56 -.->|writes| n61
-  n57 -.->|reads| n59
-  n58 -.->|reads| n59
-  n62 -->|delivers| n19
-  n63 -->|persists| n59
-  n63 -.->|publishes| n62
-  n64 -->|persists| n61
-  n66 -.->|sends| n68
-  n67 -.->|asks| n58
-  n67 -.->|asks| n91
-  n67 -.->|reads| n69
-  n67 -.->|sends| n68
-  n67 -.->|writes| n69
-  n70 -.->|asks| n58
-  n70 -.->|sends| n68
-  n71 -.->|asks| n58
-  n71 -.->|sends| n68
-  n72 -.->|asks| n58
-  n72 -.->|sends| n68
-  n73 -.->|reads| n69
-  n73 -.->|writes| n69
-  n75 -.->|reads| n77
-  n76 -.->|asks| n92
-  n76 -.->|reads| n77
-  n76 -.->|writes| n77
-  n79 -.->|asks| n36
-  n79 -.->|asks| n37
-  n79 -.->|asks| n58
-  n79 -.->|reads| n94
-  n79 -.->|transitions archive| n97
-  n80 -.->|asks| n36
-  n80 -.->|asks| n37
-  n80 -.->|asks| n58
-  n80 -.->|reads| n94
-  n80 -.->|transitions complete| n97
-  n81 -.->|asks| n4
-  n81 -.->|asks| n35
-  n81 -.->|reads| n94
-  n82 -.->|asks| n34
-  n82 -.->|asks| n36
-  n82 -.->|asks| n37
-  n82 -.->|asks| n58
-  n82 -.->|publishes| n96
-  n82 -.->|transitions create| n97
-  n83 -.->|asks| n34
-  n83 -.->|asks| n37
-  n83 -.->|publishes| n96
-  n83 -.->|reads| n94
-  n83 -.->|writes| n94
-  n84 -.->|asks| n36
-  n84 -.->|asks| n37
-  n84 -.->|asks| n58
-  n84 -.->|reads| n94
-  n85 -.->|asks| n35
-  n85 -.->|asks| n36
-  n85 -.->|asks| n58
-  n85 -.->|reads| n94
-  n86 -.->|asks| n36
-  n86 -.->|asks| n37
-  n86 -.->|asks| n58
-  n86 -.->|reads| n94
-  n86 -.->|transitions reopen| n97
-  n87 -.->|asks| n36
-  n87 -.->|asks| n37
-  n87 -.->|asks| n58
-  n87 -.->|reads| n94
-  n87 -.->|transitions restore| n97
-  n88 -.->|asks| n16
-  n88 -.->|asks| n34
-  n88 -.->|asks| n36
-  n88 -.->|asks| n37
-  n88 -.->|asks| n58
-  n88 -.->|publishes| n96
-  n88 -.->|reads| n94
-  n88 -.->|writes| n94
-  n89 -.->|asks| n34
-  n89 -.->|asks| n36
-  n89 -.->|asks| n37
-  n89 -.->|asks| n58
-  n89 -.->|publishes| n96
-  n89 -.->|reads| n94
-  n89 -.->|writes| n94
-  n90 -.->|asks| n34
-  n90 -.->|asks| n36
-  n90 -.->|asks| n37
-  n90 -.->|asks| n58
-  n90 -.->|publishes| n96
-  n90 -.->|reads| n94
-  n90 -.->|transitions reschedule| n97
-  n90 -.->|writes| n94
-  n91 -.->|reads| n94
-  n92 -.->|reads| n94
-  n93 -.->|reads| n94
-  n95 -.->|reads| n94
-  n95 -.->|writes| n94
-  n96 -->|delivers| n8
-  n96 -->|delivers| n72
-  n96 -->|delivers| n73
-  n96 -->|wakes| n67
-  n97 -.->|asks| n34
-  n97 -->|persists| n94
-  n97 -.->|publishes| n96
-```
+Every route that writes is limited per client — the member, or the address
+of a stranger: two calls a second with a burst of five for signing up,
+signing in and asking for a contact, ten a second with a burst of twenty
+for the rest. A call over the limit is answered 429.
+
+A request the API refuses says why: 400 with the field at fault, 404 for a
+task or a group that does not exist, 409 for a move the task's state does not allow,
+400 `invalid_token` for a link that is unknown, used or expired, 401
+`invalid_credentials` for a wrong password or an unknown address alike, 403
+`email_unverified` until the address is proven, 403 `account_locked` for
+fifteen minutes after five wrong passwords in a row. What a stranger may
+ask — signing up, a new link, a forgotten password — is answered the same
+whether an address has an account or not.
 
 ## Run it
 
-The product builds with the Go toolchain alone, on the SDK's published
-modules, `github.com/kitsunium/sdk` v0.44.2 and its `pkg/v1` families
-(`go build .`). The platform's dev tool runs it in dev with the Studio;
-install it from a platform checkout:
+```sh
+SERVER_ENV=dev go run ./cmd/todo            # http://127.0.0.1:4000
+SERVER_ADDR=127.0.0.1:8080 go run ./cmd/todo
+```
+
+The server listens where `SERVER_ADDR` says. In dev it defaults to
+`127.0.0.1:4000`; in production the framework's default is `:4000`, every
+interface, so a deployment names its address. Its data lives in
+`SERVER_DATA_DIR`.
+
+| Setting | Default | Says |
+|---|---|---|
+| `SERVER_ARCHIVE_AFTER` | `24h` | how long a done task stays listed before it is archived |
+| `SERVER_REMIND_WITHIN` | `24h` | how long before its due date a task's owner is reminded |
+| `SERVER_BASE_URL` | `http://localhost:4000` | where members reach the product: every link of a mail is this address and a path of the web app |
+| `SERVER_VERIFY_ADDRESSES` | `true`, `false` in dev | whether a new account proves its address before it signs in; `false` where the deployment has no mail relay |
+| `SERVER_SMTP_URL` | unset | where the mailer delivers: `smtp://user:pass@host:587?tls=starttls`; unset, the mails are captured for the dev tool and not delivered |
+
+What the stores keep of a person has an end: who a task is assigned to is erased a
+year after the task was last written, a feed entry is deleted after ninety
+days, an account untouched for three years is erased,
+and a session is deleted a day after it expired. A password is kept
+stretched (PBKDF2-SHA256), a session's secret as its SHA-256.
+
+A role's configuration files are embedded in the binary:
+`cmd/todo/<role>/config/config.json` for every environment,
+`<env>.json` for one. The environment's variables win over them.
+
+`go run ./cmd/todo config` prints every setting and where its value comes
+from.
+
+## The web app
+
+`web/site/page` holds the files of the web app, written by hand — `index.html`,
+`app.css` and a few plain scripts (`lang.js`, the words of each language;
+`tasks.js`; `circle.js`, contacts and groups; `app.js`, the router and the
+account) — with no build step and no dependency; the binary embeds them. The
+page speaks French or English, by the account's language, and writes dates in
+its time zone. It talks to the API above with the session cookie. The server
+answers the page for any path that names no file, and its content policy allows
+scripts and styles of its own origin only: nothing inline.
+
+## Drive a load
+
+The binary's second role calls a running server's API — it signs up and in
+as a member of its own, `load@example.com`, adds tasks,
+completes, archives and reopens them, and reads the list, the feed and the
+vital signs — so that there is something to watch:
 
 ```sh
-git clone https://github.com/kitsunium/platform ../platform
-(cd ../platform && go install ./cmd/kit)
-
-kit dev    # http://localhost:4000, the app; kit prints the Studio's link
+LOAD_TARGET=127.0.0.1:4000 go run ./cmd/todo load -for 2m -rate 5
 ```
 
-`kit dev` rebuilds and restarts the product on every save; data lives in
-`.app/data`. Without an SMTP relay, mails are captured: open them in the
-Studio's **Mail** view — the verification link of a new account is there.
+The load reads no mail: the server it is driven against trusts addresses,
+as one run in dev does (`cmd/todo/server/config/dev.json`), or its member's
+address was proven once by hand.
 
-## A task's life
+`-for` is how long it lasts (default 30s), `-rate` how many calls a second
+(default 5). It prints how many calls it made and how many failed, and exits
+1 when some did.
 
-```mermaid
-stateDiagram-v2
-  [*] --> open: create
-  open --> done: complete
-  overdue --> done: complete
-  done --> open: reopen
-  done --> archived: archive
-  archived --> open: restore
-  overdue --> open: reschedule (a later due date)
-  open --> overdue: overdue (timer: at the due date)
-  done --> archived: auto-archive (timer: the setting archive-after, 24h)
-```
-
-## An account's life
-
-```mermaid
-stateDiagram-v2
-  [*] --> unverified: sign up
-  unverified --> active: verify (the link of the first mail)
-  unverified --> active: reset (a reset link proves the address too)
-  active --> locked: lock (guard: 5 wrong passwords in a row)
-  locked --> active: unlock (timer: 15m)
-  locked --> active: reset
-```
-
-## Languages
-
-The product speaks **French first**, and English. Every account has a
-language, `fr` or `en`, and every mail it receives is written in it —
-subject, text, button, footer, dates ("jeudi 24 septembre à 17:00 UTC",
-"Thursday, September 24 at 17:00 UTC") and plurals.
-
-| When | The language is |
-|---|---|
-| signing up | the form's `locale`; without one, the browser's `Accept-Language` negotiated over `fr`, `en` (`en-US,en;q=0.9` → `en`); when it names neither, or is absent: **French** |
-| later | whatever `PATCH /api/auth/me {"locale": "en"}` sets — the next mails follow |
-| an account from before languages | French |
-| mailing someone without an account (an invitation to join) | the inviter's |
-
-The words live in `notify/locales/fr.json` and `en.json`, one flat catalogue
-per language rendered by the SDK's `i18n` (placeholders like `{actor}`, CLDR
-plural forms for counts). The process refuses to start when a key is missing
-from one language or a count lacks a plural form its language needs.
-
-The activity feed is written by the web app in its reader's language, from
-each entry's `kind`, `actor`, `target` (the other person it is about: the
-sharee, the assignee, the invitee, the removed member — absent when the
-actor acted on themselves), `task` and `group`. Its `text` is an English
-sentence kept for the API's sake.
-
-## API
-
-Every route but sign-up, sign-in, recovery and `/api/stats` needs a session:
-the `todo_session` cookie (HttpOnly, SameSite=Lax, Secure outside dev, 30
-days, sliding), or the same secret as `Authorization: Bearer`. Errors are
-`{"error":{"code","message","violations?"}}`. The user the account routes
-answer carries its `locale`; sign-up takes an optional `locale` and reads
-`Accept-Language`; `PATCH /api/auth/me` takes `{name?, locale?}` — a
-language other than `fr` or `en` is a violation on `locale`.
-
-| Area | Routes |
-|---|---|
-| account | `POST /api/auth/signup` `verify` `verify/resend` `login` `logout` `password` `password/forgot` `password/reset` · `GET PATCH /api/auth/me` · `GET /api/auth/sessions` · `DELETE /api/auth/sessions/{id}` |
-| contacts | `GET POST /api/contacts` · `POST /api/contacts/{id}/accept` `decline` `cancel` · `DELETE /api/contacts/{id}` |
-| groups | `GET POST /api/groups` · `GET PATCH DELETE /api/groups/{id}` · `POST /api/groups/{id}/invitations` · `GET /api/invitations` · `POST /api/invitations/{id}/accept` `decline` · `PATCH DELETE /api/groups/{id}/members/{userId}` |
-| tasks | `GET /api/tasks?view=&group=&tz=` · `GET /api/tasks/counts?tz=` · `POST /api/tasks` · `GET PATCH DELETE /api/tasks/{id}` · `POST /api/tasks/{id}/complete` `reopen` `archive` `restore` · `POST /api/tasks/{id}/share` · `DELETE /api/tasks/{id}/share/{userId}` |
-| activity | `GET /api/activity` · `POST /api/activity/read` |
-| stats | `GET /api/stats` |
-
-The Studio's API view lists every route with its request and response
-schema, and sends requests.
-
-## Deploy
-
-One static binary, anywhere:
+## Test it
 
 ```sh
-TODO_DATA_DIR=/var/lib/todo \
-TODO_BASE_URL=https://todo.example.com \
-TODO_SMTP_URL='smtp://user:password@smtp.example.com:587?tls=starttls' \
-./todo                                    # production: no Studio, data on disk
-./todo healthcheck                        # exit 0 when ready: for any supervisor
-./todo config                             # every setting, and where it came from
-./todo graph                              # the product graph, as JSON
-```
-
-The todo declares two settings: `base-url` (service notify), where users
-reach the app, for the links in its mails (default `http://localhost:4000`),
-and `archive-after` (service tasks), how long a done task stays on the lists
-(default `24h`). Each is set by its variable — `TODO_BASE_URL`,
-`TODO_ARCHIVE_AFTER` — or, for every deployment of an environment, in the
-product's configuration file `config/<env>.yaml`, embedded in the binary;
-`./todo config` prints every setting and where its value came from.
-`TODO_SMTP_URL` is the relay — without it, mails are only captured and a
-warning says so. With Docker:
-
-```sh
-docker build -t todo .
-docker run -p 4000:4000 -v todo-data:/data -e TODO_BASE_URL=… -e TODO_SMTP_URL=… todo
-```
-
-The image is distroless, runs as non-root, keeps its data in the `/data`
-volume, and checks its own health with `todo healthcheck`.
-
-## Test
-
-```sh
+go build ./... && go vet ./...
 go test -race ./...
+gofmt -l .
 ```
 
-Every test runs the whole product in-process, on a manual clock it moves:
-accounts from sign-up to sign-out and the language each reads, the lock and
-its timer, resets, contacts and invitations by email, groups and roles, the
-task list with its views, counts and timers, sharing, and the reminders
-loop. Every mail is rendered in both languages, and no word of the English
-catalogue may appear in a French mail.
-`TestTheDiagramMatchesTheCode` uses the product end to end with its static
-analysis on, then checks that the process runs exactly the nodes the source
-declares, that every edge the code proves is drawn, and that every edge the
-running product took is explained by the code. `TestTheReadmeDiagramIsCurrent`
-fails when the diagram above no longer matches the code: replace it with the
-diagram the test prints.
-
-The static analysis is a tool's: the tests run `$GRAPH_ANALYZER graph
--static` and give its graph to the product through the framework's
-`app.Analyzer`, for the product links no analyzer and imports nothing but the
-SDK. With `GRAPH_ANALYZER` set to the analyzer's binary, both tests run whole:
-
-```sh
-GRAPH_ANALYZER=<the analyzer> go test -race -v -run 'TestTheDiagramMatchesTheCode|TestTheReadmeDiagramIsCurrent' .
-```
-
-Without it, each checks what the product says of itself — the running
-product's nodes, loops, authentication, mailer and diagnostics; the
-diagram's solid arrows — and skips the rest, naming it (`go test -v` shows
-it).
+The use cases are tested by the scenarios the design names, on ports in
+memory; the three sequences by the order of their calls; the task's and the
+account's rules by properties. `cmd/todo/server` runs the whole server role
+in memory, over HTTP, on a clock the test moves, and the load role against
+it.

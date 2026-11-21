@@ -1,0 +1,13 @@
+# The web app: the pages a member uses the todo with, served by the server.
+apiVersion: design/v2
+domains:
+  - name: web
+    description: The user interface, in a browser.
+    components:
+      - name: site
+        role: presentation
+        code: 64.7.1
+        description: The web app, a few static files that talk to the HTTP API with the session cookie.
+        evidence: [former-product]
+        statics:
+          - {name: app, prefix: /, dir: page, description: "The web app: one page, its style and its script, written by hand, with no build step."}

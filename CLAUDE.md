@@ -1,138 +1,166 @@
-<!-- updated: 2026-10-04T20:38:53Z -->
+<!-- updated: 2026-11-21 -->
 # kitsunium/todo
 
-A product of the SDK's framework, and its end-to-end test: a task list for people who work together — accounts,
-contacts, groups, shared tasks, mail. Read `README.md` for what it does.
+A task list for a team, written design first on the SDK's framework. Read
+`README.md` for what it does, its API and how to run it.
 
-It is written on the SDK's framework and imports the SDK alone: one module,
-`github.com/kitsunium/sdk` v0.44.2 and its `pkg/v1/<family>` modules,
-published, no `replace` — its `framework/*` packages (`app` and its
-subsystems, `model`) and its `pkg/v1/*` packages. `go list -m all` names the
-todo and the SDK's modules, nothing else. The platform's dev tool runs the
-product in dev and reads its source (the static analysis); the product links
-none of it and its tree names none of it (SDK ADR 0180).
+One Go module, `github.com/kitsunium/todo`, go 1.27.3, on
+`github.com/kitsunium/sdk` v0.57.0 and its `pkg/v1/<family>` modules,
+published, no `replace`. `go list -m all` names the todo and the SDK's
+modules, nothing else. The standard library is free.
 
 ## Layout
 
-| Path | Service | Role |
+| Path | Component (role) | Holds |
 |---|---|---|
-| `main.go` | — | the App: eight services, one binary; `App.Main` gives serve / graph / healthcheck / config / secrets. It imports `framework/app/server` and the subsystems the services declare (`framework/app/{store,queue,workflow,mail,jobs}`): the framework links each only into a program that imports it, and refuses to start a declaration whose subsystem is not imported (`CodeSubsystemMissing`) |
-| `identity/` | identity | accounts (workflow `accounts`) and their language, one-time links (workflow `tokens`), sessions, the auth handler `session`, the directory (the queries `UsersByID` → `Directory`, `People` with each user's locale and time zone; `EmailOwner`), the hand-written `session-reaper` loop |
-| `contacts/` | contacts | links between users (workflow `requests`), invitations by email, `claim-invites` on `identity.AccountEvents`, the query `AreContacts` |
-| `groups/` | groups | groups and roles, invitations (workflow `invitations`), the queries `RoleOf` `GroupRefs` `UserGroups` `GroupMembers` |
-| `tasks/` | tasks | the model other services import: `Task`, the `Tasks` store, the `Events` topic, the queries `TaskCensus` `OpenTasks` `TaskAudience` |
-| `tasks/api/` | tasks | the `lifecycle` workflow, the whole `/api/tasks` API, views and counts, `group-changes` |
-| `notify/` | notify | the `mail` mailer, the command `SendMail` for identity's transactional mails, the mails, their one light design (`templates/`) and their words (`locales/fr.json`, `locales/en.json`); the setting `base-url` (the links of the mails) |
-| `notify/dispatch/` | notify | who is mailed when: `task-mail` `contact-mail` `group-mail` `track-due`, the `reminders` store and declared loop |
-| `activity/` | activity | the feeds: `entries` (`kind`, `actor`, `target`, `task`, `group` for a client to write in its reader's language; `text` in English), three subscriptions, the query `UnreadCount` |
-| `stats/` | stats | the `sample` job and `GET /api/stats` |
-| `internal/wire/` | — | wire conventions: `Now` (UTC, ms), `Line` (one-line text), `Invalid` (a violation), `Is` (error code), `Locale` (`fr` first, `en`; `NegotiateLocale`, `CheckLocale`, `Resolve`), time zones (`CheckTimeZone`, `Zone`; the zone database is embedded, `time/tzdata`) |
-| `web/` | web | the SPA (`web/src` → committed `web/dist`), owned by the web agent |
-| `*_test.go` | — | end-to-end tests, including the diagram suite: `TestTheDiagramMatchesTheCode` (`diagram_test.go`) and `TestTheReadmeDiagramIsCurrent` (`main_test.go`). Their static half is the platform's analysis, run as a process (`$GRAPH_ANALYZER graph -static -format json`) and given to the product through `app.Analyzer` |
+| `design/` | — | the design, the one source of the structure: `product.yaml` and one file per domain; `generated.lock` is written by every generation |
+| `identity/account` | account (domain) | `Account` (with its `Locale` and `TimeZone`) and its lock, `Session`, `NormalizeEmail`, the errors |
+| `identity/access` | access (application) | the use cases `SignUp` `VerifyEmail` `ResendVerification` `SignIn` `Authenticate` `SignOut` `ListSessions` `RevokeSession` `ForgotPassword` `ResetPassword` `ChangePassword` `UpdateProfile`, the ports `Accounts` `Sessions` `Links` `Courier` `Announcements` `Passwords` `Secrets` `Clock`; `links.go` is what the one-time links share |
+| `identity/vault` | vault (adapter) | the stores `accounts`, `sessions` and `links` with their indexes, `Postman` (the mails of an account, sent through `post`), the topic `accounts` (an address proven, told by the member's id alone, never the address) and its publisher `Herald`, the queries `member` and `member-by-email` (the directory, with each member's language and time zone), `Stretcher` (PBKDF2), `Drawer` (secrets), `WallClock` |
+| `identity/authapi` | authapi (presentation) | the routes of `/api/auth` (`PATCH /api/auth/me` changes the name, the language and the time zone; the sign-up negotiates the language from `Accept-Language`), the session handler `Authenticate`, the cookie `todo_session`, the setting `verify-addresses` |
+| `contacts/link` | link (domain) | `Link`, `Invite` (an invitation to an address with no account), `PairOf`, the `Requests` workflow, the errors |
+| `contacts/circle` | circle (application) | the use cases `RequestContact` (a request, or an invitation to an address nobody has) `AnswerRequest` `CancelInvite` `ClaimInvites` `RemoveContact` `ListContacts` `AreContacts`, the ports `Links` `Invites` `Inviter` `People` `Notices` `Clock` |
+| `contacts/linkstore` | linkstore (adapter) | the stores `links` and `invites` (deleted after ninety days), its workflow `Waiting` (a request expires after fourteen days), the topic `events`, `Links`, `Invitations`, `Courier` (mails an invitation through `post`), `Directory` (asks the identity's queries), `Announcer`, `WallClock` |
+| `contacts/contactsapi` | contactsapi (presentation) | the routes of `/api/contacts` (`POST /api/contacts/{id}/cancel` is a request's, `DELETE /api/contacts/invites/{id}` an invitation's), the query `are-contacts`, the subscription `accounts` (ClaimInvites on a member whose address was proven, the address read from the directory) |
+| `groups/team` | team (domain) | `Group` (with its `Membership`s and `Role`), `Invitation`, the `Inviting` workflow, `Manages` `CleanName` `ColorFor` `ParseRole` `Ranked`, the errors |
+| `groups/roster` | roster (application) | the use cases `CreateGroup` `EditGroup` `DeleteGroup` `ListGroups` `GetGroup` `Invite` `AnswerInvitation` `ListInvitations` `ListGroupInvitations` `WithdrawInvitation` `RemoveMember` `SetRole` `RoleOf` `Memberships` `MembersOf`, the ports `Groups` `Invitations` `People` `Circle` `Notices` `Clock`; `present.go` is what the views share |
+| `groups/groupstore` | groupstore (adapter) | the stores `groups` and `invitations`, the workflow `Lapsing` (an invitation expires after a week), the topic `events`, `Groups`, `Invitations`, `Directory` (asks the identity's query), `Friends` (asks the contacts' query), `Announcer` (one event for each member told), `WallClock` |
+| `groups/groupsapi` | groupsapi (presentation) | the routes of `/api/groups` (the invitations a group waits on included) and `/api/invitations`, the queries `role`, `memberships` and `members` |
+| `tasks/task` | task (domain) | `Task` (with its `GroupID` and `AssigneeID`) and `Task.SeenBy`, the one rule of who sees it, `Priority`, the `Lifecycle` workflow, the errors |
+| `tasks/planner` | planner (application) | the use cases `AddTask` `GetTask` `EditTask` `DeleteTask` `MoveTask` `ShareTask` `UnshareTask` `ListTasks` `CountViews` `NamePeople` `FollowGroup` `CountTasks` `DueSoon`, the ports `TaskStore` `Circle` `Groups` `People` `Clock` `Journal`; `lifecycle.go` is what they share, `access.go` is the role a member has in a task's group and who may be assigned, `views.go` the member's day and week and the views of the list |
+| `tasks/taskstore` | taskstore (adapter) | the store `tasks`, its workflow `Shelf` (a done task is archived after `archive-after`), the topic `events` (a task shared or assigned names its actor and the member it concerns), `Tasks`, `Announcer` (the use cases' `Journal`, which publishes, to everyone who sees the task), `Friends` (their `Circle`, which asks the contacts' query), `Groups` (their `Groups`, which asks the groups' queries `role` and `memberships`), `Directory` (their `People`, which asks the identity's query `member` for a name), `AppClock`, and the subscription `groups`, by which the tasks follow a group deleted or a member who left it |
+| `tasks/api` | api (presentation) | the routes of `/api/tasks` (views and `counts` included, `counts` carrying the `unread` of the feed; every answer that carries tasks carries their `people`), the query `census`; the control `task_id_valide` (`checkTaskID`, a validation: 400 on an id that is not a task's), in front of `POST /api/tasks/{id}/complete` |
+| `activity/feed` | feed (adapter) | the store `entries` (each `Read` or not, marked read by the store's own `Update`), the subscriptions `tasks`, `contacts` and `groups` to their events, `GET /api/activity`, `POST /api/activity/read`, the query `unread` (which the tasks' API asks for `counts`) |
+| `notify/reminders` | reminders (application) | the use cases `RemindDue` and `MailAction` (a contact request received or accepted, a group invitation, a task shared or assigned: who is mailed of what another did, once for each event), the ports `Mailer`, `Notifier`, `Directory` (who a member is written to: address, name, language, time zone), `ReminderLog` and `ActionLog` |
+| `notify/post` | post (adapter) | the mailer `mail` (the framework's outbox and transport), the command `send` every mail goes through (a letter: recipient, kind, parameters, action path), the words (`locales/fr.json`, `locales/en.json`) and the design (`templates/`, HTML and text) of every mail, the setting `base-url`, `Carrier` (the reminders' `Mailer` and the `Notifier` of what others did, its SMTP connection declared in the design); ten kinds of mail in all |
+| `notify/outbox` | outbox (adapter) | the stores `reminded` and `acted` (events mailed, deleted after ninety days), `Members` (the reminders' `Directory`, which asks the identity's query), `Ledger` and `Register` (the two logs) |
+| `notify/watch` | watch (presentation) | the job `remind-due`, the setting `remind-within`, the subscriptions `tasks`, `contacts` and `groups` that mail what others did |
+| `stats/census` | census (presentation) | the store `snapshots`, the job `sample`, `GET /api/stats` |
+| `web/site` | site (presentation) | the web app, French and English: `page/index.html`, `app.css`, `lang.js` (words), `tasks.js`, `circle.js`, `app.js`, embedded and served at `/` |
+| `load/driver` | driver (application) | `Drive`, the port `API` |
+| `load/httpapi` | httpapi (adapter) | `Client`, the API over HTTP, the setting `target` |
+| `load/loadcli` | loadcli (presentation) | the command `run` |
+| `cmd/todo` | — | the binary, and its roles' wiring: `server/`, `load/` (generated), and `server/server_test.go`, the role run whole |
 
 ## Rules
 
-- Declare building blocks as package-level variables: the static analysis
-  only reads those. Call a building block through its variable
-  (`tasks.Tasks.Get`, `groups.RoleOf.Ask`), never through a value.
-- A service's data is its own: another service asks its queries or
-  dispatches its commands — internal, as long as nobody exposes them — or
-  listens to its topics, never through the store.
-- Go imports must stay a tree while services call each other both ways.
-  When a service is called by a service it must itself call or listen to,
-  it declares its shared part (Service, model, store, topic, the queries
-  and commands others run) in `svc/` and the rest in a sub-package on the
-  same `svc.Service` (`tasks/api`, `notify/dispatch`); `main.go` imports
-  that sub-package blank.
-- Fire a workflow event with a constant name at the call site
-  (`Lifecycle.Fire(ctx, id, "complete")`): the analysis labels the edge
-  with it. Never call another endpoint's handler function directly.
-- Subscriptions are at-least-once: key what they write by the event's own
-  ID, insert rather than overwrite, and do the one irreversible thing — a
-  mail — last.
-- Every timestamp and deadline reads `wire.Now(ctx)` (the framework's clock): the
-  tests move it. Logs go through `app.Log(ctx)` and name users by ID, never
-  by address.
-- A transition due at a date the entity carries (a due date, a link's
-  deadline) is an `At`: the framework wakes the workflow's loop at that instant. A
-  `When` guard sees the entity only and is checked each time it is written —
-  never a condition on the time. No workflow loop runs while nothing is due.
-- Errors to callers are `app.Error` values: `wire.Invalid` for a field,
-  `app.NotFound` for what the caller may not see (never 403 for a task, a
-  group or a contact of someone else), and the codes of the contract
-  (`invalid_credentials`, `email_unverified`, `account_locked`,
-  `invalid_token`). A framework error is matched by its wire code:
-  `wire.Is(err, app.WireNotFound)`, `app.WireConflict`. Never return or log
-  a password, a secret or a hash; a secret is stored as its SHA-256, a
-  password with the SDK's `password.Hash` (`pkg/v1/crypto/password`).
-- Ask "is there one?" with `Find` on an index, not `Get`: a missing key is
-  an error span, and the Studio paints the store red.
-- The product speaks French first, and English. An account's `Locale` is
-  set at sign-up (the form's `locale`, else the SDK's `i18n.Negotiator` over
-  `Accept-Language`, else French) and changed by `PATCH /api/auth/me`; an
-  account without one reads French (`Locale.Resolve`). A service that
-  writes to a user gets the language from the directory (`identity.People`)
-  or the call (`SendInput.Locale`), never from identity's store.
-- An account's `TimeZone` is the IANA zone the browser gave at sign-up and
-  at each sign-in (`timeZone`, checked by `wire.CheckTimeZone`: spelled as
-  the database spells it, so every OS answers alike); the times in a mail
-  are written in the reader's zone (`wordsIn(l).at(zone)`, `{zone}` in
-  `date.long`), UTC when they gave none.
-- Settings are declared where they are used (`Service.Setting`), never read
-  from the environment by hand: `base-url` (notify), `archive-after` (tasks,
-  the auto-archive timer waits it). A test gives one with `app.Set`.
-- Every word of a mail comes from `notify/locales/{fr,en}.json` (flat keys,
-  `{name}` placeholders, CLDR plural forms for a count) through the SDK's
-  `i18n` printers. A new mail adds its keys to both files: the process
-  refuses to start on a key one language lacks or a missing plural form.
-  French is written for French readers — vous, `’`, `\u00a0` before
-  `: ? !` and inside `« »`, no elision a name could break ("envoyée par
-  {actor}", not "de {actor}") — and mails stay light: no dark mode.
-- Import the SDK only — `sdk/framework/*` and `sdk/pkg/v1/*` — never
-  `github.com/kitsunium/platform`: a product never imports the platform
-  (its ADR 0010, D2). What the platform gives the product, it gives as a
-  tool: the dev run with the Studio, and the static analysis the diagram
-  tests run through `$GRAPH_ANALYZER graph -static`. No file of the product
-  names the tool (SDK ADR 0180): the Studio is plugged into a dev build from
-  outside the tree.
-- The README's Mermaid diagram is generated: after a change to the graph,
-  replace it with what `TestTheReadmeDiagramIsCurrent` prints where the
-  analyzer is — the product's `graph -format mermaid`, given the static
-  analysis. `go
-  run . graph -format mermaid` prints its solid arrows alone (what the
-  product declares): the dashed ones are what the analyzer finds in the code.
+- **The design is law on the structure.** A package, an exported symbol, a
+  framework declaration (a store, a route, a job, a setting, a command), a
+  port, a use case and who calls whom exist because `design/*.yaml` says
+  so. Change the design, regenerate, then write the bodies. Never edit a
+  `gen_*.go` file or `design/generated.lock`.
+- **A hand-written file holds bodies.** The generator writes a skeleton
+  once, then never again: the file is yours. A handler or a method the
+  design gains later gets no skeleton in a file that exists — write its twin
+  there, with the name its shell calls. A body that still answers
+  `errNotImplemented` is a stub.
+- **Nothing exported outside the design, and nothing unexported either.**
+  A helper is unexported, in its component, and declared among the
+  component's `internals` in the design: the dev tool derives that block
+  from the code, then the check holds the code to it. A role's package
+  (`cmd/todo/server`) holds no function of its own but its tests. A component imports the components its `uses` names, and
+  nothing else of the module.
+- **A use case and an adapter call what their `calls` draw.** A call to a
+  port or a use case the design does not draw fails the check: add the link
+  to the design first. A sequence's test holds the order of its steps.
+- **A scenario, a sequence and a property the design names is a test to
+  write**, in the file the generator opened for it. A domain method or pure
+  function with a body needs a property.
+- **A store holds an entity of its own component**: `taskstore.Record`
+  is `task.Task` as the store keeps it, field for field. Add a field to
+  both, and to `toRecord` and `fromRecord`.
+- **Who sees a task is decided in one place**: `Task.SeenBy(user, inGroup)`
+  (owner, shared with, assignee, or member of its group). A use case never
+  tests ownership or sharing by hand: it reads the task and the caller's role
+  in its group through `load` (`planner/access.go`), a list through the
+  caller's `Groups.Memberships`. A task a member does not see is
+  `ErrNotFound`. The groups are asked through their queries, never read.
+- **Who calls is the framework's to say**: a route that needs a member
+  says `auth: required` in the design, and its handler reads
+  `app.UserID(ctx)`. A use case takes the owner as an input and never trusts
+  an id alone: another member's task is `ErrNotFound`, never a 403.
+- **A secret is never kept, answered or logged**: a password is stretched
+  by `Stretcher`, a session's secret kept as its SHA-256, and both fields
+  are tagged `app:"secret"`. What a stranger may ask is answered the same whether an
+  address has an account or not (sign-up, a new link, a forgotten
+  password); an unknown address and a wrong password are answered alike, and cost the same time (`Stretcher.verify` on an empty
+  hash).
+- **A record is changed where it is kept, never read then written back**:
+  a use case that changes a task, a group, an invitation, a link or an
+  account calls its store port's `Change(id, fn)`, and decides inside `fn`,
+  on the record as it is at that instant. The adapter runs it under the
+  store's `Update`, alone among the store's writers, so two changes made at
+  once both stay (`cmd/todo/server` holds it: acceptances, edits, requests
+  and sign-ups at the same instant). What needs another component (a role,
+  a contact) is asked before, and `fn` holds it to the record it then sees.
+  `fn` reads and writes nothing else. `Save` is for a record just made;
+  a unique index answers two creations at once.
+- **A component's data is its own**: another component reaches it through
+  a query the owner declares (`vault.MemberQuery.Ask`,
+  `api.CensusQuery.Ask`), a topic it publishes or a port, never its store.
+- **What time does to a record is a workflow on its store** (`Shelf`,
+  `Waiting`): the framework fires the timed transition, whoever wrote the
+  state. What a member does stays the domain's pure workflow, in a use
+  case. The two name the same states: add one to both.
+- **The end-to-end tests of the server role stretch real passwords**: about
+  a minute and a half under `-race`, ten seconds without. Iterate with
+  `-run` and without `-race`; run the whole package under `-race` before a
+  commit. The link that proves an address signs its member in, so a test
+  member costs one stretching, not two.
+- **A subscription is delivered at least once, and later**: it keys what
+  it writes by the event's own id and writes nothing the second time
+  (`feed.record`). A test that reads what a subscription wrote moves the
+  clock until it is there.
+- **Time is the framework's**: `app.Now(ctx)`, in UTC, to the millisecond
+  (`AppClock`, and the adapters that stamp a record). A test moves it.
+- **Ask "is there one?" with `Filter`, not `Get`**: a missing key is a
+  failed read (`Ledger.Seen`). `Tasks.Get` reads the key because a task
+  that does not exist is the caller's error, answered 404.
+- **Every mail goes through `post`**, in the reader's language (French or
+  English, French by default), as HTML with a plain text alternative, its
+  subject one line: a component that writes to a member dispatches
+  `post.SendCommand` with a kind, its parameters and the member's `Locale` and
+  `TimeZone`, or goes through `Carrier`, never a transport of its own. The
+  words are in `notify/post/locales`, one catalogue per language with the same
+  keys (a test holds it), and the layout in `notify/post/templates`; a link is
+  `base-url` and a path. A test reads what was sent with
+  `post.MailMailer.Captured()`.
+- **Logs name a task by its id**, never an assignee: `AssigneeID`, a mail's
+  `To` are tagged `app:"personal"`, and `app:"personal,subject"` in the
+  entity a store keeps. A store that keeps personal data says for how long
+  in the design (`eraseAfter`, `deleteAfter`).
+- **No file names the tool** that generates, checks or runs the product in
+  dev: this file, the README and the code say "the generator", "the
+  check", "the dev tool". The product imports the SDK only.
+- **The web app is three files and no build**: no inline script or style
+  (the framework's content policy refuses them), every word of the page in
+  French, every call through `call` in `app.js`. A route the page uses
+  that changes shape changes `app.js` in the same commit.
+- The server role's App is named `server`, the load's `load`: their
+  settings are `SERVER_<NAME>` and `LOAD_<NAME>`.
+- **A route that writes says its limit in the design** (`rateLimit`, per
+  client): 2 a second, burst 5, where a stranger makes the product work
+  (sign-up, sign-in, a contact request), 10 and 20 elsewhere. The buckets
+  refill on the framework's clock: a test's client moves it on a 429.
+- **A setting's value for an environment is a file of the role**,
+  `cmd/todo/<role>/config/<env>.json`, embedded; a key no component of the
+  role declares stops the start. Dev trusts addresses there; a test of the
+  server role sets `verify-addresses` back to true.
+- **A request is decoded strictly**: a member the route does not declare
+  is a 400. A client sends each route its own fields.
 
 ## Develop
 
-The build needs the Go toolchain and the module proxy, nothing else: no
-platform checkout and no `go.work` (git-ignored, machine-local: build with
-`GOWORK=off` to be sure none is read). The dev tool and the analyzer are
-installed apart, from a platform checkout.
-
-The SDK is a module per `pkg/v1` family since v0.20.0 (its ADR 0171), and
-the framework is its root module: never require
-`github.com/kitsunium/sdk/framework` or `github.com/kitsunium/sdk/pkg`, whose
-v0.18.0 tags are tombstones holding no package. Moving to another SDK version
-is `GOWORK=off go get github.com/kitsunium/sdk@<version> && GOWORK=off go mod
-tidy`, then `go get` of each `pkg/v1/<family>` the product imports.
-
 ```sh
-TODO_ENV=dev GOWORK=off go run .    # :4000, in dev (the dev tool adds the Studio)
 GOWORK=off go build ./... && GOWORK=off go vet ./...
-GOWORK=off go test -race ./...      # end to end, on a manual clock
-gofmt -l .                          # empty
-docker build -t todo .
+GOWORK=off go test -race ./...
+gofmt -l .                                   # empty
+SERVER_ENV=dev GOWORK=off go run ./cmd/todo  # 127.0.0.1:4000
 ```
 
-The diagram suite's static half needs the analyzer: `GRAPH_ANALYZER=<its
-binary>`. Without it, `TestTheDiagramMatchesTheCode` checks what the
-running product says of itself and `TestTheReadmeDiagramIsCurrent` the
-diagram's solid arrows, then each skips the rest, naming it (`go test -v`
-shows the skip). With it, both run whole:
-
-```sh
-GRAPH_ANALYZER=<the analyzer> GOWORK=off go test -race -v -run 'TestTheDiagramMatchesTheCode|TestTheReadmeDiagramIsCurrent' .
-```
+After a change of the design: regenerate, build, write what the new shells
+call, run the tests, then the structure check; commit the design, the
+generated files and the lock together.
 
 Commits: conventional, authored as `kodflow` (the `post-commit` gate checks
 it), no AI attribution. Never delete `.github/workflows/post-commit.yml`.

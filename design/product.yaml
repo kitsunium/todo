@@ -1,0 +1,53 @@
+# The todo: a task list for a team, served over HTTP by one process, with a
+# second process role that drives a load against it.
+apiVersion: design/v2
+project:
+  module: github.com/kitsunium/todo
+  name: todo
+  type: product
+product:
+  name: todo
+  module: github.com/kitsunium/todo
+  version: v0.3.0
+  closed: true
+  config: [json]
+context:
+  actors:
+    - name: member
+      description: A person of the team, who adds tasks, moves them through their lifecycle and reads what happened, through the HTTP API.
+    - name: operator
+      description: Runs the binary, reads its vital signs and drives a load against a running server from a terminal.
+  systems:
+    - name: mail-relay
+      description: The SMTP relay the reminders are handed to, when the deployment names one.
+deployment:
+  description: One machine that serves the todo, and the operator's, from which a load is driven against it.
+  nodes:
+    - {name: host, description: The machine that serves the API., runs: [todo/server]}
+    - {name: workstation, description: "The operator's machine, where the load command is run by hand.", runs: [todo/load]}
+  systems:
+    - {name: mail-relay, description: The SMTP relay of the deployment; none is named in dev.}
+  links:
+    - {name: load-to-api, description: "The load calls the server's HTTP API.", connection: api, between: [workstation, host]}
+    - {name: mail, description: The server hands each mail to the relay., connection: smtp-submission, between: [host, mail-relay]}
+evidence:
+  - name: owner-2026-11-16
+    kind: decision
+    date: 2026-11-16
+    note: The todo is reopened as a product written design first, on the SDK's current framework; the former framework-style product stayed beside it until this one did all it did, then left the tree.
+  - name: former-product
+    kind: observed
+    note: "The former todo, written on the framework by hand, whose functions this design keeps; it is in the repository's history, last at the commit before the one that removed the directory legacy."
+binaries:
+  - name: todo
+    description: The todo, as one executable, its server and the load it can drive against one.
+    roles:
+      - name: server
+        profile: server
+        description: Serves the HTTP API, keeps the stores, archives what was done long ago, samples the vital signs and sends the reminders.
+        mounts: [vault, authapi, linkstore, contactsapi, groupstore, groupsapi, taskstore, api, feed, post, outbox, watch, census, site]
+      - name: load
+        command: load
+        profile: cli
+        description: Drives a load against a running server over its HTTP API, then exits.
+        mounts: [httpapi, loadcli]

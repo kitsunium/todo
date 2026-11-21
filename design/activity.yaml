@@ -1,0 +1,70 @@
+# The activity: what happened to the tasks, as a feed.
+apiVersion: design/v2
+domains:
+  - name: activity
+    description: What happened to a member's tasks, newest first.
+    components:
+      - name: feed
+        role: adapter
+        code: 64.2.1
+        uses: [taskstore, linkstore, groupstore]
+        description: The feed, written from the events of the tasks, of the contacts and of the groups, and its HTTP read.
+        evidence: [former-product]
+        entities:
+          - name: Entry
+            description: One thing that happened to a task.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Seq, type: int64, tag: 'json:"seq" app:"public"', description: "Seq orders the entries: each is one above the entry written before it."}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"personal,subject"', description: "UserID is the member whose feed the entry is in: whoever the event is told to, and the subject of the entry."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is added or the lifecycle event that moved a task, contact-requested or contact-accepted for a contact, group-invited, group-joined, group-left, group-removed, group-role or group-deleted for a group."}
+              - {name: TaskID, type: string, tag: 'json:"taskId" app:"public"'}
+              - {name: Title, type: string, tag: 'json:"title" app:"personal"', description: "Title is the task's title, the name of the member a contact entry is about, or the name of the group a group entry is about."}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+              - {name: Read, type: bool, tag: 'json:"read" app:"public"', description: "Read is whether the member has marked the entry read; an entry is written unread."}
+        values:
+          - name: Page
+            description: The latest entries, newest first.
+            fields:
+              - {name: Entries, type: "[]Entry", tag: 'json:"entries"'}
+          - name: NoInput
+            description: A request that says nothing.
+          - name: Unread
+            description: How many entries of a member's feed are not read.
+            fields:
+              - {name: Unread, type: int, tag: 'json:"unread" app:"public"'}
+          - name: Whose
+            description: The member whose feed is asked.
+            fields:
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+          - name: PageRequest
+            description: How many entries to read.
+            fields:
+              - {name: Limit, type: int, tag: 'query:"limit"'}
+        constants:
+          - {name: Keep, type: int, value: "200", description: Keep is how many entries the feed keeps for a member.}
+        stores:
+          - name: entries
+            entity: Entry
+            key: ID
+            description: "The feed's entries, keyed by the id of the event each one tells; an entry is deleted ninety days after it was written."
+            deleteAfter: {delay: 2160h, since: At}
+        subscriptions:
+          - {name: tasks, topic: tasks/topic/events, handler: Record}
+          - {name: contacts, topic: contacts/topic/events, handler: RecordContact}
+          - {name: groups, topic: groups/topic/events, handler: RecordGroup}
+        queries:
+          - {name: unread, input: Whose, output: Unread, handler: CountUnread, description: "How many entries of a member's feed are not read, for the components that show it."}
+        endpoints:
+          - {route: "GET /api/activity", request: PageRequest, response: Page, handler: Recent, auth: required}
+          - {route: "POST /api/activity/read", request: NoInput, response: Unread, handler: MarkRead, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required}
+        internals:
+          functions:
+            - name: newestFirst
+              description: "newestFirst is every entry, the newest first."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "[]Entry"}, {type: "error"}]
+            - name: write
+              description: "write keeps an entry, keyed by its event's id, so a message delivered twice writes nothing the second time."
+              params: [{name: ctx, type: "context.Context"}, {name: e, type: "Entry"}]
+              results: [{type: "error"}]

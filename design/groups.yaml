@@ -1,0 +1,665 @@
+# The groups: teams of members who join by invitation, and the roles inside them.
+apiVersion: design/v2
+domains:
+  - name: groups
+    description: Teams a member creates, whose members join by an invitation a contact answers.
+    components:
+      - name: team
+        role: domain
+        code: 64.9.1
+        description: A group, its members and their roles, and the invitation that brings a member in.
+        evidence: [former-product]
+        entities:
+          - name: Group
+            description: A team, its members and the role each one has in it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"public"'}
+              - {name: Color, type: string, tag: 'json:"color" app:"public"'}
+              - {name: Members, type: "[]Membership", tag: 'json:"members"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+            methods:
+              - name: RoleOf
+                description: "RoleOf is the role a member has in the group, empty for a stranger."
+                params: [{name: user, type: string}]
+                results: [{type: Role}]
+                properties: [EachMemberHasItsRole]
+              - name: MemberIDs
+                description: MemberIDs are the ids of the members, in the order the group keeps them.
+                results: [{type: "[]string"}]
+                properties: [OneIDAMember]
+          - name: Invitation
+            description: An invitation of a contact into a group, and what became of it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: GroupID, type: string, tag: 'json:"groupId" app:"public"'}
+              - {name: InviterID, type: string, tag: 'json:"inviterId" app:"public"'}
+              - {name: InviteeID, type: string, tag: 'json:"inviteeId" app:"public"'}
+              - {name: State, type: InvitingState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: RespondedAt, type: time.Time, tag: 'json:"respondedAt" app:"public"', description: "RespondedAt is when the invitee answered; the zero time while nobody has."}
+        values:
+          - name: Role
+            description: What a member may do in a group.
+            underlying: string
+          - name: Membership
+            description: One member of a group.
+            fields:
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: Role, type: Role, tag: 'json:"role" app:"public"'}
+              - {name: JoinedAt, type: time.Time, tag: 'json:"joinedAt" app:"public"'}
+        constants:
+          - {name: MaxName, type: int, value: "60", description: MaxName is the longest name a group takes.}
+          - {name: RoleOwner, type: Role, value: '"owner"', description: "RoleOwner created the group and alone deletes it or changes a role."}
+          - {name: RoleAdmin, type: Role, value: '"admin"', description: "RoleAdmin invites and removes members and edits the group."}
+          - {name: RoleMember, type: Role, value: '"member"', description: "RoleMember is a member who works on the group's tasks."}
+        functions:
+          - name: Manages
+            description: "Manages says whether a role runs the group: invites, removes, edits."
+            params: [{name: role, type: Role}]
+            results: [{type: bool}]
+            properties: [OwnerAndAdminOnly]
+          - name: CleanName
+            description: CleanName reads a group's name as a member writes it, trimmed, one line of one to MaxName characters.
+            params: [{name: name, type: string}]
+            results: [{type: string}, {type: error}]
+            properties: [TrimmedOrRefused]
+          - name: ColorFor
+            description: "ColorFor checks a group's color, or picks one from its name when none is sent."
+            params: [{name: color, type: string}, {name: name, type: string}]
+            results: [{type: string}, {type: error}]
+            properties: [KnownOrRefused]
+          - name: ParseRole
+            description: ParseRole reads the role a member is given, admin or member; the owner is never given.
+            params: [{name: s, type: string}]
+            results: [{type: Role}, {type: error}]
+            properties: [AssignableOnly]
+          - name: Ranked
+            description: Ranked is the members, the owner first, then the admins, then the members, each rank by when they joined.
+            params: [{name: members, type: "[]Membership"}]
+            results: [{type: "[]Membership"}]
+            properties: [OwnerFirst]
+        errors:
+          - {name: ErrNotFound, serial: 1, message: no such group}
+          - {name: ErrNoInvitation, serial: 2, message: no such invitation}
+          - {name: ErrNoMember, serial: 3, message: no such member}
+          - {name: ErrNotManager, serial: 4, message: only the group's owner and admins can do this}
+          - {name: ErrNotOwner, serial: 5, message: only the group's owner can do this}
+          - {name: ErrNotContact, serial: 6, message: you can only invite your contacts}
+          - {name: ErrCannotRemove, serial: 7, message: you cannot remove this member}
+          - {name: ErrOwnerRole, serial: 8, message: the owner's role cannot change}
+          - {name: ErrAlreadyMember, serial: 9, message: this person is already a member}
+          - {name: ErrAlreadyInvited, serial: 10, message: this person is already invited}
+          - {name: ErrOwnerStays, serial: 11, message: "the owner cannot leave the group: delete it instead"}
+          - {name: ErrNotPending, serial: 12, message: this invitation is not waiting for an answer any more}
+          - {name: ErrBadName, serial: 13, message: "a name is one line of one to 60 characters"}
+          - {name: ErrBadColor, serial: 14, message: the color is not one of the group colors}
+          - {name: ErrBadRole, serial: 15, message: "a role is admin or member"}
+        workflows:
+          - name: Inviting
+            entity: Invitation
+            description: An invitation is pending until its invitee accepts or declines it, or a manager of the group withdraws it; one nobody answered for a week has expired.
+            states: [pending, accepted, declined, withdrawn, expired]
+            initial: pending
+            transitions:
+              - {event: accept, from: [pending], to: accepted}
+              - {event: decline, from: [pending], to: declined}
+              - {event: withdraw, from: [pending], to: withdrawn}
+        internals:
+          functions:
+            - name: palette
+              description: "palette is the colors a group may have, the web app has a swatch for each."
+              results: [{type: "[]string"}]
+      - name: roster
+        role: application
+        code: 64.9.2
+        uses: [team]
+        description: Creating and running a group, inviting a contact into it, answering an invitation, and what the other components ask of one's groups.
+        values:
+          - name: Person
+            description: A member as a group shows them.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+          - name: GroupRef
+            description: How a group is shown elsewhere.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"public"'}
+              - {name: Color, type: string, tag: 'json:"color" app:"public"'}
+          - name: MemberView
+            description: A member as the group's page shows them.
+            fields:
+              - {name: User, type: Person, tag: 'json:"user"'}
+              - {name: Role, type: team.Role, tag: 'json:"role" app:"public"'}
+              - {name: JoinedAt, type: time.Time, tag: 'json:"joinedAt" app:"public"'}
+          - name: GroupView
+            description: A group as one of its members sees it, the members ranked.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"public"'}
+              - {name: Color, type: string, tag: 'json:"color" app:"public"'}
+              - {name: Role, type: team.Role, tag: 'json:"role" app:"public"', description: "Role is the one of the member who looks."}
+              - {name: Members, type: "[]MemberView", tag: 'json:"members"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+          - name: InvitationView
+            description: An invitation into a group, as the inviter and the invitee read it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Group, type: GroupRef, tag: 'json:"group"'}
+              - {name: Inviter, type: Person, tag: 'json:"inviter"'}
+              - {name: Invitee, type: Person, tag: 'json:"invitee,omitzero"', description: "Invitee is who is invited: the inviter's answer to an invitation holds it."}
+              - {name: State, type: team.InvitingState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+          - name: PendingInvitation
+            description: An invitation a group is waiting on, as its owner and admins read it, without any address.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: User, type: Person, tag: 'json:"user"', description: "User is who is invited."}
+              - {name: Inviter, type: Person, tag: 'json:"inviter"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+          - name: Belonging
+            description: A group a member belongs to, and their role in it.
+            fields:
+              - {name: Group, type: GroupRef, tag: 'json:"group"'}
+              - {name: Role, type: team.Role, tag: 'json:"role" app:"public"'}
+        ports:
+          - name: Groups
+            direction: out
+            version: 1
+            description: GroupsV1 keeps the groups.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: g, type: team.Group}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: team.Group}, {type: bool}]}
+              - {name: Of, params: [{name: user, type: string}], results: [{type: "[]team.Group"}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the group of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and a group that is not there is ErrNotFound.", params: [{name: id, type: string}, {name: change, type: "func(*team.Group) error"}], results: [{type: team.Group}]}
+          - name: Invitations
+            direction: out
+            version: 1
+            description: InvitationsV1 keeps the invitations.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: inv, type: team.Invitation}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: team.Invitation}, {type: bool}]}
+              - {name: Of, params: [{name: user, type: string}], results: [{type: "[]team.Invitation"}]}
+              - {name: OfGroup, params: [{name: group, type: string}], results: [{type: "[]team.Invitation"}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+              - {name: Change, description: "Change applies a change to the invitation of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing, and an invitation that is not there is ErrNoInvitation.", params: [{name: id, type: string}, {name: change, type: "func(*team.Invitation) error"}], results: [{type: team.Invitation}]}
+          - name: People
+            direction: out
+            version: 1
+            description: PeopleV1 is the directory of the members.
+            methods:
+              - {name: ByID, params: [{name: id, type: string}], results: [{type: Person}, {type: bool}]}
+          - name: Circle
+            direction: out
+            version: 1
+            description: CircleV1 knows who is a contact of whom.
+            methods:
+              - {name: AreContacts, params: [{name: one, type: string}, {name: other, type: string}], results: [{type: bool}]}
+          - name: Notices
+            direction: out
+            version: 1
+            description: NoticesV1 is told what happened in a group, and to whom, for whoever tells the members.
+            methods:
+              - {name: Tell, params: [{name: kind, type: string}, {name: g, type: team.Group}, {name: actor, type: Person}, {name: to, type: "[]string"}]}
+          - name: Clock
+            direction: out
+            version: 1
+            description: ClockV1 tells the time.
+            methods:
+              - {name: Now, results: [{type: time.Time}]}
+        usecases:
+          - name: CreateGroup
+            description: CreateGroup starts a group; whoever creates it is its owner.
+            input:
+              - {name: User, type: string}
+              - {name: Name, type: string}
+              - {name: Color, type: string}
+            output:
+              - {name: Group, type: GroupView}
+            errors: [team.ErrBadName, team.ErrBadColor]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.NewID, groups/port/Groups@v1.Save, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: creates a group, kind: success}
+              - {name: picks a color from the name, kind: success}
+              - {name: refuses a blank name, kind: refusal, error: team.ErrBadName}
+              - {name: refuses an unknown color, kind: refusal, error: team.ErrBadColor}
+          - name: EditGroup
+            description: EditGroup renames a group or changes its color, each only when it is sent; its owner and admins may.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Name, type: "*string"}
+              - {name: Color, type: "*string"}
+            output:
+              - {name: Group, type: GroupView}
+            errors: [team.ErrNotFound, team.ErrNotManager, team.ErrBadName, team.ErrBadColor]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.Change, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: edits a group, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses a plain member, kind: refusal, error: team.ErrNotManager}
+              - {name: refuses a blank color, kind: refusal, error: team.ErrBadColor}
+          - name: DeleteGroup
+            description: DeleteGroup deletes a group and its invitations; only its owner may. Its members are told.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            errors: [team.ErrNotFound, team.ErrNotOwner]
+            calls: [groups/port/Groups@v1.Get, groups/port/Invitations@v1.OfGroup, groups/port/Invitations@v1.Delete, groups/port/Groups@v1.Delete, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            scenarios:
+              - {name: deletes a group, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses an admin, kind: refusal, error: team.ErrNotOwner}
+          - name: ListGroups
+            description: ListGroups lists a member's groups by name.
+            input:
+              - {name: User, type: string}
+            output:
+              - {name: Groups, type: "[]GroupView"}
+            calls: [groups/port/Groups@v1.Of, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: lists the groups of a member by name, kind: success}
+          - name: GetGroup
+            description: GetGroup shows one of a member's groups; a group they are not in does not exist for them.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            output:
+              - {name: Group, type: GroupView}
+            errors: [team.ErrNotFound]
+            calls: [groups/port/Groups@v1.Get, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: shows a group with its members ranked, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+          - name: Invite
+            description: Invite asks one of the caller's contacts to join a group; its owner and admins may. The invitee is told.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Invitee, type: string}
+            output:
+              - {name: Invitation, type: InvitationView}
+            errors: [team.ErrNotFound, team.ErrNotManager, team.ErrAlreadyMember, team.ErrNotContact, team.ErrAlreadyInvited]
+            calls: [groups/port/Groups@v1.Get, groups/port/Circle@v1.AreContacts, groups/port/Invitations@v1.OfGroup, groups/port/Clock@v1.Now, groups/port/Invitations@v1.NewID, groups/port/Invitations@v1.Save, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            scenarios:
+              - {name: invites a contact, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses a plain member, kind: refusal, error: team.ErrNotManager}
+              - {name: refuses someone already in, kind: refusal, error: team.ErrAlreadyMember}
+              - {name: refuses who is no contact, kind: refusal, error: team.ErrNotContact}
+              - {name: refuses an invitation already waiting, kind: refusal, error: team.ErrAlreadyInvited}
+          - name: AnswerInvitation
+            description: AnswerInvitation moves a pending invitation by one event, accept or decline, for its invitee; accepting joins the group as a member.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Event, type: string}
+            output:
+              - {name: Group, type: GroupView}
+            errors: [team.ErrNoInvitation, team.ErrNotPending, team.ErrNotFound]
+            calls: [groups/port/Clock@v1.Now, groups/port/Invitations@v1.Change, groups/port/Groups@v1.Change, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            scenarios:
+              - {name: accepts an invitation, kind: success}
+              - {name: declines an invitation, kind: success}
+              - {name: refuses the invitation of others, kind: refusal, error: team.ErrNoInvitation}
+              - {name: refuses an invitation already answered, kind: refusal, error: team.ErrNotPending}
+              - {name: refuses an invitation into a deleted group, kind: refusal, error: team.ErrNotFound}
+          - name: ListInvitations
+            description: ListInvitations lists the invitations waiting for a member's answer, the newest first.
+            input:
+              - {name: User, type: string}
+            output:
+              - {name: Invitations, type: "[]InvitationView"}
+            calls: [groups/port/Invitations@v1.Of, groups/port/Groups@v1.Get, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: lists the pending invitations newest first, kind: success}
+          - name: ListGroupInvitations
+            description: ListGroupInvitations lists the invitations a group is waiting on, the newest first; its owner and admins may ask, as they may invite.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+            output:
+              - {name: Invitations, type: "[]PendingInvitation"}
+            errors: [team.ErrNotFound, team.ErrNotManager]
+            calls: [groups/port/Groups@v1.Get, groups/port/Invitations@v1.OfGroup, groups/port/People@v1.ByID]
+            scenarios:
+              - {name: lists the pending invitations of a group newest first, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses a plain member, kind: refusal, error: team.ErrNotManager}
+          - name: WithdrawInvitation
+            description: WithdrawInvitation takes back an invitation a group is waiting on; its owner and admins may. The invitation is answered once, whoever the invitee or the manager is, so a withdrawal and an acceptance at the same instant leave one winner.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: InvitationID, type: string}
+            errors: [team.ErrNotFound, team.ErrNotManager, team.ErrNoInvitation]
+            calls: [groups/port/Groups@v1.Get, groups/port/Invitations@v1.Change]
+            scenarios:
+              - {name: withdraws an invitation, kind: success}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses a plain member who withdraws, kind: refusal, error: team.ErrNotManager}
+              - {name: refuses an invitation of another group, kind: refusal, error: team.ErrNoInvitation}
+              - {name: refuses an invitation already answered, kind: refusal, error: team.ErrNoInvitation}
+              - {name: refuses an unknown invitation, kind: refusal, error: team.ErrNoInvitation}
+          - name: RemoveMember
+            description: RemoveMember takes a member out of a group. Anyone but the owner may leave; the owner removes anyone, an admin removes members.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Member, type: string}
+            errors: [team.ErrNotFound, team.ErrNoMember, team.ErrOwnerStays, team.ErrCannotRemove]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.Change, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            scenarios:
+              - {name: leaves a group, kind: success}
+              - {name: removes a member, kind: success}
+              - {name: refuses an unknown member, kind: refusal, error: team.ErrNoMember}
+              - {name: refuses the owner who leaves, kind: refusal, error: team.ErrOwnerStays}
+              - {name: refuses a plain member who removes, kind: refusal, error: team.ErrCannotRemove}
+              - {name: refuses an admin who removes an admin, kind: refusal, error: team.ErrCannotRemove}
+              - {name: refuses the removal of the owner, kind: refusal, error: team.ErrCannotRemove}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+          - name: SetRole
+            description: SetRole makes a member an admin, or an admin a member; only the owner may, and never of themselves.
+            input:
+              - {name: User, type: string}
+              - {name: ID, type: string}
+              - {name: Member, type: string}
+              - {name: Role, type: string}
+            output:
+              - {name: Group, type: GroupView}
+            errors: [team.ErrBadRole, team.ErrNotFound, team.ErrNotOwner, team.ErrNoMember, team.ErrOwnerRole]
+            calls: [groups/port/Clock@v1.Now, groups/port/Groups@v1.Change, groups/port/People@v1.ByID, groups/port/Notices@v1.Tell]
+            scenarios:
+              - {name: makes a member an admin, kind: success}
+              - {name: refuses an unknown role, kind: refusal, error: team.ErrBadRole}
+              - {name: refuses the group of others, kind: refusal, error: team.ErrNotFound}
+              - {name: refuses an admin, kind: refusal, error: team.ErrNotOwner}
+              - {name: refuses an unknown member, kind: refusal, error: team.ErrNoMember}
+              - {name: refuses to change the owner, kind: refusal, error: team.ErrOwnerRole}
+          - name: RoleOf
+            description: "RoleOf is the role of a member in a group, empty for a stranger or for a group that does not exist; the other components ask it."
+            input:
+              - {name: Group, type: string}
+              - {name: User, type: string}
+            output:
+              - {name: Role, type: team.Role}
+            calls: [groups/port/Groups@v1.Get]
+            scenarios:
+              - {name: tells the role of a member and nothing of a stranger, kind: success}
+          - name: Memberships
+            description: Memberships lists the groups a member belongs to, with their role in each; the other components ask it.
+            input:
+              - {name: User, type: string}
+            output:
+              - {name: Memberships, type: "[]Belonging"}
+            calls: [groups/port/Groups@v1.Of]
+            scenarios:
+              - {name: lists the groups a member belongs to, kind: success}
+          - name: MembersOf
+            description: "MembersOf lists the members of a group, whoever they are, empty for a group that does not exist; the components that tell a group's members ask it."
+            input:
+              - {name: Group, type: string}
+            output:
+              - {name: Users, type: "[]string"}
+            calls: [groups/port/Groups@v1.Get]
+            scenarios:
+              - {name: lists the members of a group, kind: success}
+        internals:
+          functions:
+            - name: present
+              description: "present is a group as the member who looks sees it: the members ranked, named by the directory."
+              params: [{name: ctx, type: "context.Context"}, {name: people, type: "PeopleV1"}, {name: user, type: "string"}, {name: g, type: "team.Group"}]
+              results: [{type: "GroupView"}, {type: "error"}]
+            - name: personOf
+              description: "personOf is a member as the directory names them; one the directory no longer has keeps their id."
+              params: [{name: ctx, type: "context.Context"}, {name: people, type: "PeopleV1"}, {name: id, type: "string"}]
+              results: [{type: "Person"}, {type: "error"}]
+            - name: refOf
+              description: "refOf is how a group is shown elsewhere."
+              params: [{name: g, type: "team.Group"}]
+              results: [{type: "GroupRef"}]
+            - name: roleIn
+              description: "roleIn is the role a member has in a group they look for: a group that is not there, or that does not hold them, does not exist for them."
+              params: [{name: g, type: "team.Group"}, {name: found, type: "bool"}, {name: user, type: "string"}]
+              results: [{type: "team.Role"}, {type: "error"}]
+      - name: groupstore
+        role: adapter
+        code: 64.9.3
+        uses: [roster, team, vault, contactsapi]
+        description: The groups and their invitations in the framework's store, what happens in a group on a topic, the directory asked of the identity, the contacts asked of theirs, and the framework's clock.
+        entities:
+          - name: GroupRecord
+            description: A group as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"public"'}
+              - {name: Color, type: string, tag: 'json:"color" app:"public"'}
+              - {name: Members, type: "[]team.Membership", tag: 'json:"members"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+          - name: InvitationRecord
+            description: An invitation as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: GroupID, type: string, tag: 'json:"groupId" app:"public"'}
+              - {name: InviterID, type: string, tag: 'json:"inviterId" app:"public"'}
+              - {name: InviteeID, type: string, tag: 'json:"inviteeId" app:"public"'}
+              - {name: State, type: LapsingState, tag: 'json:"state" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: RespondedAt, type: time.Time, tag: 'json:"respondedAt" app:"public"'}
+        values:
+          - name: Event
+            description: What happened in a group, as the topic carries it to whoever listens, one a member it is told to.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"', description: "ID is the event's own: a listener that is delivered it twice keys what it writes by it."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is group-invited, group-joined, group-left, group-removed, group-role or group-deleted."}
+              - {name: GroupID, type: string, tag: 'json:"groupId" app:"public"'}
+              - {name: GroupName, type: string, tag: 'json:"groupName" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"', description: "UserID is the member the event is told to."}
+              - {name: ActorID, type: string, tag: 'json:"actorId" app:"public"'}
+              - {name: ActorName, type: string, tag: 'json:"actorName" app:"personal"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        workflows:
+          - name: Lapsing
+            entity: InvitationRecord
+            store: invitations
+            field: State
+            description: What time does to an invitation kept, one nobody answered expires after a week; its answers are the use cases', which write the state they decided.
+            states: [pending, accepted, declined, withdrawn, expired]
+            initial: pending
+            transitions:
+              - {event: expire, from: [pending], to: expired, delay: 168h}
+        topics:
+          - {name: events, message: Event, description: "What happened in the groups: an invitation, a member who joined, left, was removed or was given a role, a group deleted, delivered at least once."}
+        stores:
+          - name: groups
+            entity: GroupRecord
+            key: ID
+            description: Every group, keyed by its id.
+          - name: invitations
+            entity: InvitationRecord
+            key: ID
+            description: "Every invitation, keyed by its id, found by whom it invites and by the group it is into."
+            indexes: [{name: by-invitee, field: InviteeID}, {name: by-group, field: GroupID}]
+        adapters:
+          - name: Groups
+            description: Groups is Groups@v1 on the store "groups".
+            implements: [groups/port/Groups@v1]
+          - name: Invitations
+            description: Invitations is Invitations@v1 on the store "invitations".
+            implements: [groups/port/Invitations@v1]
+          - name: Directory
+            description: Directory is People@v1 on the identity's query "member".
+            implements: [groups/port/People@v1]
+          - name: Friends
+            description: Friends is Circle@v1 on the contacts' query "are-contacts".
+            implements: [groups/port/Circle@v1]
+          - name: Announcer
+            description: "Announcer is Notices@v1 on the topic events, one event for each member told, the actor never."
+            implements: [groups/port/Notices@v1]
+          - name: WallClock
+            description: WallClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
+            implements: [groups/port/Clock@v1]
+        internals:
+          functions:
+            - name: groupOf
+              description: "groupOf is the group a record keeps."
+              params: [{name: r, type: "GroupRecord"}]
+              results: [{type: "team.Group"}]
+            - name: recordOfGroup
+              description: "recordOfGroup is a group as the store keeps it."
+              params: [{name: g, type: "team.Group"}]
+              results: [{type: "GroupRecord"}]
+            - name: invitationOf
+              description: "invitationOf is the invitation a record keeps."
+              params: [{name: r, type: "InvitationRecord"}]
+              results: [{type: "team.Invitation"}]
+            - name: recordOfInvitation
+              description: "recordOfInvitation is an invitation as the store keeps it."
+              params: [{name: inv, type: "team.Invitation"}]
+              results: [{type: "InvitationRecord"}]
+            - name: invitationsFound
+              description: "invitationsFound is the invitations the records of a lookup keep."
+              params: [{name: found, type: "[]InvitationRecord"}, {name: err, type: "error"}]
+              results: [{type: "[]team.Invitation"}, {type: "error"}]
+      - name: groupsapi
+        role: presentation
+        code: 64.9.4
+        uses: [roster, team]
+        description: The HTTP API of a member's groups and invitations, and the questions the rest of the product asks of them.
+        values:
+          - name: NoInput
+            description: A request, or an answer, that says nothing.
+          - name: CreateRequest
+            description: The group to start; no color picks one from the name.
+            fields:
+              - {name: Name, type: string, tag: 'json:"name" app:"public"'}
+              - {name: Color, type: string, tag: 'json:"color" app:"public"'}
+          - name: ByGroup
+            description: The group a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+          - name: EditRequest
+            description: What a member changes of a group, each field only when it is sent.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: Name, type: "*string", tag: 'json:"name" app:"public"'}
+              - {name: Color, type: "*string", tag: 'json:"color" app:"public"'}
+          - name: InviteRequest
+            description: The contact a group invites.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+          - name: ByInvitation
+            description: The invitation a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+          - name: ByGroupInvitation
+            description: An invitation of a group, as a route names them.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: InvitationID, type: string, tag: 'path:"invitationId"'}
+          - name: ByMember
+            description: A member of a group a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: UserID, type: string, tag: 'path:"userId"'}
+          - name: RoleRequest
+            description: The role a member of a group is given.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+              - {name: UserID, type: string, tag: 'path:"userId"'}
+              - {name: Role, type: string, tag: 'json:"role" app:"public"'}
+          - name: GroupList
+            description: A member's groups.
+            fields:
+              - {name: Groups, type: "[]roster.GroupView", tag: 'json:"groups"'}
+          - name: InvitationList
+            description: The invitations waiting for a member.
+            fields:
+              - {name: Invitations, type: "[]roster.InvitationView", tag: 'json:"invitations"'}
+          - name: PendingList
+            description: The invitations a group is waiting on.
+            fields:
+              - {name: Invitations, type: "[]roster.PendingInvitation", tag: 'json:"invitations"'}
+          - name: RoleAsked
+            description: A group and a member.
+            fields:
+              - {name: Group, type: string, tag: 'json:"group" app:"public"'}
+              - {name: User, type: string, tag: 'json:"user" app:"public"'}
+          - name: RoleAnswer
+            description: The role of a member in a group; empty when they are not in it.
+            fields:
+              - {name: Role, type: team.Role, tag: 'json:"role" app:"public"'}
+          - name: WhoseGroups
+            description: A member whose groups are asked.
+            fields:
+              - {name: User, type: string, tag: 'json:"user" app:"public"'}
+          - name: WhichGroup
+            description: A group whose members are asked.
+            fields:
+              - {name: Group, type: string, tag: 'json:"group" app:"public"'}
+          - name: Members
+            description: The members of a group.
+            fields:
+              - {name: Users, type: "[]string", tag: 'json:"users" app:"public"'}
+          - name: Belongings
+            description: The groups a member belongs to.
+            fields:
+              - {name: Memberships, type: "[]roster.Belonging", tag: 'json:"memberships"'}
+        queries:
+          - {name: role, input: RoleAsked, output: RoleAnswer, handler: AskRole, description: "The role of a member in a group, empty when they are not in it, for the components that decide who sees what.", uses: [groups/usecase/RoleOf], calls: [groups/usecase/RoleOf]}
+          - {name: memberships, input: WhoseGroups, output: Belongings, handler: AskMemberships, description: "The groups a member belongs to and their role in each, for the components that follow them.", uses: [groups/usecase/Memberships], calls: [groups/usecase/Memberships]}
+          - {name: members, input: WhichGroup, output: Members, handler: AskMembers, description: "The members of a group, for the components that tell them what happens to the group's tasks.", uses: [groups/usecase/MembersOf], calls: [groups/usecase/MembersOf]}
+        endpoints:
+          - {route: "GET /api/groups", request: NoInput, response: GroupList, handler: List, auth: required, uses: [groups/usecase/ListGroups], calls: [groups/usecase/ListGroups]}
+          - {route: "POST /api/groups", request: CreateRequest, response: roster.GroupView, handler: Create, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/CreateGroup], calls: [groups/usecase/CreateGroup]}
+          - {route: "GET /api/groups/{id}", request: ByGroup, response: roster.GroupView, handler: Get, auth: required, uses: [groups/usecase/GetGroup], calls: [groups/usecase/GetGroup]}
+          - {route: "PATCH /api/groups/{id}", request: EditRequest, response: roster.GroupView, handler: Edit, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/EditGroup], calls: [groups/usecase/EditGroup]}
+          - {route: "DELETE /api/groups/{id}", request: ByGroup, response: NoInput, handler: Delete, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/DeleteGroup], calls: [groups/usecase/DeleteGroup]}
+          - {route: "POST /api/groups/{id}/invitations", request: InviteRequest, response: roster.InvitationView, handler: Invite, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/Invite], calls: [groups/usecase/Invite]}
+          - {route: "GET /api/groups/{id}/invitations", request: ByGroup, response: PendingList, handler: GroupInvitations, auth: required, uses: [groups/usecase/ListGroupInvitations], calls: [groups/usecase/ListGroupInvitations]}
+          - {route: "DELETE /api/groups/{id}/invitations/{invitationId}", request: ByGroupInvitation, response: NoInput, handler: Withdraw, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/WithdrawInvitation], calls: [groups/usecase/WithdrawInvitation]}
+          - {route: "GET /api/invitations", request: NoInput, response: InvitationList, handler: Invitations, auth: required, uses: [groups/usecase/ListInvitations], calls: [groups/usecase/ListInvitations]}
+          - {route: "POST /api/invitations/{id}/accept", request: ByInvitation, response: roster.GroupView, handler: Accept, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/AnswerInvitation], calls: [groups/usecase/AnswerInvitation]}
+          - {route: "POST /api/invitations/{id}/decline", request: ByInvitation, response: NoInput, handler: Decline, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/AnswerInvitation], calls: [groups/usecase/AnswerInvitation]}
+          - {route: "DELETE /api/groups/{id}/members/{userId}", request: ByMember, response: NoInput, handler: RemoveMember, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/RemoveMember], calls: [groups/usecase/RemoveMember]}
+          - {route: "PATCH /api/groups/{id}/members/{userId}", request: RoleRequest, response: roster.GroupView, handler: SetRole, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [groups/usecase/SetRole], calls: [groups/usecase/SetRole]}
+        internals:
+          functions:
+            - name: caller
+              description: "caller is the member the request comes from; every route asks for one."
+              params: [{name: ctx, type: "context.Context"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: answer
+              description: "answer runs AnswerInvitation for one of the two routes that answer an invitation."
+              params: [{name: ctx, type: "context.Context"}, {name: id, type: "string"}, {name: event, type: "team.InvitingEvent"}]
+              results: [{type: "roster.GroupView"}, {type: "error"}]
+            - name: refusal
+              description: "refusal is a use case's error as the API answers it: 404 for a group, an invitation or a member that is not the caller's, 403 for what a role does not allow, 409 for what the state of the group or the invitation does not allow, 400 with the field at fault for a name, a color or a role that is not valid."
+              params: [{name: err, type: "error"}]
+              results: [{type: "error"}]
+            - name: invalid
+              description: "invalid is a 400 that names the field at fault."
+              params: [{name: path, type: "string"}, {name: rule, type: "string"}, {name: message, type: "string"}]
+              results: [{type: "error"}]
+    sequences:
+      - name: invite-contact
+        description: A manager of a group invites one of their contacts; the invitee is told.
+        start: groups/usecase/Invite
+        steps:
+          - call: groups/port/Groups@v1.Get
+          - call: groups/port/Circle@v1.AreContacts
+          - call: groups/port/Invitations@v1.OfGroup
+          - call: groups/port/Clock@v1.Now
+          - call: groups/port/Invitations@v1.NewID
+          - call: groups/port/Invitations@v1.Save
+          - call: groups/port/People@v1.ByID
+          - call: groups/port/People@v1.ByID
+          - call: groups/port/Notices@v1.Tell

@@ -1,0 +1,630 @@
+# The identity: accounts, passwords, sessions, and who calls a route.
+apiVersion: design/v2
+domains:
+  - name: identity
+    description: Who the members are, and which of them a request comes from.
+    components:
+      - name: account
+        role: domain
+        code: 64.6.1
+        description: The account, its lock after wrong passwords, and the session.
+        evidence: [former-product]
+        entities:
+          - name: Account
+            description: A member of the team, who signs in with an address and a password.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"', description: "Locale is the language the member reads their mails in, fr or en; an account that has none reads French."}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"', description: "TimeZone is the IANA zone the member's mails write times in; empty reads UTC."}
+              - {name: PasswordHash, type: string, tag: 'json:"-" app:"secret"', description: "PasswordHash is the password, stretched: never the password, never answered."}
+              - {name: Verified, type: bool, tag: 'json:"verified" app:"public"', description: "Verified says the member proved the address is theirs; an account that is not signs nobody in."}
+              - {name: FailedLogins, type: int, tag: 'json:"-" app:"public"', description: "FailedLogins counts the wrong passwords in a row."}
+              - {name: LockedUntil, type: time.Time, tag: 'json:"-" app:"public"', description: "LockedUntil is when the lock of too many wrong passwords ends; the zero time when there is none."}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+            methods:
+              - name: Locked
+                description: Locked reports whether the account refuses every password at now.
+                params: [{name: now, type: time.Time}]
+                results: [{type: bool}]
+                properties: [OnlyBeforeItsEnd]
+          - name: Session
+            description: A member signed in, from one browser or one client.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: TokenHash, type: string, tag: 'json:"-" app:"secret"', description: "TokenHash is the SHA-256 of the session's secret: the secret itself is kept nowhere."}
+              - {name: UserAgent, type: string, tag: 'json:"userAgent" app:"personal"', description: "UserAgent is the browser or the client that signed in, as it named itself."}
+              - {name: IP, type: string, tag: 'json:"ip" app:"personal"', description: "IP is the address the sign-in came from."}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
+              - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+          - name: Link
+            description: A one-time link mailed to a member, to prove an address or to choose a new password.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Hash, type: string, tag: 'json:"-" app:"secret"', description: "Hash is the SHA-256 of the link's secret, which only the mail carries."}
+              - {name: Purpose, type: string, tag: 'json:"purpose" app:"public"', description: "Purpose is verify or reset: a link does one thing."}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+        constants:
+          - {name: PurposeVerify, type: string, value: '"verify"', description: PurposeVerify is the purpose of a link that proves an address.}
+          - {name: PurposeReset, type: string, value: '"reset"', description: PurposeReset is the purpose of a link that chooses a new password.}
+          - {name: VerifyFor, type: time.Duration, value: "24 * time.Hour", description: VerifyFor is how long a link that proves an address is good for.}
+          - {name: ResetFor, type: time.Duration, value: "time.Hour", description: ResetFor is how long a link that chooses a new password is good for.}
+          - {name: MaxFailedLogins, type: int, value: "5", description: MaxFailedLogins is how many wrong passwords in a row lock an account.}
+          - {name: LockFor, type: time.Duration, value: "15 * time.Minute", description: LockFor is how long a locked account refuses every password.}
+          - {name: SessionFor, type: time.Duration, value: "30 * 24 * time.Hour", description: SessionFor is how long a session lives after it was last seen.}
+          - {name: MinPassword, type: int, value: "10", description: MinPassword is the shortest password an account takes.}
+          - {name: LocaleFR, type: string, value: '"fr"', description: "LocaleFR is French, the language of an account that chose none."}
+          - {name: LocaleEN, type: string, value: '"en"', description: "LocaleEN is English."}
+        functions:
+          - name: NormalizeEmail
+            description: NormalizeEmail is an address as the product keeps it, trimmed and in lower case, or ErrInvalidEmail.
+            params: [{name: s, type: string}]
+            results: [{type: string}, {type: error}]
+            properties: [LowerOrRefused]
+        errors:
+          - {name: ErrInvalidEmail, serial: 1, message: this is not an email address}
+          - {name: ErrWeakPassword, serial: 2, message: a password is 10 to 128 characters long}
+          - {name: ErrNameRequired, serial: 3, message: an account needs a name}
+          - {name: ErrEmailTaken, serial: 4, message: this address already has an account, description: "ErrEmailTaken is what the store answers when two sign-ups of one address race: the use case answers the second like any taken address, and never says it."}
+          - {name: ErrInvalidCredentials, serial: 5, message: the email address or the password is not right}
+          - {name: ErrLocked, serial: 6, message: "too many wrong passwords: the account is locked for 15 minutes"}
+          - {name: ErrUnverified, serial: 8, message: "confirm your email address first: the link is in your inbox"}
+          - {name: ErrBadLink, serial: 9, message: "this link is invalid or has expired: ask for a new one"}
+          - {name: ErrInvalidLocale, serial: 10, message: "the language is fr or en"}
+          - {name: ErrInvalidTimeZone, serial: 11, message: "the time zone is a name of the IANA database, like Europe/Paris"}
+          - {name: ErrNoSession, serial: 7, message: "the session has expired: sign in again"}
+      - name: access
+        role: application
+        code: 64.6.2
+        uses: [account]
+        description: Signing up, signing in and out, and naming the member a session belongs to.
+        ports:
+          - name: Accounts
+            direction: out
+            version: 1
+            description: AccountsV1 keeps the accounts.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: a, type: account.Account}]}
+              - {name: Get, params: [{name: id, type: string}], results: [{type: account.Account}, {type: bool}]}
+              - {name: ByEmail, params: [{name: email, type: string}], results: [{type: account.Account}, {type: bool}]}
+              - {name: Change, description: "Change applies a change to the account of an id as it is kept at that instant, alone among the writers of the store, and keeps the result; an error of the change keeps nothing.", params: [{name: id, type: string}, {name: change, type: "func(*account.Account) error"}], results: [{type: account.Account}]}
+          - name: Sessions
+            direction: out
+            version: 1
+            description: SessionsV1 keeps the sessions.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: s, type: account.Session}]}
+              - {name: ByTokenHash, params: [{name: hash, type: string}], results: [{type: account.Session}, {type: bool}]}
+              - {name: Delete, params: [{name: id, type: string}]}
+              - {name: DeleteOf, params: [{name: userID, type: string}, {name: keep, type: string}]}
+              - {name: Of, params: [{name: userID, type: string}], results: [{type: "[]account.Session"}]}
+          - name: Links
+            direction: out
+            version: 1
+            description: LinksV1 keeps the one-time links.
+            methods:
+              - {name: NewID, results: [{type: string}]}
+              - {name: Save, params: [{name: l, type: account.Link}]}
+              - {name: ByHash, params: [{name: hash, type: string}], results: [{type: account.Link}, {type: bool}]}
+              - {name: DeleteOf, params: [{name: userID, type: string}, {name: purpose, type: string}]}
+          - name: Courier
+            direction: out
+            version: 1
+            description: CourierV1 writes to a member the mails of their account, each with the link's secret only the mail carries.
+            methods:
+              - {name: Verification, params: [{name: to, type: account.Account}, {name: secret, type: string}]}
+              - {name: Reset, params: [{name: to, type: account.Account}, {name: secret, type: string}]}
+              - {name: AlreadyMember, params: [{name: to, type: account.Account}]}
+          - name: Announcements
+            direction: out
+            version: 1
+            description: AnnouncementsV1 tells the rest of the product what happened to an account, for whoever listens.
+            methods:
+              - {name: Verified, description: "Verified says the address of an account is proven.", params: [{name: acc, type: account.Account}]}
+          - name: Passwords
+            direction: out
+            version: 1
+            description: PasswordsV1 stretches a password and checks one against what was kept.
+            methods:
+              - {name: Hash, params: [{name: password, type: string}], results: [{type: string}]}
+              - {name: Verify, params: [{name: password, type: string}, {name: hash, type: string}], results: [{type: bool}]}
+          - name: Secrets
+            direction: out
+            version: 1
+            description: SecretsV1 makes a session's secret and digests one.
+            methods:
+              - {name: New, results: [{type: string}, {type: string}]}
+              - {name: Digest, params: [{name: secret, type: string}], results: [{type: string}]}
+          - name: Clock
+            direction: out
+            version: 1
+            description: ClockV1 tells the time.
+            methods:
+              - {name: Now, results: [{type: time.Time}]}
+        usecases:
+          - name: SignUp
+            description: SignUp creates an account and mails the link that proves its address; an address that already has an account is answered alike, and its member told.
+            input:
+              - {name: Email, type: string}
+              - {name: Name, type: string}
+              - {name: Password, type: string}
+              - {name: Trusted, type: bool}
+              - {name: Locale, type: string}
+              - {name: TimeZone, type: string}
+            output:
+              - {name: Email, type: string}
+              - {name: Verified, type: bool}
+            errors: [account.ErrInvalidEmail, account.ErrWeakPassword, account.ErrNameRequired, account.ErrInvalidLocale, account.ErrInvalidTimeZone]
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.NewID, identity/port/Accounts@v1.Save, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Links@v1.NewID, identity/port/Links@v1.Save, identity/port/Courier@v1.Verification, identity/port/Courier@v1.AlreadyMember, identity/port/Announcements@v1.Verified]
+            scenarios:
+              - {name: creates an account to verify, kind: success}
+              - {name: creates a verified account where addresses are trusted, kind: success}
+              - {name: answers a taken address alike, kind: success}
+              - {name: refuses an invalid address, kind: refusal, error: account.ErrInvalidEmail}
+              - {name: refuses a short password, kind: refusal, error: account.ErrWeakPassword}
+              - {name: keeps the language and the time zone, kind: success}
+              - {name: refuses an unknown language, kind: refusal, error: account.ErrInvalidLocale}
+              - {name: refuses an unknown time zone, kind: refusal, error: account.ErrInvalidTimeZone}
+          - name: VerifyEmail
+            description: VerifyEmail proves an account's address with the secret of the link it was mailed, and signs its member in, since the link was in their inbox.
+            input:
+              - {name: Secret, type: string}
+              - {name: UserAgent, type: string}
+              - {name: IP, type: string}
+            output:
+              - {name: Account, type: account.Account}
+              - {name: SessionSecret, type: string}
+              - {name: Session, type: account.Session}
+            errors: [account.ErrBadLink]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Accounts@v1.Change, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save, identity/port/Announcements@v1.Verified]
+            scenarios:
+              - {name: verifies the account of a link, kind: success}
+              - {name: refuses an expired link, kind: refusal, error: account.ErrBadLink}
+              - {name: refuses a link of another purpose, kind: refusal, error: account.ErrBadLink}
+          - name: ResendVerification
+            description: ResendVerification mails a new link to an address whose account is not verified yet, and says nothing of the others.
+            input:
+              - {name: Email, type: string}
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Clock@v1.Now, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Links@v1.NewID, identity/port/Links@v1.Save, identity/port/Courier@v1.Verification]
+            scenarios:
+              - {name: mails a new link to an unverified account, kind: success}
+              - {name: says nothing of an unknown address, kind: success}
+          - name: ForgotPassword
+            description: ForgotPassword mails an address the link that chooses a new password, when it has an account, and answers alike when it has none.
+            input:
+              - {name: Email, type: string}
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Clock@v1.Now, identity/port/Links@v1.DeleteOf, identity/port/Secrets@v1.New, identity/port/Links@v1.NewID, identity/port/Links@v1.Save, identity/port/Courier@v1.Reset]
+            scenarios:
+              - {name: mails the link to a member, kind: success}
+              - {name: says nothing of an unknown address, kind: success}
+          - name: ResetPassword
+            description: ResetPassword chooses a new password with the secret of a reset link, lifts the lock, proves the address and ends every session.
+            input:
+              - {name: Secret, type: string}
+              - {name: Password, type: string}
+            errors: [account.ErrBadLink, account.ErrWeakPassword]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Links@v1.ByHash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Hash, identity/port/Accounts@v1.Change, identity/port/Links@v1.DeleteOf, identity/port/Sessions@v1.DeleteOf, identity/port/Announcements@v1.Verified]
+            scenarios:
+              - {name: chooses a new password, kind: success}
+              - {name: refuses a link used once, kind: refusal, error: account.ErrBadLink}
+              - {name: refuses a short password, kind: refusal, error: account.ErrWeakPassword}
+              - {name: announces nothing for an address already proven, kind: success}
+          - name: ChangePassword
+            description: ChangePassword replaces a member's password for one who knows the current one, and ends their other sessions.
+            input:
+              - {name: UserID, type: string}
+              - {name: SessionID, type: string}
+              - {name: Current, type: string}
+              - {name: Password, type: string}
+            errors: [account.ErrInvalidCredentials, account.ErrWeakPassword]
+            calls: [identity/port/Accounts@v1.Get, identity/port/Passwords@v1.Verify, identity/port/Passwords@v1.Hash, identity/port/Clock@v1.Now, identity/port/Accounts@v1.Change, identity/port/Sessions@v1.DeleteOf]
+            scenarios:
+              - {name: replaces the password, kind: success}
+              - {name: refuses a wrong current password, kind: refusal, error: account.ErrInvalidCredentials}
+          - name: SignIn
+            description: SignIn opens a session for an address and its password; five wrong passwords in a row lock the account for fifteen minutes.
+            input:
+              - {name: Email, type: string}
+              - {name: Password, type: string}
+              - {name: UserAgent, type: string}
+              - {name: IP, type: string}
+              - {name: TimeZone, type: string}
+            output:
+              - {name: Secret, type: string}
+              - {name: Session, type: account.Session}
+              - {name: Account, type: account.Account}
+            errors: [account.ErrInvalidCredentials, account.ErrLocked, account.ErrUnverified, account.ErrInvalidTimeZone]
+            calls: [identity/port/Accounts@v1.ByEmail, identity/port/Clock@v1.Now, identity/port/Passwords@v1.Verify, identity/port/Accounts@v1.Change, identity/port/Secrets@v1.New, identity/port/Sessions@v1.NewID, identity/port/Sessions@v1.Save]
+            scenarios:
+              - {name: opens a session, kind: success}
+              - {name: refuses a wrong password, kind: refusal, error: account.ErrInvalidCredentials}
+              - {name: refuses an unknown address, kind: refusal, error: account.ErrInvalidCredentials}
+              - {name: refuses a locked account, kind: refusal, error: account.ErrLocked}
+              - {name: refuses an unverified account, kind: refusal, error: account.ErrUnverified}
+              - {name: follows the time zone of the browser, kind: success}
+              - {name: refuses an unknown time zone, kind: refusal, error: account.ErrInvalidTimeZone}
+          - name: Authenticate
+            description: Authenticate names the member a session's secret belongs to, and keeps the session alive.
+            input:
+              - {name: Secret, type: string}
+            output:
+              - {name: Session, type: account.Session}
+              - {name: Account, type: account.Account}
+              - {name: Renewed, type: bool}
+            errors: [account.ErrNoSession]
+            calls: [identity/port/Secrets@v1.Digest, identity/port/Sessions@v1.ByTokenHash, identity/port/Clock@v1.Now, identity/port/Sessions@v1.Save, identity/port/Accounts@v1.Get]
+            scenarios:
+              - {name: names the member of a live session, kind: success}
+              - {name: refuses an expired session, kind: refusal, error: account.ErrNoSession}
+              - {name: refuses an unknown secret, kind: refusal, error: account.ErrNoSession}
+          - name: ListSessions
+            description: ListSessions lists the sessions a member has open, the one last seen first.
+            input:
+              - {name: UserID, type: string}
+            output:
+              - {name: Sessions, type: "[]account.Session"}
+            calls: [identity/port/Sessions@v1.Of, identity/port/Clock@v1.Now]
+            scenarios:
+              - {name: lists the live sessions of the member, kind: success}
+          - name: RevokeSession
+            description: RevokeSession ends one of a member's sessions; another member's is not found.
+            input:
+              - {name: UserID, type: string}
+              - {name: ID, type: string}
+            errors: [account.ErrNoSession]
+            calls: [identity/port/Sessions@v1.Of, identity/port/Sessions@v1.Delete]
+            scenarios:
+              - {name: ends a session of the member, kind: success}
+              - {name: refuses a session of another member, kind: refusal, error: account.ErrNoSession}
+          - name: SignOut
+            description: SignOut ends a session.
+            input:
+              - {name: SessionID, type: string}
+            calls: [identity/port/Sessions@v1.Delete]
+            scenarios:
+              - {name: ends the session, kind: success}
+          - name: UpdateProfile
+            description: UpdateProfile changes the name, the language and the time zone of a member, each only when it is given.
+            input:
+              - {name: UserID, type: string}
+              - {name: Name, type: "*string"}
+              - {name: Locale, type: "*string"}
+              - {name: TimeZone, type: "*string"}
+            output:
+              - {name: Account, type: account.Account}
+            errors: [account.ErrNameRequired, account.ErrInvalidLocale, account.ErrInvalidTimeZone]
+            calls: [identity/port/Clock@v1.Now, identity/port/Accounts@v1.Change]
+            scenarios:
+              - {name: changes what is given, kind: success}
+              - {name: keeps what is not given, kind: success}
+              - {name: empties the time zone to utc, kind: success}
+              - {name: refuses an empty name, kind: refusal, error: account.ErrNameRequired}
+              - {name: refuses an unknown language, kind: refusal, error: account.ErrInvalidLocale}
+              - {name: refuses an unknown time zone, kind: refusal, error: account.ErrInvalidTimeZone}
+        internals:
+          functions:
+            - name: checkLocale
+              description: "checkLocale is the language a member asked for, fr when none, or ErrInvalidLocale."
+              params: [{name: s, type: "string"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: checkZone
+              description: "checkZone is the IANA zone a member named, empty for none, or ErrInvalidTimeZone."
+              params: [{name: s, type: "string"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: acceptable
+              description: "acceptable reports whether a password has the length an account takes."
+              params: [{name: password, type: "string"}]
+              results: [{type: "bool"}]
+            - name: issue
+              description: "issue makes the member's one link of a purpose, good for valid from now, in place of any they had, and returns its secret, which only the mail will carry."
+              params: [{name: ctx, type: "context.Context"}, {name: links, type: "LinksV1"}, {name: secrets, type: "SecretsV1"}, {name: userID, type: "string"}, {name: purpose, type: "string"}, {name: now, type: "time.Time"}, {name: valid, type: "time.Duration"}]
+              results: [{type: "string"}, {type: "error"}]
+            - name: redeem
+              description: "redeem is the link a secret opens for a purpose, while it lasts."
+              params: [{name: ctx, type: "context.Context"}, {name: links, type: "LinksV1"}, {name: secrets, type: "SecretsV1"}, {name: clock, type: "ClockV1"}, {name: secret, type: "string"}, {name: purpose, type: "string"}]
+              results: [{type: "account.Link"}, {type: "time.Time"}, {type: "error"}]
+      - name: vault
+        role: adapter
+        code: 64.6.3
+        uses: [access, account, post]
+        description: The accounts, the sessions and the one-time links in the framework's stores, the mails of an account, the directory the rest of the product asks, the passwords stretched, the secrets drawn.
+        entities:
+          - name: AccountRecord
+            description: An account as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal,subject"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"'}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"'}
+              - {name: PasswordHash, type: string, tag: 'json:"passwordHash" app:"secret"'}
+              - {name: Verified, type: bool, tag: 'json:"verified" app:"public"'}
+              - {name: FailedLogins, type: int, tag: 'json:"failedLogins" app:"public"'}
+              - {name: LockedUntil, type: time.Time, tag: 'json:"lockedUntil" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: UpdatedAt, type: time.Time, tag: 'json:"updatedAt" app:"public"'}
+          - name: SessionRecord
+            description: A session as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"personal,subject"'}
+              - {name: TokenHash, type: string, tag: 'json:"tokenHash" app:"secret"'}
+              - {name: UserAgent, type: string, tag: 'json:"userAgent" app:"personal"'}
+              - {name: IP, type: string, tag: 'json:"ip" app:"personal"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
+              - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+          - name: LinkRecord
+            description: A one-time link as the store keeps it, field for field.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Hash, type: string, tag: 'json:"hash" app:"secret"'}
+              - {name: Purpose, type: string, tag: 'json:"purpose" app:"public"'}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: ExpiresAt, type: time.Time, tag: 'json:"expiresAt" app:"public"'}
+        values:
+          - name: ByID
+            description: Which member is asked about.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+          - name: ByEmail
+            description: Which address is asked about.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+          - name: Member
+            description: A member as the rest of the product may know them; Found is false when there is none.
+            fields:
+              - {name: Found, type: bool, tag: 'json:"found" app:"public"'}
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"', description: "Locale is fr or en: the language a mail to them is written in."}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"', description: "TimeZone is the IANA zone their mails write times in; empty reads UTC."}
+          - name: Announcement
+            description: What happened to an account, as the topic carries it to whoever listens.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"', description: "ID is the message's own: a listener that is delivered it twice keys what it writes by it."}
+              - {name: Kind, type: string, tag: 'json:"kind" app:"public"', description: "Kind is verified: the address of the account is proven."}
+              - {name: UserID, type: string, tag: 'json:"userId" app:"public"'}
+              - {name: At, type: time.Time, tag: 'json:"at" app:"public"'}
+        queries:
+          - {name: member, input: ByID, output: Member, handler: Directory, description: "The directory: a member's address and name by their id, for the components that write to them."}
+          - {name: member-by-email, input: ByEmail, output: Member, handler: Lookup, description: "The directory, by address: whose account an address is."}
+        constants:
+          - {name: KindVerified, type: string, value: '"verified"', description: "KindVerified is the kind of the message that says the address of an account is proven."}
+        topics:
+          - {name: accounts, message: Announcement, description: "What happened to the accounts: an address proven, told by the id of its member and never by the address, delivered at least once."}
+        stores:
+          - name: accounts
+            entity: AccountRecord
+            key: ID
+            description: "Every account, keyed by its id; one untouched for three years is erased."
+            indexes: [{name: by-email, field: Email, unique: true}]
+            eraseAfter: {delay: 26280h, since: UpdatedAt}
+          - name: sessions
+            entity: SessionRecord
+            key: ID
+            description: "Every session, keyed by its id; one is deleted a day after it expired."
+            indexes: [{name: by-token, field: TokenHash, unique: true}]
+            deleteAfter: {delay: 24h, since: ExpiresAt}
+          - name: links
+            entity: LinkRecord
+            key: ID
+            description: "Every one-time link, keyed by its id; one is deleted a day after it expired."
+            indexes: [{name: by-hash, field: Hash, unique: true}]
+            deleteAfter: {delay: 24h, since: ExpiresAt}
+        adapters:
+          - name: OneTimeLinks
+            description: OneTimeLinks is Links@v1 on the store "links".
+            implements: [identity/port/Links@v1]
+          - name: Postman
+            description: Postman is Courier@v1; it hands the mails of an account, in the member's language, to the command send of post.
+            implements: [identity/port/Courier@v1]
+          - name: Herald
+            description: Herald is Announcements@v1 on the topic "accounts".
+            implements: [identity/port/Announcements@v1]
+          - name: Accounts
+            description: Accounts is Accounts@v1 on the store "accounts".
+            implements: [identity/port/Accounts@v1]
+          - name: Sessions
+            description: Sessions is Sessions@v1 on the store "sessions".
+            implements: [identity/port/Sessions@v1]
+          - name: Stretcher
+            description: Stretcher is Passwords@v1 on the SDK's PBKDF2-SHA256.
+            implements: [identity/port/Passwords@v1]
+          - name: Drawer
+            description: Drawer is Secrets@v1, 256 random bits a secret, SHA-256 its digest.
+            implements: [identity/port/Secrets@v1]
+          - name: WallClock
+            description: WallClock is Clock@v1 on the framework's clock, UTC, to the millisecond.
+            implements: [identity/port/Clock@v1]
+        internals:
+          functions:
+            - name: accountOf
+              description: "accountOf is the account a record keeps."
+              params: [{name: r, type: "AccountRecord"}]
+              results: [{type: "account.Account"}]
+            - name: gone
+              description: "gone is the error of a delete, a record already gone being none."
+              params: [{name: err, type: "error"}]
+              results: [{type: "error"}]
+            - name: sessionOf
+              description: "sessionOf is the session a record keeps."
+              params: [{name: r, type: "SessionRecord"}]
+              results: [{type: "account.Session"}]
+            - name: recordOf
+              description: "recordOf is an account as the store keeps it."
+              params: [{name: acc, type: "account.Account"}]
+              results: [{type: "AccountRecord"}]
+            - name: memberOf
+              description: "memberOf is a record as the directory answers it."
+              params: [{name: r, type: "AccountRecord"}]
+              results: [{type: "Member"}]
+          types:
+            - name: Postman
+              methods:
+                - name: send
+                  receiver: pointer
+                  description: "send hands a member's mail of a kind to the command send of post, in the language and the time zone of their account, with the path of its action."
+                  params: [{name: ctx, type: "context.Context"}, {name: to, type: "account.Account"}, {name: kind, type: "string"}, {name: path, type: "string"}]
+                  results: [{type: "error"}]
+      - name: authapi
+        role: presentation
+        code: 64.6.4
+        uses: [access, account]
+        description: The HTTP API of the accounts, and the handler that says who calls a route.
+        values:
+          - name: Credentials
+            description: What a request proves its member with, the session cookie of a browser or the same secret as a bearer token.
+            fields:
+              - {name: Cookie, type: string, tag: 'cookie:"todo_session"'}
+              - {name: Authorization, type: string, tag: 'header:"Authorization"'}
+          - name: Principal
+            description: What the handler says of the caller.
+            fields:
+              - {name: SessionID, type: string, tag: 'json:"sessionId" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"'}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"'}
+          - name: SignUpRequest
+            description: What a stranger sends to become a member.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+              - {name: Locale, type: string, tag: 'json:"locale"', description: "Locale is fr or en; when it is not sent, the language the Accept-Language header prefers, French by default."}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone"', description: "TimeZone is the IANA zone of the member's browser, like Europe/Paris; empty reads UTC."}
+              - {name: AcceptLanguage, type: string, tag: 'header:"Accept-Language"'}
+          - name: SignInRequest
+            description: An address and its password, and the time zone of the browser it comes from.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone"', description: "TimeZone is the IANA zone of the browser; when it is sent, it becomes the account's."}
+          - name: SignedUp
+            description: What a sign-up answers, the same whether the address had an account or not.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Status, type: string, tag: 'json:"status" app:"public"', description: "Status is verification_sent, or verified where the deployment trusts addresses."}
+          - name: LinkRequest
+            description: The secret of a one-time link.
+            fields:
+              - {name: Token, type: string, tag: 'json:"token" app:"secret"'}
+          - name: EmailRequest
+            description: An address.
+            fields:
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+          - name: ResetRequest
+            description: The secret of a reset link and the new password.
+            fields:
+              - {name: Token, type: string, tag: 'json:"token" app:"secret"'}
+              - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+          - name: ChangeRequest
+            description: The current password and the new one.
+            fields:
+              - {name: Current, type: string, tag: 'json:"current" app:"secret"'}
+              - {name: Password, type: string, tag: 'json:"password" app:"secret"'}
+          - name: SessionView
+            description: A session of the caller, as the API answers it.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: UserAgent, type: string, tag: 'json:"userAgent" app:"personal"'}
+              - {name: IP, type: string, tag: 'json:"ip" app:"personal"'}
+              - {name: CreatedAt, type: time.Time, tag: 'json:"createdAt" app:"public"'}
+              - {name: LastSeenAt, type: time.Time, tag: 'json:"lastSeenAt" app:"public"'}
+              - {name: Current, type: bool, tag: 'json:"current" app:"public"', description: "Current says the request runs in this session."}
+          - name: SessionList
+            description: The caller's sessions, the one last seen first.
+            fields:
+              - {name: Sessions, type: "[]SessionView", tag: 'json:"sessions"'}
+          - name: SessionID
+            description: The session a route names.
+            fields:
+              - {name: ID, type: string, tag: 'path:"id"'}
+          - name: Profile
+            description: A member, as the API answers them.
+            fields:
+              - {name: ID, type: string, tag: 'json:"id" app:"public"'}
+              - {name: Email, type: string, tag: 'json:"email" app:"personal"'}
+              - {name: Name, type: string, tag: 'json:"name" app:"personal"'}
+              - {name: Locale, type: string, tag: 'json:"locale" app:"public"'}
+              - {name: TimeZone, type: string, tag: 'json:"timeZone" app:"personal"'}
+          - name: ProfileRequest
+            description: What a member changes of their account; a member left out stays as it is.
+            fields:
+              - {name: Name, type: "*string", tag: 'json:"name,omitempty" app:"personal"'}
+              - {name: Locale, type: "*string", tag: 'json:"locale,omitempty" app:"public"', description: "Locale is the new language, fr or en: the next mails are in it."}
+              - {name: TimeZone, type: "*string", tag: 'json:"timeZone,omitempty" app:"personal"', description: "TimeZone is the new IANA zone; an empty name is UTC."}
+          - name: SignedIn
+            description: A session just opened, the member and the secret a client that keeps no cookie sends back as a bearer token.
+            fields:
+              - {name: User, type: Profile, tag: 'json:"user"'}
+              - {name: Token, type: string, tag: 'json:"token" app:"secret"'}
+          - name: NoInput
+            description: A request, or an answer, that says nothing.
+        constants:
+          - {name: CookieName, type: string, value: '"todo_session"', description: CookieName is the cookie a browser keeps its session's secret in.}
+        settings:
+          - {name: verify-addresses, type: bool, default: true, description: "Whether a new account proves its address by a mailed link before it signs in; off where the deployment has no mail relay."}
+        auth:
+          name: session
+          credentials: Credentials
+          data: Principal
+          handler: Authenticate
+          uses: [identity/usecase/Authenticate]
+          calls: [identity/usecase/Authenticate]
+        endpoints:
+          - {route: "POST /api/auth/signup", request: SignUpRequest, response: SignedUp, handler: SignUp, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/SignUp, "setting:verify-addresses"], calls: [identity/usecase/SignUp]}
+          - {route: "POST /api/auth/verify", request: LinkRequest, response: SignedIn, handler: Verify, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/VerifyEmail], calls: [identity/usecase/VerifyEmail]}
+          - {route: "POST /api/auth/verify/resend", request: EmailRequest, response: NoInput, handler: Resend, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ResendVerification], calls: [identity/usecase/ResendVerification]}
+          - {route: "POST /api/auth/password/forgot", request: EmailRequest, response: NoInput, handler: Forgot, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ForgotPassword], calls: [identity/usecase/ForgotPassword]}
+          - {route: "POST /api/auth/password/reset", request: ResetRequest, response: NoInput, handler: Reset, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ResetPassword], calls: [identity/usecase/ResetPassword]}
+          - {route: "POST /api/auth/password", request: ChangeRequest, response: NoInput, handler: ChangePassword, auth: required, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/ChangePassword], calls: [identity/usecase/ChangePassword]}
+          - {route: "POST /api/auth/login", request: SignInRequest, response: SignedIn, handler: SignIn, rateLimit: {perSecond: 2, burst: 5, per: client}, uses: [identity/usecase/SignIn], calls: [identity/usecase/SignIn]}
+          - {route: "POST /api/auth/logout", request: NoInput, response: NoInput, handler: SignOut, rateLimit: {perSecond: 10, burst: 20, per: client}, auth: required, uses: [identity/usecase/SignOut], calls: [identity/usecase/SignOut]}
+          - {route: "GET /api/auth/sessions", request: NoInput, response: SessionList, handler: Sessions, auth: required, uses: [identity/usecase/ListSessions], calls: [identity/usecase/ListSessions]}
+          - {route: "DELETE /api/auth/sessions/{id}", request: SessionID, response: NoInput, handler: Revoke, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [identity/usecase/RevokeSession], calls: [identity/usecase/RevokeSession]}
+          - {route: "GET /api/auth/me", request: NoInput, response: Profile, handler: Me, auth: required}
+          - {route: "PATCH /api/auth/me", request: ProfileRequest, response: Profile, handler: UpdateMe, auth: required, rateLimit: {perSecond: 10, burst: 20, per: client}, uses: [identity/usecase/UpdateProfile], calls: [identity/usecase/UpdateProfile]}
+        internals:
+          functions:
+            - name: setCookie
+              description: "setCookie gives the browser the session's secret."
+              params: [{name: ctx, type: "context.Context"}, {name: secret, type: "string"}]
+            - name: profileOf
+              description: "profileOf is an account as the API answers it."
+              params: [{name: a, type: "account.Account"}]
+              results: [{type: "Profile"}]
+            - name: negotiate
+              description: "negotiate is the language an Accept-Language header prefers among fr and en, by the weight of each tag, fr when it names neither."
+              params: [{name: header, type: "string"}]
+              results: [{type: "string"}]
+            - name: refusal
+              description: "refusal is a use case's error as the API answers it, with the codes a client branches on: 400 with the field at fault, 409 for an address already taken, 401 invalid_credentials, 403 account_locked."
+              params: [{name: err, type: "error"}]
+              results: [{type: "error"}]
+            - name: localeOf
+              description: "localeOf is the language an account reads, French when it chose none."
+              params: [{name: a, type: "account.Account"}]
+              results: [{type: "string"}]
+    sequences:
+      - name: sign-in
+        description: A member signs in; a session is opened.
+        start: identity/usecase/SignIn
+        steps:
+          - call: identity/port/Accounts@v1.ByEmail
+          - call: identity/port/Clock@v1.Now
+          - call: identity/port/Passwords@v1.Verify
+          - call: identity/port/Secrets@v1.New
+          - call: identity/port/Sessions@v1.NewID
+          - call: identity/port/Sessions@v1.Save

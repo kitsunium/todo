@@ -1,0 +1,98 @@
+// Written once from the design; this file is yours. The shells in
+// gen_design.go delegate to what it holds; a body that still answers
+// errNotImplemented is a stub.
+
+package access
+
+import (
+	"context"
+	"time"
+
+	"github.com/kitsunium/todo/identity/account"
+)
+
+// execute is SignIn's body. An unknown address and a wrong password are
+// answered alike, and an unknown address still has a password checked, so
+// neither the answer nor its time says whether an address has an account.
+// The fifth wrong password in a row locks the account for LockFor; a right
+// one clears the count. A time zone sent with the password becomes the
+// account's once the password proved right. An account whose address is not proven signs
+// nobody in.
+func (h *SignInHandler) execute(ctx context.Context, in *SignInInput) (SignInOutput, error) {
+	zone, err := checkZone(in.TimeZone) // refused whoever the address is: it says nothing of an account
+	if err != nil {
+		return SignInOutput{}, err
+	}
+	email, err := account.NormalizeEmail(in.Email)
+	if err != nil {
+		email = "" // no account has it: answered as an unknown address
+	}
+	a, found, err := h.accounts.ByEmail(ctx, email)
+	if err != nil {
+		return SignInOutput{}, err
+	}
+	now, err := h.clock.Now(ctx)
+	if err != nil {
+		return SignInOutput{}, err
+	}
+	if !found {
+		_, _ = h.passwords.Verify(ctx, in.Password, "")
+		return SignInOutput{}, account.ErrInvalidCredentials
+	}
+	if a.Locked(now) {
+		return SignInOutput{}, account.ErrLocked
+	}
+	ok, err := h.passwords.Verify(ctx, in.Password, a.PasswordHash)
+	if err != nil {
+		return SignInOutput{}, err
+	}
+	if !ok {
+		// Counted on the account as it is at that instant: wrong passwords
+		// tried at once each count, and the fifth locks.
+		if _, err := h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+			a.FailedLogins++
+			if a.FailedLogins >= account.MaxFailedLogins {
+				a.FailedLogins, a.LockedUntil = 0, now.Add(account.LockFor)
+			}
+			return nil
+		}); err != nil {
+			return SignInOutput{}, err
+		}
+		return SignInOutput{}, account.ErrInvalidCredentials
+	}
+	if a.FailedLogins > 0 || !a.LockedUntil.IsZero() {
+		if a, err = h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+			a.FailedLogins, a.LockedUntil = 0, time.Time{}
+			return nil
+		}); err != nil {
+			return SignInOutput{}, err
+		}
+	}
+	if !a.Verified {
+		// Said only once the password proved right: the answer never tells a
+		// stranger whether an address has an account.
+		return SignInOutput{}, account.ErrUnverified
+	}
+	if zone != "" && zone != a.TimeZone {
+		// A member who travelled has their mails in the zone they sign in from.
+		if a, err = h.accounts.Change(ctx, a.ID, func(a *account.Account) error {
+			a.TimeZone = zone
+			return nil
+		}); err != nil {
+			return SignInOutput{}, err
+		}
+	}
+	secret, digest, err := h.secrets.New(ctx)
+	if err != nil {
+		return SignInOutput{}, err
+	}
+	id, err := h.sessions.NewID(ctx)
+	if err != nil {
+		return SignInOutput{}, err
+	}
+	s := account.Session{ID: id, UserID: a.ID, TokenHash: digest, UserAgent: in.UserAgent, IP: in.IP, CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(account.SessionFor)}
+	if err := h.sessions.Save(ctx, s); err != nil {
+		return SignInOutput{}, err
+	}
+	return SignInOutput{Secret: secret, Session: s, Account: a}, nil
+}

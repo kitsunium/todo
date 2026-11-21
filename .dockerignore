@@ -1,8 +1,7 @@
 .git
 .app
 .kit
+build
 go.work
 go.work.sum
 *.md
-node_modules
-web/node_modules

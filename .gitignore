@@ -1,6 +1,5 @@
-# The dev data directory, and the dev tool's local state.
+# The dev data directory.
 .app/
-.kit/
 
 # Go workspaces are local to a machine.
 go.work
@@ -9,8 +8,11 @@ go.work.sum
 /todo
 .DS_Store
 
-# The web app's dependencies: web/dist is committed, node_modules never.
+# Dependencies of a tool run beside the product are never committed.
 node_modules/
 
 # Local agent config, never tracked
 .claude/
+
+# Build caches of a working session.
+build/

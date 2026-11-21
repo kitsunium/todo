@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Todo</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/lang.js" defer></script>
+    <script src="/tasks.js" defer></script>
+    <script src="/circle.js" defer></script>
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <h1><a id="brand" href="/">Todo</a></h1>
+      <nav id="nav" hidden></nav>
+      <p id="who" hidden>
+        <span id="who-name"></span> <button id="logout" type="button"></button>
+      </p>
+      <button id="lang" type="button" hidden></button>
+    </header>
+
+    <p id="notice" role="alert" hidden></p>
+    <p id="word" role="status" hidden></p>
+
+    <main id="view" tabindex="-1"></main>
+    <noscript><p>Todo needs JavaScript.</p></noscript>
+  </body>
+</html>

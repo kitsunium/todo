@@ -1,0 +1,184 @@
+// The ports the use cases' tests run on: tasks in memory, a clock that
+// stands still, a journal that remembers.
+
+package planner
+
+import (
+	"context"
+	"strconv"
+	"time"
+
+	"github.com/kitsunium/todo/tasks/task"
+)
+
+// ada owns every task a test makes; bob and cy own none; dee is in no group.
+const (
+	ada = "user_ada"
+	bob = "user_bob"
+	cy  = "user_cy"
+	dee = "user_dee"
+)
+
+// core is the one group of the tests: Ada owns it, Bob is its admin, Cy a
+// member.
+const core = "group_core"
+
+// epoch is the instant every test starts at.
+var epoch = time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
+
+// memTasks is TaskStoreV1 in memory.
+type memTasks struct {
+	byID map[string]task.Task
+	next int
+}
+
+func newMemTasks(ts ...task.Task) *memTasks {
+	m := &memTasks{byID: map[string]task.Task{}}
+	for _, t := range ts {
+		m.byID[t.ID] = t
+	}
+	return m
+}
+
+func (m *memTasks) NewID(context.Context) (string, error) {
+	m.next++
+	return "task_" + strconv.Itoa(m.next), nil
+}
+
+func (m *memTasks) Save(_ context.Context, t task.Task) error {
+	m.byID[t.ID] = t
+	return nil
+}
+
+func (m *memTasks) Get(_ context.Context, id string) (task.Task, error) {
+	t, ok := m.byID[id]
+	if !ok {
+		return task.Task{}, task.ErrNotFound
+	}
+	return t, nil
+}
+
+func (m *memTasks) Change(_ context.Context, id string, change func(*task.Task) error) (task.Task, error) {
+	t, ok := m.byID[id]
+	if !ok {
+		return task.Task{}, task.ErrNotFound
+	}
+	if err := change(&t); err != nil {
+		return task.Task{}, err
+	}
+	m.byID[id] = t
+	return t, nil
+}
+
+func (m *memTasks) Delete(_ context.Context, id string) error {
+	delete(m.byID, id)
+	return nil
+}
+
+// contacts is CircleV1 over the pairs it holds, "one|other".
+type contacts map[string]bool
+
+func (c contacts) AreContacts(_ context.Context, one, other string) (bool, error) {
+	return c[one+"|"+other] || c[other+"|"+one], nil
+}
+
+// memGroups is GroupsV1 over the roles it holds, group then member.
+type memGroups map[string]map[string]string
+
+// crew is the group "core": Ada its owner, Bob an admin, Cy a member.
+func crew() memGroups {
+	return memGroups{core: {ada: roleOwner, bob: roleAdmin, cy: "member"}}
+}
+
+func (g memGroups) RoleOf(_ context.Context, group, user string) (string, error) {
+	return g[group][user], nil
+}
+
+func (g memGroups) Memberships(_ context.Context, user string) (map[string]string, error) {
+	out := map[string]string{}
+	for id, roles := range g {
+		if role := roles[user]; role != "" {
+			out[id] = role
+		}
+	}
+	return out, nil
+}
+
+// grouped is an open task of Ada's on the list of the group "core".
+func grouped(id string) task.Task {
+	t := open(id)
+	t.GroupID = core
+	return t
+}
+
+// shared is an open task of Ada's shared with Bob.
+func shared(id string) task.Task {
+	t := open(id)
+	t.SharedWith = []string{bob}
+	return t
+}
+
+func (m *memTasks) List(context.Context) ([]task.Task, error) {
+	out := make([]task.Task, 0, len(m.byID))
+	for _, t := range m.byID {
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+// fixedClock is ClockV1 at one instant.
+type fixedClock time.Time
+
+func (c fixedClock) Now(context.Context) (time.Time, error) { return time.Time(c), nil }
+
+// memJournal is JournalV1 that remembers what it was told.
+type memJournal struct {
+	kinds []string
+	told  []string // what one member alone was told, "kind to member"
+	acts  []string // who did it, "kind by actor to member", for what names an actor
+}
+
+func (j *memJournal) Record(_ context.Context, kind string, _ task.Task) error {
+	j.kinds = append(j.kinds, kind)
+	return nil
+}
+
+func (j *memJournal) Tell(_ context.Context, kind string, _ task.Task, actor, to string) error {
+	j.told = append(j.told, kind+" to "+to)
+	j.acts = append(j.acts, kind+" by "+actor+" to "+to)
+	return nil
+}
+
+func (j *memJournal) Involve(_ context.Context, kind string, _ task.Task, actor, user string) error {
+	j.kinds = append(j.kinds, kind)
+	j.acts = append(j.acts, kind+" by "+actor+" to "+user)
+	return nil
+}
+
+// open, done and archived are tasks in each state, for a test to adjust.
+func open(id string) task.Task {
+	return task.Task{ID: id, OwnerID: ada, Title: "task " + id, Priority: task.PriorityNormal, State: task.LifecycleOpen, CreatedAt: epoch, UpdatedAt: epoch}
+}
+
+func done(id string, at time.Time) task.Task {
+	t := open(id)
+	t.State, t.DoneAt, t.UpdatedAt = task.LifecycleDone, at, at
+	return t
+}
+
+// memPeople is PeopleV1 in memory, which counts what it is asked.
+type memPeople struct {
+	names map[string]string
+	asked []string
+}
+
+func (m *memPeople) ByID(_ context.Context, id string) (Person, bool, error) {
+	m.asked = append(m.asked, id)
+	name, ok := m.names[id]
+	return Person{ID: id, Name: name}, ok, nil
+}
+
+// directory names ada, bob and cy, and nobody else.
+func directory() *memPeople {
+	return &memPeople{names: map[string]string{ada: "Ada", bob: "Bob", cy: "Cy"}}
+}

@@ -3,36 +3,36 @@
 # The todo, as one static binary in a distroless image.
 #
 #   docker build -t todo .
+#   docker run --rm -p 4000:4000 -v todo-data:/data todo
 #
-# The product imports the SDK alone — one module, github.com/kitsunium/sdk, a
-# published version, no replace — so the build needs this directory and the
-# module proxy, and no other checkout.
-# The web app needs no Node stage: web/dist is committed and embedded.
+# The product imports the SDK alone, a published version with no replace: the
+# build needs this directory and the module proxy, and no other checkout. The
+# web app needs no build step: its files are embedded as they are written.
 #
-# Configuration, with `docker run -e NAME=value`:
-#   TODO_BASE_URL       where users reach the app, for the links in its mails
-#                       (default http://localhost:4000)
-#   TODO_SMTP_URL       smtp://user:password@host:587?tls=starttls|implicit|none;
-#                       unset, mails are only captured and a warning says so —
-#                       set it in production
-#   TODO_ARCHIVE_AFTER  how long a done task stays listed (default 24h)
-#   TODO_TRUST_PROXY=on behind one reverse proxy: the client address is the last
-#                       X-Forwarded-For hop, the one the proxy appended (sessions
-#                       list it)
+# The image runs the role `server`. Its configuration, with
+# `docker run -e NAME=value` (the README lists every setting):
+#   SERVER_BASE_URL          where members reach the product, for the links of
+#                            its mails (default http://localhost:4000)
+#   SERVER_SMTP_URL          smtp://user:pass@host:587?tls=starttls|implicit|none;
+#                            unset, the mails are only captured: set it in
+#                            production
+#   SERVER_VERIFY_ADDRESSES  false where there is no mail relay (default true)
+#   SERVER_TRUST_PROXY=on    behind one reverse proxy: the client address is
+#                            the hop the proxy appended to X-Forwarded-For
 
-FROM golang:1.27.2 AS build
+FROM golang:1.27.3 AS build
 WORKDIR /src/todo
 COPY go.mod go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+RUN --mount=type=cache,target=/go/pkg/mod GOWORK=off go mod download
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/todo . \
+    GOWORK=off CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/todo ./cmd/todo \
     && mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/todo /todo
 COPY --from=build --chown=nonroot:nonroot /out/data /data
-ENV TODO_DATA_DIR=/data TODO_ADDR=:4000
+ENV SERVER_DATA_DIR=/data SERVER_ADDR=:4000
 VOLUME /data
 EXPOSE 4000
 USER nonroot:nonroot
